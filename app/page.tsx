@@ -103,13 +103,24 @@ export default function Home() {
     setAccessRole("worker");
   };
 
-  const submitWorkerApplication = async (application: { full_name: string; city: string; age: number; phone: string; document_note: string }) => {
+  const submitWorkerApplication = async (application: { full_name: string; city: string; age: number; phone: string }, document: File) => {
     const token = window.sessionStorage.getItem("nezaria_access_token");
     if (!token || !supabaseUrl || !supabaseKey || !viewerId) return { ok: false, message: "Не вдалося перевірити ваш вхід. Увійдіть ще раз." };
+    if (!document.type.startsWith("image/") || document.size > 8 * 1024 * 1024) {
+      return { ok: false, message: "Додайте фото документа у форматі JPG, PNG або WEBP до 8 МБ." };
+    }
+    const extension = document.name.split(".").pop()?.replace(/[^a-zA-Z0-9]/g, "") || "jpg";
+    const documentPath = `${viewerId}/${crypto.randomUUID()}.${extension}`;
+    const upload = await fetch(`${supabaseUrl}/storage/v1/object/worker-documents/${documentPath}`, {
+      method: "POST",
+      headers: { apikey: supabaseKey, Authorization: `Bearer ${token}`, "Content-Type": document.type, "x-upsert": "false" },
+      body: document,
+    });
+    if (!upload.ok) return { ok: false, message: "Не вдалося завантажити фото документа. Спробуйте ще раз." };
     const response = await fetch(`${supabaseUrl}/rest/v1/worker_applications`, {
       method: "POST",
       headers: { apikey: supabaseKey, Authorization: `Bearer ${token}`, "Content-Type": "application/json", Prefer: "return=minimal" },
-      body: JSON.stringify({ ...application, user_id: viewerId }),
+      body: JSON.stringify({ ...application, document_note: documentPath, user_id: viewerId }),
     });
     if (response.ok) return { ok: true, message: "Заявку надіслано власнику." };
     if (response.status === 409) return { ok: false, message: "Заявка вже існує. Очікуйте рішення власника." };
@@ -214,8 +225,9 @@ function RoleScreen({ name, onOwnerCode, onWorker }: { name: string; onOwnerCode
   return <main className="auth-page"><section className="auth-card role-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>{mode === "choose" ? <><p className="eyebrow">ВХІД У РОБОЧИЙ ПРОСТІР</p><h1>Вітаємо, {name}.<br /><span>Оберіть роль.</span></h1><p className="auth-copy">Роль визначає, які інструменти будуть доступні у вашому кабінеті.</p><div className="role-options"><button className="role-option" onClick={() => setMode("owner")}><b>◈</b><span><strong>Власник</strong><small>Повна аналітика, команда та налаштування</small></span><i>→</i></button><button className="role-option" onClick={onWorker}><b>◌</b><span><strong>Працівник</strong><small>Подати заявку або перейти до підтримки</small></span><i>→</i></button></div></> : <form onSubmit={submit}><button className="back-link" type="button" onClick={() => setMode("choose")}>← Назад</button><p className="eyebrow">ПІДТВЕРДЖЕННЯ ВЛАСНИКА</p><h1>Введіть<br /><span>код доступу.</span></h1><p className="auth-copy">Код перевіряється безпечно на сервері та ніколи не показується у браузері.</p><input className="owner-code" value={code} onChange={(event) => setCode(event.target.value)} placeholder="Код власника" autoFocus required /><button className="google-button mint-action" disabled={loading}>{loading ? "Перевіряємо…" : "Відкрити панель"}</button>{error && <p className="auth-error">{error}</p>}</form>}</section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
 }
 
-function WorkerScreen({ name, onSubmit }: { name: string; onSubmit: (application: { full_name: string; city: string; age: number; phone: string; document_note: string }) => Promise<{ ok: boolean; message: string }> }) {
+function WorkerScreen({ name, onSubmit }: { name: string; onSubmit: (application: { full_name: string; city: string; age: number; phone: string }, document: File) => Promise<{ ok: boolean; message: string }> }) {
   const [form, setForm] = useState({ first_name: name, last_name: "", patronymic: "", city: "", age: "", phone: "", document_note: "" });
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -226,11 +238,16 @@ function WorkerScreen({ name, onSubmit }: { name: string; onSubmit: (application
     setLoading(true);
     setMessage("");
     const full_name = `${form.last_name} ${form.first_name} ${form.patronymic}`.trim();
-    const result = await onSubmit({ full_name, city: form.city, age: Number(form.age), phone: form.phone, document_note: form.document_note });
+    if (!documentFile) {
+      setLoading(false);
+      setMessage("Додайте фото документа.");
+      return;
+    }
+    const result = await onSubmit({ full_name, city: form.city, age: Number(form.age), phone: form.phone }, documentFile);
     setLoading(false);
     setMessage(result.message);
     setSubmitted(result.ok);
   };
 
-  return <main className="auth-page"><section className="auth-card worker-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>{submitted ? <><p className="eyebrow">ЗАЯВКУ НАДІСЛАНО</p><h1>Дякуємо,<br /><span>{name}.</span></h1><p className="auth-copy">Власник перевірить вашу заявку. Після схвалення тут відкриється кабінет підтримки.</p><div className="worker-status"><i /> {message}</div></> : <form onSubmit={submit}><p className="eyebrow">АНКЕТА ПРАЦІВНИКА</p><h1>Приєднайтесь<br /><span>до команди.</span></h1><p className="auth-copy">Заповніть дані для розгляду заявки. Усі поля з позначкою * обов’язкові.</p><div className="form-grid"><label>Прізвище *<input value={form.last_name} onChange={(event) => update("last_name", event.target.value)} required /></label><label>Ім’я *<input value={form.first_name} onChange={(event) => update("first_name", event.target.value)} required /></label><label>По батькові *<input value={form.patronymic} onChange={(event) => update("patronymic", event.target.value)} required /></label><label>Місто *<input value={form.city} onChange={(event) => update("city", event.target.value)} required /></label><label>Вік *<input type="number" min="18" max="99" value={form.age} onChange={(event) => update("age", event.target.value)} required /></label><label>Телефон *<input value={form.phone} onChange={(event) => update("phone", event.target.value)} required /></label></div><label className="wide-field">Документ або посилання *<input value={form.document_note} onChange={(event) => update("document_note", event.target.value)} placeholder="Посилання на документ" required /></label><button className="google-button mint-action" disabled={loading}>{loading ? "Надсилаємо…" : "Надіслати заявку"}</button>{message && <p className="auth-error">{message}</p>}</form>}</section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
+  return <main className="auth-page"><section className="auth-card worker-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>{submitted ? <><p className="eyebrow">ЗАЯВКУ НАДІСЛАНО</p><h1>Дякуємо,<br /><span>{name}.</span></h1><p className="auth-copy">Власник перевірить вашу заявку. Після схвалення тут відкриється кабінет підтримки.</p><div className="worker-status"><i /> {message}</div></> : <form onSubmit={submit}><p className="eyebrow">АНКЕТА ПРАЦІВНИКА</p><h1>Приєднайтесь<br /><span>до команди.</span></h1><p className="auth-copy">Заповніть дані для розгляду заявки. Усі поля з позначкою * обов’язкові.</p><div className="form-grid"><label>Прізвище *<input value={form.last_name} onChange={(event) => update("last_name", event.target.value)} required /></label><label>Ім’я *<input value={form.first_name} onChange={(event) => update("first_name", event.target.value)} required /></label><label>По батькові *<input value={form.patronymic} onChange={(event) => update("patronymic", event.target.value)} required /></label><label>Місто *<input value={form.city} onChange={(event) => update("city", event.target.value)} required /></label><label>Вік *<input type="number" min="18" max="99" value={form.age} onChange={(event) => update("age", event.target.value)} required /></label><label>Телефон *<input value={form.phone} onChange={(event) => update("phone", event.target.value)} required /></label></div><label className="wide-field">Фото документа *<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setDocumentFile(event.target.files?.[0] || null)} required /></label><p className="auth-copy">JPG, PNG або WEBP — до 8 МБ.</p><button className="google-button mint-action" disabled={loading}>{loading ? "Надсилаємо…" : "Надіслати заявку"}</button>{message && <p className="auth-error">{message}</p>}</form>}</section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
 }
