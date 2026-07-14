@@ -47,6 +47,25 @@ export async function GET(request: Request) {
   return Response.json({ employees: withDetails });
 }
 
+export async function PATCH(request: Request) {
+  const user = await verifyGoogleUser(request);
+  if (!user || !(await verifyOwnerSession(request, user.id))) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const config = adminConfig();
+  if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body.id !== "string" || body.action !== "terminate") return Response.json({ error: "Invalid request" }, { status: 400 });
+
+  const response = await fetch(`${config.url}/rest/v1/worker_applications?id=eq.${encodeURIComponent(body.id)}&status=eq.approved`, {
+    method: "PATCH",
+    headers: { ...headers(config), "Content-Type": "application/json", Prefer: "return=representation" },
+    body: JSON.stringify({ status: "terminated", reviewed_at: new Date().toISOString() }),
+  });
+  if (!response.ok) return Response.json({ error: "Could not terminate employee" }, { status: 502 });
+  const updated = await response.json() as Employee[];
+  if (!updated.length) return Response.json({ error: "Employee is no longer active" }, { status: 409 });
+  return Response.json({ ok: true });
+}
+
 function adminConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
