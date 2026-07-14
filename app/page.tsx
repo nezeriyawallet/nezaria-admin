@@ -358,6 +358,15 @@ export default function Home() {
     return () => supportButton.removeEventListener("click", openQueue);
   }, [accessRole, workspaceMode]);
 
+  useEffect(() => {
+    if (accessRole !== "owner" || workspaceMode !== "ceo") return;
+    const queueButton = document.querySelector(".open-queue") as HTMLButtonElement | null;
+    if (!queueButton) return;
+    const openQueue = () => switchWorkspace("admin");
+    queueButton.addEventListener("click", openQueue);
+    return () => queueButton.removeEventListener("click", openQueue);
+  }, [accessRole, workspaceMode]);
+
   if (authState !== "signed_in") {
     return <AuthScreen checking={authState === "checking"} onGoogleSignIn={signInWithGoogle} />;
   }
