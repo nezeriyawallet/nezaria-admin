@@ -234,6 +234,21 @@ export default function Home() {
     setAccessRole("worker");
   };
 
+  const signOut = async () => {
+    const token = window.sessionStorage.getItem("nezaria_access_token");
+    if (supabaseUrl && supabaseKey && token) {
+      await fetch(`${supabaseUrl}/auth/v1/logout`, { method: "POST", headers: { apikey: supabaseKey, Authorization: `Bearer ${token}` } }).catch(() => undefined);
+    }
+    ["nezaria_access_token", "nezaria_refresh_token", "nezeriya_access_role", "nezeriya_owner_session", "nezeriya_workspace_mode"].forEach((key) => {
+      window.sessionStorage.removeItem(key);
+      window.localStorage.removeItem(key);
+    });
+    setAccessRole(null);
+    setViewerId("");
+    setWorkspaceMode("ceo");
+    setAuthState("signed_out");
+  };
+
   const switchWorkspace = (mode: WorkspaceMode) => {
     window.localStorage.setItem("nezeriya_workspace_mode", mode);
     setWorkspaceMode(mode);
@@ -307,6 +322,41 @@ export default function Home() {
       body: JSON.stringify({ online }),
     });
   };
+
+  useEffect(() => {
+    if (accessRole !== "owner") return;
+    const profile = document.querySelector(".sidebar-bottom .profile") as HTMLElement | null;
+    if (!profile || !profile.parentElement) return;
+    const container = profile.parentElement;
+    container.style.position = "relative";
+    profile.style.cursor = "pointer";
+    profile.title = "Відкрити меню профілю";
+    const menu = document.createElement("div");
+    menu.style.cssText = "position:absolute;left:7px;right:7px;bottom:62px;padding:7px;background:#172022;border:1px solid #334244;border-radius:9px;box-shadow:0 12px 30px #0008;z-index:20";
+    menu.hidden = true;
+    const exitButton = document.createElement("button");
+    exitButton.type = "button";
+    exitButton.textContent = "Вийти";
+    exitButton.style.cssText = "width:100%;border:1px solid #663e40;background:#281c1e;color:#ffaaa5;border-radius:6px;padding:9px 10px;text-align:left;font:inherit;font-size:11px;font-weight:800;cursor:pointer";
+    exitButton.onclick = () => { void signOut(); };
+    menu.appendChild(exitButton);
+    container.appendChild(menu);
+    const toggleMenu = () => { menu.hidden = !menu.hidden; };
+    const closeMenu = (event: MouseEvent) => { if (!container.contains(event.target as Node)) menu.hidden = true; };
+    profile.addEventListener("click", toggleMenu);
+    document.addEventListener("click", closeMenu);
+    return () => { profile.removeEventListener("click", toggleMenu); document.removeEventListener("click", closeMenu); menu.remove(); };
+  }, [accessRole, supabaseKey, supabaseUrl]);
+
+  useEffect(() => {
+    if (accessRole !== "owner" || workspaceMode !== "ceo") return;
+    const supportButton = document.querySelector(".sidebar nav .nav-item:nth-child(4)") as HTMLButtonElement | null;
+    if (!supportButton) return;
+    supportButton.title = "Відкрити чергу звернень";
+    const openQueue = () => switchWorkspace("admin");
+    supportButton.addEventListener("click", openQueue);
+    return () => supportButton.removeEventListener("click", openQueue);
+  }, [accessRole, workspaceMode]);
 
   if (authState !== "signed_in") {
     return <AuthScreen checking={authState === "checking"} onGoogleSignIn={signInWithGoogle} />;
