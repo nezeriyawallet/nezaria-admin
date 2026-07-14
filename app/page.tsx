@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-type NavItem = "Огляд" | "Користувачі" | "Фінанси" | "Підтримка" | "Команда";
+type NavItem = "Огляд" | "Користувачі" | "Фінанси" | "Підтримка" | "Команда" | "Працівники";
 type AccessRole = "owner" | "worker" | null;
 type WorkerApplication = {
   id: string;
@@ -17,7 +17,7 @@ type WorkerApplication = {
 };
 type WalletMetrics = Record<string, string | number | null>;
 
-const navigation: NavItem[] = ["Огляд", "Користувачі", "Фінанси", "Підтримка", "Команда"];
+const navigation: NavItem[] = ["Огляд", "Користувачі", "Фінанси", "Підтримка", "Команда", "Працівники"];
 
 const metrics = [
   { label: "Загальна комісія", value: "$84,291.40", change: "+12.8%", icon: "◈", tone: "mint" },
@@ -229,7 +229,7 @@ export default function Home() {
       <section className="content">
 
         <div className="dashboard">
-          {active === "Команда" ? <ApplicationsPanel /> : <>
+          {active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : <>
           <section className="heading-row">
             <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p></div>
             <div className="header-controls"><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>
@@ -248,7 +248,6 @@ export default function Home() {
           </section>
 
           <section className="lower-grid">
-            <article className="panel table-panel"><div className="panel-head"><div><p className="panel-label">КОМАНДА ПІДТРИМКИ</p><h2>Ефективність працівників</h2></div><button className="text-button" onClick={() => setActive("Команда")}>Вся команда →</button></div><div className="team-table">{team.map((person) => <div className="team-row" key={person.name}><div className="member"><div className="avatar member-avatar">{person.initials}</div><div><strong>{person.name}</strong><small>{person.role}</small></div></div><div><small>Рейтинг</small><strong className="rating">★ {person.rating}</strong></div><div><small>Чатів</small><strong>{person.chats}</strong></div><span className={`status ${person.status === "В чаті" ? "online" : "break"}`}>{person.status}</span></div>)}</div></article>
             <article className="panel queue-panel"><div className="panel-head"><div><p className="panel-label">ПІДТРИМКА</p><h2>Черга звернень</h2></div><span className="queue-count">12</span></div><div className="queue-stat"><strong>03:42</strong><span>середній час відповіді</span></div><div className="queue-progress"><i /></div><div className="queue-info"><span>8 у роботі</span><span>4 очікують</span></div><button className="open-queue" onClick={() => { setActive("Підтримка"); setNotice("Чергу звернень відкрито"); }}>Відкрити звернення <b>→</b></button></article>
           </section>
           </>}
@@ -257,6 +256,14 @@ export default function Home() {
       {notice && <div className="toast">✓ {notice}</div>}
     </main>
   );
+}
+
+function EmployeesPanel() {
+  return <section className="employees-page">
+    <section className="heading-row"><div><p className="eyebrow">ПРАЦІВНИКИ</p><h1>Ефективність <span>команди</span></h1><p className="subtle">Рейтинг, кількість чатів і поточний статус кожного працівника.</p></div></section>
+    <section className="employees-summary"><article className="panel"><p>Усього працівників</p><strong>{team.length}</strong></article><article className="panel"><p>Зараз у чаті</p><strong>{team.filter((person) => person.status === "В чаті").length}</strong></article><article className="panel"><p>Середній рейтинг</p><strong>4.93 ★</strong></article><article className="panel"><p>Усього чатів</p><strong>{team.reduce((total, person) => total + person.chats, 0)}</strong></article></section>
+    <article className="panel employees-table-panel"><div className="panel-head"><div><p className="panel-label">КОМАНДА ПІДТРИМКИ</p><h2>Усі працівники</h2></div></div><div className="team-table employees-table">{team.map((person) => <div className="team-row" key={person.name}><div className="member"><div className="avatar member-avatar">{person.initials}</div><div><strong>{person.name}</strong><small>{person.role}</small></div></div><div><small>Рейтинг</small><strong className="rating">★ {person.rating}</strong></div><div><small>Чатів</small><strong>{person.chats}</strong></div><span className={`status ${person.status === "В чаті" ? "online" : "break"}`}>{person.status}</span></div>)}</div></article>
+  </section>;
 }
 
 function ApplicationsPanel() {
