@@ -367,6 +367,33 @@ export default function Home() {
     return () => queueButton.removeEventListener("click", openQueue);
   }, [accessRole, workspaceMode]);
 
+  useEffect(() => {
+    if (accessRole !== "owner" || workspaceMode !== "ceo") return;
+    const settingsButton = document.querySelector(".sidebar-bottom .nav-item") as HTMLElement | null;
+    if (settingsButton) settingsButton.style.display = "none";
+    const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
+    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session") || window.localStorage.getItem("nezeriya_owner_session");
+    if (!token || !ownerSession) return;
+    void fetch("/api/support/tickets", { headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } })
+      .then((response) => response.ok ? response.json() : null)
+      .then((result: { tickets?: SupportTicket[] } | null) => {
+        if (!result) return;
+        const tickets = result.tickets || [];
+        const activeCount = tickets.filter((ticket) => ticket.status === "in_progress").length;
+        const waitingCount = tickets.filter((ticket) => ticket.status === "new").length;
+        const total = activeCount + waitingCount;
+        const queueCard = document.querySelector(".queue-stat")?.parentElement;
+        const queueStat = document.querySelector(".queue-stat strong") as HTMLElement | null;
+        const queueInfo = document.querySelector(".queue-info") as HTMLElement | null;
+        const progress = document.querySelector(".queue-progress i") as HTMLElement | null;
+        const badge = queueCard?.querySelector(".queue-count") as HTMLElement | null;
+        if (queueStat) queueStat.textContent = "—";
+        if (queueInfo) queueInfo.innerHTML = `<span>${activeCount} у роботі</span><span>${waitingCount} очікують</span>`;
+        if (progress) progress.style.width = total ? `${Math.round(activeCount / total * 100)}%` : "0%";
+        if (badge) badge.textContent = String(waitingCount);
+      });
+  }, [accessRole, workspaceMode, active]);
+
   if (authState !== "signed_in") {
     return <AuthScreen checking={authState === "checking"} onGoogleSignIn={signInWithGoogle} />;
   }
