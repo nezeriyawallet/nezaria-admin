@@ -15,6 +15,7 @@ type WorkerApplication = {
   photo_url: string | null;
   face_photo_url: string | null;
 };
+type WalletMetrics = Record<string, string | number | null>;
 
 const navigation: NavItem[] = ["Огляд", "Користувачі", "Фінанси", "Підтримка", "Команда"];
 
@@ -31,6 +32,12 @@ const team = [
   { name: "Анна Романюк", initials: "АР", role: "Support", rating: "4.88", chats: 92, status: "Перерва" },
 ];
 
+function displayMetric(value: string | number | null | undefined, prefix = "") {
+  if (value === null || value === undefined || value === "") return "—";
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? `${prefix}${new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 2 }).format(number)}` : `${prefix}${value}`;
+}
+
 export default function Home() {
   const [active, setActive] = useState<NavItem>("Огляд");
   const [period, setPeriod] = useState("30 днів");
@@ -40,6 +47,8 @@ export default function Home() {
   const [viewerName, setViewerName] = useState("Nazar");
   const [viewerId, setViewerId] = useState("");
   const [accessRole, setAccessRole] = useState<AccessRole>(null);
+  const [walletMetrics, setWalletMetrics] = useState<WalletMetrics | null>(null);
+  const [metricsError, setMetricsError] = useState("");
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   const chartPath = useMemo(() => "M0 176 C28 168 36 139 62 150 S100 126 122 135 S154 83 184 107 S226 117 248 82 S283 58 305 74 S342 45 372 65 S406 23 438 41 S482 27 510 18", []);
@@ -81,11 +90,32 @@ export default function Home() {
     void restoreSession();
   }, [supabaseKey, supabaseUrl]);
 
+  useEffect(() => {
+    if (accessRole !== "owner") return;
+    const token = window.sessionStorage.getItem("nezaria_access_token");
+    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
+    if (!token || !ownerSession) return;
+    void fetch("/api/owner/metrics", { headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } })
+      .then(async (response) => ({ ok: response.ok, body: await response.json().catch(() => ({})) }))
+      .then(({ ok, body }) => {
+        if (ok) { setWalletMetrics(body.metrics || {}); setMetricsError(""); }
+        else setMetricsError(body.error || "Статистика тимчасово недоступна");
+      })
+      .catch(() => setMetricsError("Статистика тимчасово недоступна"));
+  }, [accessRole]);
+
   const refresh = () => {
     setUpdated("Дані синхронізовано щойно");
     setNotice("Метрики оновлено з Nezeriya API");
     window.setTimeout(() => setNotice(null), 2600);
   };
+
+  const dashboardMetrics = walletMetrics ? [
+    { label: "Загальна комісія", value: displayMetric(walletMetrics.totalCommission, "$"), change: "live", icon: "◈", tone: "mint" },
+    { label: "Комісія за місяць", value: displayMetric(walletMetrics.monthlyCommission, "$"), change: "live", icon: "↗", tone: "blue" },
+    { label: "Дохід Telegram Stars", value: displayMetric(walletMetrics.monthlyStars), change: "live", icon: "★", tone: "violet" },
+    { label: "Зареєстровані користувачі", value: displayMetric(walletMetrics.users), change: "live", icon: "◉", tone: "orange" },
+  ] : metrics;
 
   const signInWithGoogle = () => {
     if (!supabaseUrl) {
@@ -210,8 +240,11 @@ export default function Home() {
           </section>
 
           <section className="metrics-grid">
-            {metrics.map((metric) => <article className="metric-card" key={metric.label}><div className={`metric-icon ${metric.tone}`}>{metric.icon}</div><p>{metric.label}</p><div className="metric-value">{metric.value}</div><span className="increase">↑ {metric.change} <em>до минулого періоду</em></span></article>)}
+            {dashboardMetrics.map((metric) => <article className="metric-card" key={metric.label}><div className={`metric-icon ${metric.tone}`}>{metric.icon}</div><p>{metric.label}</p><div className="metric-value">{metric.value}</div><span className="increase">{metric.change === "live" ? "● LIVE" : <>↑ {metric.change} <em>до минулого періоду</em></>}</span></article>)}
           </section>
+
+          {walletMetrics && <section className="wallet-detail-grid"><article className="panel wallet-detail-panel"><div className="panel-head"><div><p className="panel-label">ОПЕРАЦІЇ ГАМАНЦЯ</p><h2>Детальна статистика</h2></div><span className="live"><i /> LIVE</span></div><div className="wallet-detail-list"><span>Гаманців<strong>{displayMetric(walletMetrics.wallets)}</strong></span><span>Транзакцій<strong>{displayMetric(walletMetrics.transactions)}</strong></span><span>Невдалих транзакцій<strong>{displayMetric(walletMetrics.failedTransactions)}</strong></span><span>DeDust swap<strong>{displayMetric(walletMetrics.dedustSwaps)}</strong></span><span>Реферальний дохід<strong>{displayMetric(walletMetrics.referralTotal, "$")}</strong></span><span>Втрати рулетки<strong>{displayMetric(walletMetrics.wheelLoss, "$")}</strong></span></div></article><article className="panel wallet-detail-panel"><div className="panel-head"><div><p className="panel-label">NZR</p><h2>Активність токена</h2></div></div><div className="wallet-detail-list"><span>NZR транзакцій<strong>{displayMetric(walletMetrics.nzrTransactions)}</strong></span><span>Продажі NZR<strong>{displayMetric(walletMetrics.nzrSwapSell)}</strong></span><span>Купівлі NZR<strong>{displayMetric(walletMetrics.nzrSwapBuy)}</strong></span><span>Покупки NZR за Stars<strong>{displayMetric(walletMetrics.nzrStars)}</strong></span></div></article></section>}
+          {metricsError && <p className="metrics-error">{metricsError}</p>}
 
           <section className="main-grid">
             <article className="panel earnings-panel"><div className="panel-head"><div><p className="panel-label">ЗАРОБІТОК</p><h2>Дохід та комісії</h2></div><button className="dots">•••</button></div><div className="chart-summary"><strong>$18,730.60</strong><span className="increase">↑ 16.4%</span></div><div className="chart-wrap"><div className="chart-lines"><span /><span /><span /><span /></div><svg viewBox="0 0 510 205" aria-label="Графік доходу за період" role="img"><defs><linearGradient id="fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#42e8bd" stopOpacity=".28"/><stop offset="100%" stopColor="#42e8bd" stopOpacity="0"/></linearGradient></defs><path d={`${chartPath} L510 205 L0 205 Z`} fill="url(#fill)"/><path d={chartPath} fill="none" stroke="#42e8bd" strokeLinecap="round" strokeWidth="3"/><circle cx="372" cy="65" r="5" fill="#101719" stroke="#42e8bd" strokeWidth="3"/></svg><div className="x-axis"><span>01 лип</span><span>08 лип</span><span>15 лип</span><span>22 лип</span><span>Сьогодні</span></div></div></article>
