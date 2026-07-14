@@ -74,8 +74,14 @@ function configForServer(): Config | null {
 function headers(config: Config, extra: Record<string, string> = {}) { return { apikey: config.key, Authorization: `Bearer ${config.key}`, ...extra }; }
 function rest(config: Config, path: string, init: RequestInit = {}) { return fetch(`${config.url}/rest/v1${path}`, { ...init, headers: { ...headers(config), ...(init.headers || {}) } }); }
 async function patch(config: Config, table: string, filter: string, data: Record<string, unknown>) { await rest(config, `/${table}?${filter}`, { method: "PATCH", headers: { "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify(data) }); }
-async function insertMessage(config: Config, data: Omit<Message, "id" | "sent_at">) { await rest(config, "/support_messages?on_conflict=ticket_id,telegram_message_id", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify(data) }); }
+async function insertMessage(config: Config, data: Omit<Message, "id" | "sent_at">) {
+  const response = await rest(config, "/support_messages?on_conflict=ticket_id,telegram_message_id", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify(data) });
+  return response.ok && (await response.json().catch(() => []) as unknown[]).length > 0;
+}
 async function ticketById(config: Config, id: string) { const response = await rest(config, `/support_tickets?id=eq.${encodeURIComponent(id)}&select=*&limit=1`); return response.ok ? (await response.json() as Ticket[])[0] || null : null; }
+async function ticketByPeer(config: Config, peerId: string) { const response = await rest(config, `/support_tickets?telegram_peer_id=eq.${encodeURIComponent(peerId)}&select=*&limit=1`); return response.ok ? (await response.json() as Ticket[])[0] || null : null; }
+async function createTicket(config: Config, data: Record<string, unknown>) { const response = await rest(config, "/support_tickets", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "return=representation" }, body: JSON.stringify(data) }); return response.ok ? (await response.json() as Ticket[])[0] || null : null; }
+async function removeTicketMessages(config: Config, ticketId: string) { await rest(config, `/support_messages?ticket_id=eq.${encodeURIComponent(ticketId)}`, { method: "DELETE" }); }
 
 async function listTickets(config: Config) {
   const ticketsResponse = await rest(config, "/support_tickets?status=neq.closed&telegram_peer_id=neq.777000&select=*&order=updated_at.desc");
@@ -116,14 +122,21 @@ async function syncTelegram(config: Config) {
       const messages = await client.getMessages(entity, { limit: 30 });
       const incomingMessages = messages.filter((message) => !message.out && !message.action && Boolean(message.message?.trim()));
       if (incomingMessages.length === 0) continue;
-      const ticketResponse = await rest(config, "/support_tickets?on_conflict=telegram_peer_id", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ telegram_peer_id: peerId, telegram_access_hash: entity.accessHash.toString(), client_name: clientName, client_username: entity.username || null, updated_at: new Date().toISOString() }) });
-      if (!ticketResponse.ok) continue;
-      const [ticket] = await ticketResponse.json() as Ticket[];
+      const ticketData = { telegram_peer_id: peerId, telegram_access_hash: entity.accessHash.toString(), client_name: clientName, client_username: entity.username || null, updated_at: new Date().toISOString() };
+      let ticket = await ticketByPeer(config, peerId);
+      let messagesToSave = incomingMessages;
+      if (ticket?.status === "closed") {
+        const closedAt = new Date(ticket.updated_at).getTime();
+        messagesToSave = incomingMessages.filter((message) => message.date * 1000 > closedAt);
+        if (messagesToSave.length === 0) continue;
+        await removeTicketMessages(config, ticket.id);
+        await patch(config, "support_tickets", `id=eq.${ticket.id}`, { ...ticketData, status: "new", assigned_to: null, assigned_at: null, rating: null, review: null });
+        ticket = await ticketById(config, ticket.id);
+      } else if (!ticket) ticket = await createTicket(config, ticketData);
       if (!ticket) continue;
-      for (const message of incomingMessages) {
+      for (const message of messagesToSave) {
         const text = message.message.trim();
-        await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: message.id, sender_type: "client", body: text });
-        await handleFeedback(config, ticket, text);
+        if (await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: message.id, sender_type: "client", body: text })) await handleFeedback(config, ticket, text);
       }
     }
   } finally { await client.disconnect(); }
