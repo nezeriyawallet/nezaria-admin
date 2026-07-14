@@ -751,8 +751,33 @@ function WorkerStatusScreen({ name, title, text }: { name: string; title: string
   return <main className="auth-page"><section className="auth-card worker-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div><p className="eyebrow">КАБІНЕТ ПРАЦІВНИКА</p><h1>Вітаємо, {name}.<br /><span>{title}</span></h1><p className="auth-copy">{text}</p><div className="worker-status"><i /> Оновлюється автоматично після перезавантаження сторінки</div></section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
 }
 
+type WorkerPortalProfile = { full_name: string; city: string; avatar_url: string | null; reviews: EmployeeReview[] };
+
 function WorkerWorkspace({ name }: { name: string }) {
-  return <main className="worker-desk-shell"><header className="worker-desk-brand"><span className="brand-mark">N</span><strong>nezeriya<span className="brand-light">.wallet</span></strong><span>Працівник: {name}</span></header><div className="worker-desk-content"><SupportDesk /></div></main>;
+  return <WorkerPortal name={name} />;
+}
+
+function WorkerPortal({ name }: { name: string }) {
+  const [view, setView] = useState<"chats" | "reviews" | "ratings">("chats");
+  const [profile, setProfile] = useState<WorkerPortalProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
+    if (!token) return;
+    void fetch("/api/worker/profile", { headers: { Authorization: `Bearer ${token}` } })
+      .then((response) => response.ok ? response.json() : null)
+      .then((result) => { if (result?.profile) setProfile(result.profile); })
+      .finally(() => setLoading(false));
+  }, []);
+  const logout = () => {
+    ["nezaria_access_token", "nezaria_refresh_token", "nezeriya_access_role", "nezeriya_owner_session"].forEach((key) => { window.sessionStorage.removeItem(key); window.localStorage.removeItem(key); });
+    window.location.reload();
+  };
+  const reviews = profile?.reviews || [];
+  const average = reviews.length ? (reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(2) : "—";
+  const avatar = profile?.avatar_url;
+  const displayName = profile?.full_name || name;
+  return <main className="worker-portal"><aside className="worker-portal-sidebar"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div><nav className="worker-portal-nav"><button className={view === "chats" ? "selected" : ""} onClick={() => setView("chats")}>◉ Чати</button><button className={view === "reviews" ? "selected" : ""} onClick={() => setView("reviews")}>★ Відгуки</button><button className={view === "ratings" ? "selected" : ""} onClick={() => setView("ratings")}>✦ Оцінки</button></nav><div className="worker-profile"><div className="worker-profile-row">{avatar ? <img src={avatar} alt={`Фото ${displayName}`} /> : <span>{displayName.slice(0, 1).toUpperCase()}</span>}<div><strong>{displayName}</strong><small>{profile?.city || "Працівник підтримки"}</small></div></div><button onClick={logout}>Вийти</button></div></aside><section className="worker-portal-content">{view === "chats" ? <SupportDesk /> : loading ? <article className="panel empty-applications">Завантажуємо дані…</article> : view === "reviews" ? <section className="worker-feedback"><p className="eyebrow">ВІДГУКИ</p><h1>Відгуки клієнтів</h1>{reviews.length === 0 ? <article className="panel empty-applications">Відгуків поки немає.</article> : <div className="worker-review-list">{reviews.map((review) => <article className="panel worker-review" key={review.id}><strong>{review.client_name}</strong><span>{"★".repeat(review.rating)}</span><p>{review.comment}</p><small>{new Date(review.created_at).toLocaleDateString("uk-UA")}</small></article>)}</div>}</section> : <section className="worker-feedback"><p className="eyebrow">ОЦІНКИ</p><h1>Рейтинг акаунта</h1><div className="rating-summary"><article className="panel"><p>Середній показник</p><strong>{average === "—" ? "—" : `${average} ★`}</strong></article><article className="panel"><p>Усього оцінок</p><strong>{reviews.length}</strong></article></div><div className="rating-breakdown">{[5,4,3,2,1].map((rating) => <div key={rating}><span>{rating} ★</span><i><b style={{ width: reviews.length ? `${reviews.filter((review) => review.rating === rating).length / reviews.length * 100}%` : "0%" }} /></i><strong>{reviews.filter((review) => review.rating === rating).length}</strong></div>)}</div></section>}</section></main>;
 }
 
 function AuthScreen({ checking, onGoogleSignIn }: { checking: boolean; onGoogleSignIn: () => void }) {
