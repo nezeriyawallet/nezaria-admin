@@ -154,6 +154,18 @@ export default function Home() {
     return { ok: false, message: "Не вдалося надіслати заявку. Спробуйте ще раз." };
   };
 
+  const getWorkerApplicationStatus = async () => {
+    const token = window.sessionStorage.getItem("nezaria_access_token");
+    if (!token || !supabaseUrl || !supabaseKey || !viewerId) return null;
+    const response = await fetch(`${supabaseUrl}/rest/v1/worker_applications?user_id=eq.${encodeURIComponent(viewerId)}&select=status&limit=1`, {
+      headers: { apikey: supabaseKey, Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) return null;
+    const rows = await response.json() as { status?: string }[];
+    const status = rows[0]?.status;
+    return status === "pending" || status === "approved" || status === "rejected" ? status : null;
+  };
+
   if (authState !== "signed_in") {
     return <AuthScreen checking={authState === "checking"} onGoogleSignIn={signInWithGoogle} />;
   }
@@ -163,7 +175,7 @@ export default function Home() {
   }
 
   if (accessRole === "worker") {
-    return <WorkerScreen name={viewerName} onSubmit={submitWorkerApplication} />;
+    return <WorkerScreen name={viewerName} onSubmit={submitWorkerApplication} onCheckStatus={getWorkerApplicationStatus} />;
   }
 
   return (
@@ -289,6 +301,14 @@ function ApplicationsPanel() {
   </section>;
 }
 
+function WorkerStatusScreen({ name, title, text }: { name: string; title: string; text: string }) {
+  return <main className="auth-page"><section className="auth-card worker-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div><p className="eyebrow">КАБІНЕТ ПРАЦІВНИКА</p><h1>Вітаємо, {name}.<br /><span>{title}</span></h1><p className="auth-copy">{text}</p><div className="worker-status"><i /> Оновлюється автоматично після перезавантаження сторінки</div></section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
+}
+
+function WorkerWorkspace({ name }: { name: string }) {
+  return <main className="auth-page"><section className="auth-card worker-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div><p className="eyebrow">РОБОЧИЙ КАБІНЕТ</p><h1>Ви в <span>команді.</span></h1><p className="auth-copy">Вітаємо, {name}. Власник прийняв вашу заявку. Тут з’являтимуться нові звернення користувачів для підтримки.</p><div className="worker-status worker-approved"><i /> Ви прийняті до команди Nezeriya Wallet</div></section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
+}
+
 function AuthScreen({ checking, onGoogleSignIn }: { checking: boolean; onGoogleSignIn: () => void }) {
   return (
     <main className="auth-page">
@@ -325,7 +345,7 @@ function RoleScreen({ name, onOwnerCode, onWorker }: { name: string; onOwnerCode
   return <main className="auth-page"><section className="auth-card role-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>{mode === "choose" ? <><p className="eyebrow">ВХІД У РОБОЧИЙ ПРОСТІР</p><h1>Вітаємо, {name}.<br /><span>Оберіть роль.</span></h1><p className="auth-copy">Роль визначає, які інструменти будуть доступні у вашому кабінеті.</p><div className="role-options"><button className="role-option" onClick={() => setMode("owner")}><b>◈</b><span><strong>Власник</strong><small>Повна аналітика, команда та налаштування</small></span><i>→</i></button><button className="role-option" onClick={onWorker}><b>◌</b><span><strong>Працівник</strong><small>Подати заявку або перейти до підтримки</small></span><i>→</i></button></div></> : <form onSubmit={submit}><button className="back-link" type="button" onClick={() => setMode("choose")}>← Назад</button><p className="eyebrow">ПІДТВЕРДЖЕННЯ ВЛАСНИКА</p><h1>Введіть<br /><span>код доступу.</span></h1><p className="auth-copy">Код перевіряється безпечно на сервері та ніколи не показується у браузері.</p><input className="owner-code" value={code} onChange={(event) => setCode(event.target.value)} placeholder="Код власника" autoFocus required /><button className="google-button mint-action" disabled={loading}>{loading ? "Перевіряємо…" : "Відкрити панель"}</button>{error && <p className="auth-error">{error}</p>}</form>}</section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
 }
 
-function WorkerScreen({ name, onSubmit }: { name: string; onSubmit: (application: { full_name: string; city: string; age: number; phone: string }, document: File, facePhoto: File) => Promise<{ ok: boolean; message: string }> }) {
+function WorkerScreen({ name, onSubmit, onCheckStatus }: { name: string; onSubmit: (application: { full_name: string; city: string; age: number; phone: string }, document: File, facePhoto: File) => Promise<{ ok: boolean; message: string }>; onCheckStatus: () => Promise<"pending" | "approved" | "rejected" | null> }) {
   const [form, setForm] = useState({ first_name: name, last_name: "", patronymic: "", city: "", age: "", phone: "", document_note: "" });
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [facePhotoFile, setFacePhotoFile] = useState<File | null>(null);
@@ -333,6 +353,15 @@ function WorkerScreen({ name, onSubmit }: { name: string; onSubmit: (application
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [applicationStatus, setApplicationStatus] = useState<"checking" | "pending" | "approved" | "rejected" | null>("checking");
+
+  useEffect(() => {
+    let active = true;
+    const checkStatus = () => void onCheckStatus().then((status) => { if (active) setApplicationStatus(status); });
+    checkStatus();
+    const interval = window.setInterval(checkStatus, 15000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, [onCheckStatus]);
 
   const update = (field: keyof typeof form, value: string) => setForm((current) => ({ ...current, [field]: value }));
   const submit = async (event: React.FormEvent) => {
@@ -349,7 +378,12 @@ function WorkerScreen({ name, onSubmit }: { name: string; onSubmit: (application
     setLoading(false);
     setMessage(result.message);
     setSubmitted(result.ok);
+    if (result.ok) setApplicationStatus("pending");
   };
+
+  if (applicationStatus === "checking") return <WorkerStatusScreen name={name} title="Перевіряємо заявку…" text="Завантажуємо актуальний статус вашої заявки." />;
+  if (applicationStatus === "approved") return <WorkerWorkspace name={name} />;
+  if (applicationStatus === "pending") return <WorkerStatusScreen name={name} title="Заявка на розгляді." text="Власник перевіряє ваші дані. Після прийняття тут відкриється робочий кабінет." />;
 
   return <main className="auth-page"><section className="auth-card worker-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>{submitted ? <><p className="eyebrow">ЗАЯВКУ НАДІСЛАНО</p><h1>Дякуємо,<br /><span>{name}.</span></h1><p className="auth-copy">Власник перевірить вашу заявку. Після схвалення тут відкриється кабінет підтримки.</p><div className="worker-status"><i /> {message}</div></> : <form onSubmit={submit}><p className="eyebrow">АНКЕТА ПРАЦІВНИКА</p><h1>Приєднайтесь<br /><span>до команди.</span></h1><p className="auth-copy">Заповніть дані для розгляду заявки. Усі поля з позначкою * обов’язкові.</p><div className="form-grid"><label>Прізвище *<input value={form.last_name} onChange={(event) => update("last_name", event.target.value)} required /></label><label>Ім’я *<input value={form.first_name} onChange={(event) => update("first_name", event.target.value)} required /></label><label>По батькові *<input value={form.patronymic} onChange={(event) => update("patronymic", event.target.value)} required /></label><label>Місто *<input value={form.city} onChange={(event) => update("city", event.target.value)} required /></label><label>Вік *<input type="number" min="16" max="99" value={form.age} onChange={(event) => update("age", event.target.value)} required /></label><label>Телефон *<input value={form.phone} onChange={(event) => update("phone", event.target.value)} required /></label></div><label className="wide-field">Фото паспорта *<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setDocumentFile(event.target.files?.[0] || null)} required /></label><label className="wide-field">Фото обличчя *<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setFacePhotoFile(event.target.files?.[0] || null)} required /></label><label className="consent-check"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} required /><span>Погоджуюсь на обробку моїх персональних даних для розгляду заявки.</span></label><p className="auth-copy">JPG, PNG або WEBP — до 8 МБ кожне.</p><button className="google-button mint-action" disabled={loading}>{loading ? "Надсилаємо…" : "Надіслати заявку"}</button>{message && <p className="auth-error">{message}</p>}</form>}</section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
 }
