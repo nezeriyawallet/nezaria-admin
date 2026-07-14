@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 type NavItem = "Огляд" | "Користувачі" | "Фінанси" | "Підтримка" | "Команда";
+type AccessRole = "owner" | "worker" | null;
 
 const navigation: NavItem[] = ["Огляд", "Користувачі", "Фінанси", "Підтримка", "Команда"];
 
@@ -26,6 +27,7 @@ export default function Home() {
   const [notice, setNotice] = useState<string | null>(null);
   const [authState, setAuthState] = useState<"checking" | "signed_out" | "signed_in">("checking");
   const [viewerName, setViewerName] = useState("Nazar");
+  const [accessRole, setAccessRole] = useState<AccessRole>(null);
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   const chartPath = useMemo(() => "M0 176 C28 168 36 139 62 150 S100 126 122 135 S154 83 184 107 S226 117 248 82 S283 58 305 74 S342 45 372 65 S406 23 438 41 S482 27 510 18", []);
@@ -54,6 +56,8 @@ export default function Home() {
         if (!response.ok) throw new Error("Session expired");
         const user = await response.json();
         setViewerName(user.user_metadata?.full_name || user.email?.split("@")[0] || "Користувач");
+        const savedRole = window.sessionStorage.getItem("nezeriya_access_role");
+        setAccessRole(savedRole === "owner" || savedRole === "worker" ? savedRole : null);
         setAuthState("signed_in");
       } catch {
         window.sessionStorage.removeItem("nezaria_access_token");
@@ -78,8 +82,35 @@ export default function Home() {
     window.location.assign(`${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}`);
   };
 
+  const verifyOwnerCode = async (code: string) => {
+    const token = window.sessionStorage.getItem("nezaria_access_token");
+    if (!token) return false;
+    const response = await fetch("/api/owner/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ code }),
+    });
+    if (!response.ok) return false;
+    window.sessionStorage.setItem("nezeriya_access_role", "owner");
+    setAccessRole("owner");
+    return true;
+  };
+
+  const selectWorker = () => {
+    window.sessionStorage.setItem("nezeriya_access_role", "worker");
+    setAccessRole("worker");
+  };
+
   if (authState !== "signed_in") {
     return <AuthScreen checking={authState === "checking"} onGoogleSignIn={signInWithGoogle} />;
+  }
+
+  if (!accessRole) {
+    return <RoleScreen name={viewerName} onOwnerCode={verifyOwnerCode} onWorker={selectWorker} />;
+  }
+
+  if (accessRole === "worker") {
+    return <WorkerScreen name={viewerName} />;
   }
 
   return (
@@ -148,4 +179,26 @@ function AuthScreen({ checking, onGoogleSignIn }: { checking: boolean; onGoogleS
       <div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" />
     </main>
   );
+}
+
+function RoleScreen({ name, onOwnerCode, onWorker }: { name: string; onOwnerCode: (code: string) => Promise<boolean>; onWorker: () => void }) {
+  const [mode, setMode] = useState<"choose" | "owner">("choose");
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    const valid = await onOwnerCode(code);
+    setLoading(false);
+    if (!valid) setError("Код не підходить. Спробуй ще раз.");
+  };
+
+  return <main className="auth-page"><section className="auth-card role-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>{mode === "choose" ? <><p className="eyebrow">ВХІД У РОБОЧИЙ ПРОСТІР</p><h1>Вітаємо, {name}.<br /><span>Оберіть роль.</span></h1><p className="auth-copy">Роль визначає, які інструменти будуть доступні у вашому кабінеті.</p><div className="role-options"><button className="role-option" onClick={() => setMode("owner")}><b>◈</b><span><strong>Власник</strong><small>Повна аналітика, команда та налаштування</small></span><i>→</i></button><button className="role-option" onClick={onWorker}><b>◌</b><span><strong>Працівник</strong><small>Подати заявку або перейти до підтримки</small></span><i>→</i></button></div></> : <form onSubmit={submit}><button className="back-link" type="button" onClick={() => setMode("choose")}>← Назад</button><p className="eyebrow">ПІДТВЕРДЖЕННЯ ВЛАСНИКА</p><h1>Введіть<br /><span>код доступу.</span></h1><p className="auth-copy">Код перевіряється безпечно на сервері та ніколи не показується у браузері.</p><input className="owner-code" value={code} onChange={(event) => setCode(event.target.value)} placeholder="Код власника" autoFocus required /><button className="google-button mint-action" disabled={loading}>{loading ? "Перевіряємо…" : "Відкрити панель"}</button>{error && <p className="auth-error">{error}</p>}</form>}</section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
+}
+
+function WorkerScreen({ name }: { name: string }) {
+  return <main className="auth-page"><section className="auth-card worker-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div><p className="eyebrow">КАБІНЕТ ПРАЦІВНИКА</p><h1>Вітаємо, {name}.<br /><span>Заявка на розгляді.</span></h1><p className="auth-copy">Тут буде анкета працівника: дані, місто, досвід та документи. Після схвалення власником відкриється кабінет підтримки.</p><div className="worker-status"><i /> Очікуємо на заповнення анкети</div></section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
 }
