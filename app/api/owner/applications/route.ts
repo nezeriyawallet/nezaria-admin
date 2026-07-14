@@ -7,6 +7,7 @@ type Application = {
   age: number;
   phone: string;
   document_note: string;
+  face_photo_path: string | null;
   status: "pending" | "approved" | "rejected";
   created_at: string;
 };
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
 
   const config = adminConfig();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
-  const response = await fetch(`${config.url}/rest/v1/worker_applications?select=id,full_name,city,age,phone,document_note,status,created_at&order=created_at.desc`, {
+  const response = await fetch(`${config.url}/rest/v1/worker_applications?select=id,full_name,city,age,phone,document_note,face_photo_path,status,created_at&order=created_at.desc`, {
     headers: { apikey: config.key, Authorization: `Bearer ${config.key}` },
   });
   if (!response.ok) return Response.json({ error: "Could not load applications" }, { status: 502 });
@@ -26,6 +27,7 @@ export async function GET(request: Request) {
   const withPhotos = await Promise.all(applications.map(async (application) => ({
     ...application,
     photo_url: await signedPhotoUrl(config, application.document_note),
+    face_photo_url: application.face_photo_path ? await signedPhotoUrl(config, application.face_photo_path) : null,
   })));
   return Response.json({ applications: withPhotos });
 }
