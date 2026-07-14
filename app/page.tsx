@@ -295,6 +295,17 @@ export default function Home() {
     });
   };
 
+  const setSupportPresence = async (online: boolean, keepalive = false) => {
+    const token = window.sessionStorage.getItem("nezaria_access_token");
+    if (!token || !supabaseUrl || !supabaseKey) return;
+    await fetch(`${supabaseUrl}/rest/v1/rpc/set_my_support_presence`, {
+      method: "POST",
+      keepalive,
+      headers: { apikey: supabaseKey, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ online }),
+    });
+  };
+
   if (authState !== "signed_in") {
     return <AuthScreen checking={authState === "checking"} onGoogleSignIn={signInWithGoogle} />;
   }
@@ -328,7 +339,7 @@ export default function Home() {
       <section className="content">
 
         <div className="dashboard">
-          {workspaceMode === "admin" ? <SupportAdminPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
+          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
           <section className="heading-row">
             <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p></div>
             <div className="header-controls"><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>
@@ -357,10 +368,21 @@ export default function Home() {
   );
 }
 
-function SupportAdminPanel() {
+function SupportAdminPanel({ onPresence }: { onPresence: (online: boolean, keepalive?: boolean) => Promise<void> }) {
   const [available, setAvailable] = useState(true);
+  useEffect(() => {
+    void onPresence(true);
+    const markOffline = () => { void onPresence(false, true); };
+    window.addEventListener("pagehide", markOffline);
+    return () => { window.removeEventListener("pagehide", markOffline); markOffline(); };
+  }, [onPresence]);
+  const changeAvailability = () => setAvailable((current) => {
+    const next = !current;
+    void onPresence(next);
+    return next;
+  });
   return <section className="support-admin-page">
-    <section className="heading-row"><div><p className="eyebrow">NEZERIYA ADMIN</p><h1>Кабінет <span>техпідтримки</span></h1><p className="subtle">Режим для роботи зі зверненнями користувачів.</p></div><button className={`availability ${available ? "available" : "away"}`} onClick={() => setAvailable((value) => !value)}><i />{available ? "Доступний" : "Не в мережі"}</button></section>
+    <section className="heading-row"><div><p className="eyebrow">NEZERIYA ADMIN</p><h1>Кабінет <span>техпідтримки</span></h1><p className="subtle">Режим для роботи зі зверненнями користувачів.</p></div><button className={`availability ${available ? "available" : "away"}`} onClick={changeAvailability}><i />{available ? "Доступний" : "Не в мережі"}</button></section>
     <section className="support-admin-summary"><article className="panel"><p>Нові звернення</p><strong>0</strong><span>Черга зараз порожня</span></article><article className="panel"><p>У роботі</p><strong>0</strong><span>Активних діалогів немає</span></article><article className="panel"><p>Статус працівника</p><strong>{available ? "Онлайн" : "Пауза"}</strong><span>Перемикається кнопкою зверху</span></article></section>
     <article className="panel support-empty"><div className="support-empty-icon">◌</div><h2>Звернень поки немає</h2><p>Коли підключимо чат або форму звернень з Nezeriya Wallet, усі нові діалоги з’являтимуться тут. Працівник зможе взяти звернення в роботу та відповісти клієнту.</p></article>
   </section>;
