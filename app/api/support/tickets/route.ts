@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   const config = configForServer();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
   if (new URL(request.url).searchParams.get("sync") === "1") await syncTelegram(config);
-  return Response.json(await listTickets(config));
+  return Response.json(await listTickets(config, access.userId));
 }
 
 export async function POST(request: Request) {
@@ -28,6 +28,11 @@ export async function POST(request: Request) {
   const ticket = await ticketById(config, body.ticketId);
   if (!ticket) return Response.json({ error: "Ticket not found" }, { status: 404 });
 
+  if (body.action === "skip") {
+    if (ticket.status !== "new") return Response.json({ error: "Only new tickets can be hidden" }, { status: 409 });
+    await rest(config, "/support_ticket_skips?on_conflict=ticket_id,user_id", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify({ ticket_id: ticket.id, user_id: access.userId }) });
+    return Response.json({ ok: true });
+  }
   if (body.action === "take") {
     if (ticket.status !== "new") return Response.json({ error: "Ticket is already taken" }, { status: 409 });
     const greeting = "Вітаємо вас у технічній підтримці Nezeriya Wallet";
@@ -83,12 +88,14 @@ async function ticketByPeer(config: Config, peerId: string) { const response = a
 async function createTicket(config: Config, data: Record<string, unknown>) { const response = await rest(config, "/support_tickets", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "return=representation" }, body: JSON.stringify(data) }); return response.ok ? (await response.json() as Ticket[])[0] || null : null; }
 async function removeTicketMessages(config: Config, ticketId: string) { await rest(config, `/support_messages?ticket_id=eq.${encodeURIComponent(ticketId)}`, { method: "DELETE" }); }
 
-async function listTickets(config: Config) {
+async function listTickets(config: Config, userId: string) {
   const ticketsResponse = await rest(config, "/support_tickets?status=neq.closed&telegram_peer_id=neq.777000&select=*&order=updated_at.desc");
   const messagesResponse = await rest(config, "/support_messages?select=*&order=sent_at.asc");
+  const skipsResponse = await rest(config, `/support_ticket_skips?user_id=eq.${encodeURIComponent(userId)}&select=ticket_id`);
   const tickets = ticketsResponse.ok ? await ticketsResponse.json() as Ticket[] : [];
   const messages = messagesResponse.ok ? await messagesResponse.json() as Message[] : [];
-  return { tickets: tickets.map((ticket) => ({ ...ticket, messages: messages.filter((message) => message.ticket_id === ticket.id) })) };
+  const skipped = new Set(skipsResponse.ok ? (await skipsResponse.json() as { ticket_id: string }[]).map((skip) => skip.ticket_id) : []);
+  return { tickets: tickets.filter((ticket) => !skipped.has(ticket.id)).map((ticket) => ({ ...ticket, messages: messages.filter((message) => message.ticket_id === ticket.id) })) };
 }
 
 async function telegramClient() {

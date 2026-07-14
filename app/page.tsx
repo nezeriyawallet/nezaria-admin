@@ -412,7 +412,7 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
     setLoading(false);
   };
   useEffect(() => { void load(); const interval = window.setInterval(() => void load(), 12000); return () => window.clearInterval(interval); }, []);
-  const action = async (actionName: "take" | "send" | "close") => {
+  const action = async (actionName: "take" | "skip" | "send" | "close") => {
     if (!selected || busy) return;
     if (actionName === "send" && !message.trim()) return;
     setBusy(true);
@@ -422,6 +422,19 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
     else { setMessage(""); await load(); }
     setBusy(false);
   };
+  useEffect(() => {
+    const takeButton = document.querySelector(".conversation .take-ticket") as HTMLButtonElement | null;
+    if (!takeButton || takeButton.parentElement?.querySelector(".skip-ticket")) return;
+    const skipButton = document.createElement("button");
+    skipButton.type = "button";
+    skipButton.className = "skip-ticket";
+    skipButton.textContent = "Утриматись";
+    skipButton.style.cssText = "margin-left:7px;border:1px solid #506060;background:#172122;color:#afbebd;border-radius:7px;padding:9px 11px;font-weight:800;font-size:11px;cursor:pointer";
+    skipButton.disabled = busy;
+    skipButton.onclick = () => { void action("skip"); };
+    takeButton.insertAdjacentElement("afterend", skipButton);
+    return () => skipButton.remove();
+  }, [tickets, selectedId, busy]);
   const freshCount = tickets.filter((ticket) => ticket.status === "new").length;
   const activeCount = tickets.filter((ticket) => ticket.status === "in_progress").length;
   return <section className="support-desk-page">
