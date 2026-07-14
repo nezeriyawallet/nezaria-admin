@@ -394,6 +394,49 @@ export default function Home() {
       });
   }, [accessRole, workspaceMode, active]);
 
+  useEffect(() => {
+    if (accessRole !== "owner" || window.innerWidth > 700) return;
+    const topbar = document.querySelector(".topbar") as HTMLElement | null;
+    if (!topbar || topbar.querySelector(".mobile-profile-menu")) return;
+    const avatarButton = document.createElement("button");
+    avatarButton.type = "button";
+    avatarButton.className = "mobile-profile-menu";
+    avatarButton.textContent = viewerName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "N";
+    avatarButton.style.cssText = "margin-left:auto;width:38px;height:38px;border-radius:50%;border:1px solid #4b5a5a;background:linear-gradient(145deg,#c5a268,#684b34);color:#fff;font:700 11px Arial;cursor:pointer";
+    const menu = document.createElement("div");
+    menu.style.cssText = "position:fixed;top:68px;right:12px;width:min(280px,calc(100vw - 24px));max-height:calc(100vh - 84px);overflow:auto;padding:10px;background:#121b1d;border:1px solid #344244;border-radius:12px;box-shadow:0 18px 45px #000b;z-index:200";
+    menu.hidden = true;
+    const title = document.createElement("strong");
+    title.textContent = viewerName;
+    title.style.cssText = "display:block;padding:7px 8px 12px;color:#edf7f4;font:700 13px Arial";
+    menu.appendChild(title);
+    const addButton = (label: string, action: () => void, selected = false) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.style.cssText = `display:block;width:100%;border:0;border-radius:7px;padding:11px 10px;margin:2px 0;text-align:left;background:${selected ? "#21423b" : "transparent"};color:${selected ? "#76edd0" : "#c8d5d2"};font:700 12px Arial;cursor:pointer`;
+      button.onclick = () => { action(); menu.hidden = true; };
+      menu.appendChild(button);
+    };
+    addButton("NEZERIYA CEO", () => { switchWorkspace("ceo"); setActive("Огляд"); }, workspaceMode === "ceo");
+    addButton("NEZERIYA ADMIN", () => switchWorkspace("admin"), workspaceMode === "admin");
+    const divider = document.createElement("div");
+    divider.style.cssText = "height:1px;background:#2d393a;margin:8px 0";
+    menu.appendChild(divider);
+    navigation.forEach((item) => addButton(item, () => { switchWorkspace("ceo"); setActive(item); }, workspaceMode === "ceo" && active === item));
+    const exitDivider = document.createElement("div");
+    exitDivider.style.cssText = "height:1px;background:#2d393a;margin:8px 0";
+    menu.appendChild(exitDivider);
+    addButton("Вийти", () => { void signOut(); });
+    document.body.appendChild(menu);
+    const toggle = () => { menu.hidden = !menu.hidden; };
+    const close = (event: MouseEvent) => { if (!menu.contains(event.target as Node) && event.target !== avatarButton) menu.hidden = true; };
+    avatarButton.addEventListener("click", toggle);
+    document.addEventListener("click", close);
+    topbar.appendChild(avatarButton);
+    return () => { avatarButton.removeEventListener("click", toggle); document.removeEventListener("click", close); avatarButton.remove(); menu.remove(); };
+  }, [accessRole, workspaceMode, active, viewerName]);
+
   if (authState !== "signed_in") {
     return <AuthScreen checking={authState === "checking"} onGoogleSignIn={signInWithGoogle} />;
   }
