@@ -30,6 +30,9 @@ export async function POST(request: Request) {
 
   if (body.action === "take") {
     if (ticket.status !== "new") return Response.json({ error: "Ticket is already taken" }, { status: 409 });
+    const greeting = "Вітаємо вас у технічній підтримці Nezeriya Wallet";
+    const telegramMessageId = await sendTelegram(ticket, greeting);
+    await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: telegramMessageId, sender_type: "agent", body: greeting });
     await patch(config, "support_tickets", `id=eq.${ticket.id}`, { status: "in_progress", assigned_to: access.userId, assigned_at: new Date().toISOString(), updated_at: new Date().toISOString() });
     return Response.json({ ok: true });
   }
@@ -75,7 +78,7 @@ async function insertMessage(config: Config, data: Omit<Message, "id" | "sent_at
 async function ticketById(config: Config, id: string) { const response = await rest(config, `/support_tickets?id=eq.${encodeURIComponent(id)}&select=*&limit=1`); return response.ok ? (await response.json() as Ticket[])[0] || null : null; }
 
 async function listTickets(config: Config) {
-  const ticketsResponse = await rest(config, "/support_tickets?select=*&order=updated_at.desc");
+  const ticketsResponse = await rest(config, "/support_tickets?status=neq.closed&telegram_peer_id=neq.777000&select=*&order=updated_at.desc");
   const messagesResponse = await rest(config, "/support_messages?select=*&order=sent_at.asc");
   const tickets = ticketsResponse.ok ? await ticketsResponse.json() as Ticket[] : [];
   const messages = messagesResponse.ok ? await messagesResponse.json() as Message[] : [];
@@ -107,16 +110,17 @@ async function syncTelegram(config: Config) {
     const dialogs = await client.getDialogs({ limit: 60 });
     for (const dialog of dialogs) {
       const entity = dialog.entity as Api.User;
-      if (!entity || entity.className !== "User" || entity.bot || !entity.accessHash) continue;
-      const peerId = entity.id.toString();
+      const peerId = entity?.id?.toString();
+      if (!entity || entity.className !== "User" || entity.bot || !entity.accessHash || !peerId || peerId === "777000" || entity.username?.toLowerCase() === "telegram") continue;
       const clientName = [entity.firstName, entity.lastName].filter(Boolean).join(" ") || entity.username || "Клієнт";
+      const messages = await client.getMessages(entity, { limit: 30 });
+      const incomingMessages = messages.filter((message) => !message.out && !message.action && Boolean(message.message?.trim()));
+      if (incomingMessages.length === 0) continue;
       const ticketResponse = await rest(config, "/support_tickets?on_conflict=telegram_peer_id", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ telegram_peer_id: peerId, telegram_access_hash: entity.accessHash.toString(), client_name: clientName, client_username: entity.username || null, updated_at: new Date().toISOString() }) });
       if (!ticketResponse.ok) continue;
       const [ticket] = await ticketResponse.json() as Ticket[];
       if (!ticket) continue;
-      const messages = await client.getMessages(entity, { limit: 30 });
-      for (const message of messages) {
-        if (message.out || !message.message?.trim()) continue;
+      for (const message of incomingMessages) {
         const text = message.message.trim();
         await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: message.id, sender_type: "client", body: text });
         await handleFeedback(config, ticket, text);

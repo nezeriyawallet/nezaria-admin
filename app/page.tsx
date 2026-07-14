@@ -174,8 +174,8 @@ export default function Home() {
 
   useEffect(() => {
     if (accessRole !== "owner") return;
-    const token = window.sessionStorage.getItem("nezaria_access_token");
-    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
+    const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
+    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session") || window.localStorage.getItem("nezeriya_owner_session");
     if (!token || !ownerSession) return;
     void fetch("/api/owner/metrics", { headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } })
       .then(async (response) => ({ ok: response.ok, body: await response.json().catch(() => ({})) }))
@@ -403,7 +403,12 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
     const response = await fetch("/api/support/tickets?sync=1", { headers: headers() });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) setError(result.error || "Не вдалося завантажити звернення.");
-    else { setTickets(result.tickets || []); setError(""); if (!selectedId && result.tickets?.[0]) setSelectedId(result.tickets[0].id); }
+    else {
+      const nextTickets = result.tickets || [];
+      setTickets(nextTickets);
+      setError("");
+      setSelectedId((current) => current && nextTickets.some((ticket: SupportTicket) => ticket.id === current) ? current : (nextTickets[0]?.id || ""));
+    }
     setLoading(false);
   };
   useEffect(() => { void load(); const interval = window.setInterval(() => void load(), 12000); return () => window.clearInterval(interval); }, []);
