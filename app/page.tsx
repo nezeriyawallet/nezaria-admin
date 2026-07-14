@@ -22,6 +22,8 @@ type EmployeeProfile = {
   avatar_url: string | null; last_active_at: string | null; reviews: EmployeeReview[];
 };
 type WalletMetrics = Record<string, string | number | null>;
+type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
+type SupportTicket = { id: string; client_name: string; client_username: string | null; status: "new" | "in_progress" | "awaiting_rating" | "closed"; assigned_to: string | null; rating: number | null; review: string | null; created_at: string; updated_at: string; messages: SupportMessage[] };
 
 const navigation: NavItem[] = ["Огляд", "Користувачі", "Фінанси", "Підтримка", "Команда", "Працівники"];
 
@@ -324,7 +326,7 @@ export default function Home() {
         <div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>
         <div className="workspace-switcher"><button className={`workspace-choice ${workspaceMode === "ceo" ? "selected" : ""}`} onClick={() => switchWorkspace("ceo")}><span className="workspace-dot" />NEZERIYA CEO</button><button className={`workspace-choice ${workspaceMode === "admin" ? "selected" : ""}`} onClick={() => switchWorkspace("admin")}><span className="workspace-dot" />NEZERIYA ADMIN</button></div>
         <nav aria-label="Головна навігація">
-          {(workspaceMode === "ceo" ? navigation : ["Підтримка"]).map((item, index) => (
+          {(workspaceMode === "ceo" ? navigation : ["Підтримка"] as NavItem[]).map((item, index) => (
             <button key={item} onClick={() => setActive(item)} className={`nav-item ${active === item ? "active" : ""}`}>
               <span className="nav-icon">{["▦", "◎", "◌", "◍", "◫"][index]}</span>{item}
             </button>
@@ -381,10 +383,46 @@ function SupportAdminPanel({ onPresence }: { onPresence: (online: boolean, keepa
     void onPresence(next);
     return next;
   });
-  return <section className="support-admin-page">
-    <section className="heading-row"><div><p className="eyebrow">NEZERIYA ADMIN</p><h1>Кабінет <span>техпідтримки</span></h1><p className="subtle">Режим для роботи зі зверненнями користувачів.</p></div><button className={`availability ${available ? "available" : "away"}`} onClick={changeAvailability}><i />{available ? "Доступний" : "Не в мережі"}</button></section>
-    <section className="support-admin-summary"><article className="panel"><p>Нові звернення</p><strong>0</strong><span>Черга зараз порожня</span></article><article className="panel"><p>У роботі</p><strong>0</strong><span>Активних діалогів немає</span></article><article className="panel"><p>Статус працівника</p><strong>{available ? "Онлайн" : "Пауза"}</strong><span>Перемикається кнопкою зверху</span></article></section>
-    <article className="panel support-empty"><div className="support-empty-icon">◌</div><h2>Звернень поки немає</h2><p>Коли підключимо чат або форму звернень з Nezeriya Wallet, усі нові діалоги з’являтимуться тут. Працівник зможе взяти звернення в роботу та відповісти клієнту.</p></article>
+  return <SupportDesk available={available} onAvailability={changeAvailability} />;
+}
+
+function SupportDesk({ available, onAvailability }: { available?: boolean; onAvailability?: () => void }) {
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const selected = tickets.find((ticket) => ticket.id === selectedId) || tickets[0];
+  const headers = () => {
+    const token = window.sessionStorage.getItem("nezaria_access_token");
+    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
+    return { Authorization: `Bearer ${token || ""}`, ...(ownerSession ? { "x-owner-session": ownerSession } : {}) };
+  };
+  const load = async () => {
+    const response = await fetch("/api/support/tickets?sync=1", { headers: headers() });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) setError(result.error || "Не вдалося завантажити звернення.");
+    else { setTickets(result.tickets || []); setError(""); if (!selectedId && result.tickets?.[0]) setSelectedId(result.tickets[0].id); }
+    setLoading(false);
+  };
+  useEffect(() => { void load(); const interval = window.setInterval(() => void load(), 12000); return () => window.clearInterval(interval); }, []);
+  const action = async (actionName: "take" | "send" | "close") => {
+    if (!selected || busy) return;
+    if (actionName === "send" && !message.trim()) return;
+    setBusy(true);
+    const response = await fetch("/api/support/tickets", { method: "POST", headers: { "Content-Type": "application/json", ...headers() }, body: JSON.stringify({ action: actionName, ticketId: selected.id, message }) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) setError(result.error || "Не вдалося виконати дію.");
+    else { setMessage(""); await load(); }
+    setBusy(false);
+  };
+  const freshCount = tickets.filter((ticket) => ticket.status === "new").length;
+  const activeCount = tickets.filter((ticket) => ticket.status === "in_progress").length;
+  return <section className="support-desk-page">
+    <section className="heading-row"><div><p className="eyebrow">NEZERIYA ADMIN</p><h1>Чати <span>підтримки</span></h1><p className="subtle">Нові повідомлення синхронізуються з акаунтом підтримки.</p></div>{onAvailability && <button className={`availability ${available ? "available" : "away"}`} onClick={onAvailability}><i />{available ? "Доступний" : "Не в мережі"}</button>}</section>
+    <section className="support-admin-summary"><article className="panel"><p>Нові звернення</p><strong>{freshCount}</strong><span>Очікують працівника</span></article><article className="panel"><p>У роботі</p><strong>{activeCount}</strong><span>Активних діалогів</span></article><article className="panel"><p>Усього чатів</p><strong>{tickets.length}</strong><span>Усі синхронізовані звернення</span></article></section>
+    {loading ? <article className="panel empty-applications">Синхронізуємо чати…</article> : error ? <article className="panel empty-applications">{error}</article> : <section className="support-desk"><aside className="ticket-list">{tickets.length === 0 ? <p>Нових звернень поки немає.</p> : tickets.map((ticket) => <button key={ticket.id} className={`ticket-item ${selected?.id === ticket.id ? "selected" : ""}`} onClick={() => setSelectedId(ticket.id)}><span className={`ticket-dot ${ticket.status}`} /><div><strong>{ticket.client_name}</strong><small>{ticket.messages.at(-1)?.body || "Нове звернення"}</small></div><em>{ticket.status === "new" ? "Нове" : ticket.status === "in_progress" ? "В роботі" : ticket.status === "awaiting_rating" ? "Оцінка" : "Закрито"}</em></button>)}</aside><article className="panel conversation">{selected ? <><div className="conversation-head"><div><h2>{selected.client_name}</h2><p>{selected.client_username ? `@${selected.client_username}` : "Telegram"}</p></div><div>{selected.status === "new" && <button className="take-ticket" disabled={busy} onClick={() => void action("take")}>Взяти в роботу</button>}{selected.status === "in_progress" && <button className="close-ticket" disabled={busy} onClick={() => void action("close")}>Закрити чат</button>}</div></div><div className="messages">{selected.messages.map((item) => <div className={`message ${item.sender_type}`} key={item.id}>{item.body}</div>)}</div>{selected.status === "in_progress" ? <form className="message-form" onSubmit={(event) => { event.preventDefault(); void action("send"); }}><input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Напишіть відповідь…" maxLength={4000} /><button disabled={busy}>Надіслати</button></form> : <p className="conversation-note">{selected.status === "new" ? "Візьміть чат у роботу, щоб відповісти клієнту." : selected.status === "awaiting_rating" ? "Клієнту надіслано запит на оцінку та відгук." : "Діалог завершено."}</p>}</> : <p>Виберіть звернення зліва.</p>}</article></section>}
   </section>;
 }
 
@@ -533,7 +571,7 @@ function WorkerStatusScreen({ name, title, text }: { name: string; title: string
 }
 
 function WorkerWorkspace({ name }: { name: string }) {
-  return <main className="auth-page"><section className="auth-card worker-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div><p className="eyebrow">РОБОЧИЙ КАБІНЕТ</p><h1>Ви в <span>команді.</span></h1><p className="auth-copy">Вітаємо, {name}. Власник прийняв вашу заявку. Тут з’являтимуться нові звернення користувачів для підтримки.</p><div className="worker-status worker-approved"><i /> Ви прийняті до команди Nezeriya Wallet</div></section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
+  return <main className="worker-desk-shell"><header className="worker-desk-brand"><span className="brand-mark">N</span><strong>nezeriya<span className="brand-light">.wallet</span></strong><span>Працівник: {name}</span></header><div className="worker-desk-content"><SupportDesk /></div></main>;
 }
 
 function AuthScreen({ checking, onGoogleSignIn }: { checking: boolean; onGoogleSignIn: () => void }) {
