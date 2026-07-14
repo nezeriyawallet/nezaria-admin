@@ -18,7 +18,7 @@ type WorkerApplication = {
 type EmployeeReview = { id: string; client_name: string; rating: number; comment: string; created_at: string };
 type EmployeeProfile = {
   id: string; full_name: string; city: string; age: number; phone: string; created_at: string;
-  avatar_url: string | null; reviews: EmployeeReview[];
+  avatar_url: string | null; last_active_at: string | null; reviews: EmployeeReview[];
 };
 type WalletMetrics = Record<string, string | number | null>;
 
@@ -201,6 +201,15 @@ export default function Home() {
     return status === "pending" || status === "approved" || status === "rejected" ? status : null;
   };
 
+  const sendWorkerPresence = async () => {
+    const token = window.sessionStorage.getItem("nezaria_access_token");
+    if (!token || !supabaseUrl || !supabaseKey) return;
+    await fetch(`${supabaseUrl}/rest/v1/rpc/update_my_worker_presence`, {
+      method: "POST",
+      headers: { apikey: supabaseKey, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+  };
+
   if (authState !== "signed_in") {
     return <AuthScreen checking={authState === "checking"} onGoogleSignIn={signInWithGoogle} />;
   }
@@ -210,7 +219,7 @@ export default function Home() {
   }
 
   if (accessRole === "worker") {
-    return <WorkerScreen name={viewerName} onSubmit={submitWorkerApplication} onCheckStatus={getWorkerApplicationStatus} />;
+    return <WorkerScreen name={viewerName} onSubmit={submitWorkerApplication} onCheckStatus={getWorkerApplicationStatus} onPresence={sendWorkerPresence} />;
   }
 
   return (
@@ -288,7 +297,12 @@ function EmployeesPanel() {
   return <section className="employees-page">
     <section className="heading-row"><div><p className="eyebrow">ПРАЦІВНИКИ</p><h1>Ефективність <span>команди</span></h1><p className="subtle">Тут відображаються лише працівники, яких ви реально прийняли.</p></div><button className="sync" onClick={() => void loadEmployees()}>↻ Оновити</button></section>
     <section className="employees-summary"><article className="panel"><p>Усього працівників</p><strong>{employees.length}</strong></article><article className="panel"><p>Відгуків клієнтів</p><strong>{reviewCount}</strong></article><article className="panel"><p>Середній рейтинг</p><strong>{averageRating === "—" ? "—" : `${averageRating} ★`}</strong></article><article className="panel"><p>Статус даних</p><strong className="employee-live">LIVE</strong></article></section>
-    {loading ? <article className="panel empty-applications">Завантажуємо працівників…</article> : error ? <article className="panel empty-applications">{error}</article> : employees.length === 0 ? <article className="panel empty-applications">Ще немає прийнятих працівників. Приймайте заявки у розділі «Команда».</article> : <article className="panel employees-table-panel"><div className="panel-head"><div><p className="panel-label">КОМАНДА ПІДТРИМКИ</p><h2>Усі працівники</h2></div></div><div className="team-table employees-table">{employees.map((employee) => { const rating = employee.reviews.length ? (employee.reviews.reduce((sum, review) => sum + review.rating, 0) / employee.reviews.length).toFixed(2) : "—"; const initials = employee.full_name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase(); return <button className="team-row employee-row" key={employee.id} onClick={() => setSelected(employee)}><div className="member"><div className="avatar member-avatar employee-avatar">{employee.avatar_url ? <img src={employee.avatar_url} alt={`Фото ${employee.full_name}`} /> : initials}</div><div><strong>{employee.full_name}</strong><small>{employee.city}</small></div></div><div><small>Рейтинг</small><strong className="rating">{rating === "—" ? "—" : `★ ${rating}`}</strong></div><div><small>Відгуків</small><strong>{employee.reviews.length}</strong></div><span className="status online">Прийнято</span></button>; })}</div></article>}
+    {loading ? <article className="panel empty-applications">Завантажуємо працівників…</article> : error ? <article className="panel empty-applications">{error}</article> : employees.length === 0 ? <article className="panel empty-applications">Ще немає прийнятих працівників. Приймайте заявки у розділі «Команда».</article> : <article className="panel employees-table-panel"><div className="panel-head"><div><p className="panel-label">КОМАНДА ПІДТРИМКИ</p><h2>Усі працівники</h2></div></div><div className="team-table employees-table">{employees.map((employee) => {
+      const rating = employee.reviews.length ? (employee.reviews.reduce((sum, review) => sum + review.rating, 0) / employee.reviews.length).toFixed(2) : "—";
+      const initials = employee.full_name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+      const isOnline = Boolean(employee.last_active_at) && Date.now() - new Date(employee.last_active_at!).getTime() < 90000;
+      return <button className="team-row employee-row" key={employee.id} onClick={() => setSelected(employee)}><div className="member"><div className="avatar member-avatar employee-avatar">{employee.avatar_url ? <img src={employee.avatar_url} alt={`Фото ${employee.full_name}`} /> : initials}</div><div><strong>{employee.full_name}</strong><small>{employee.city}</small></div></div><div><small>Рейтинг</small><strong className="rating">{rating === "—" ? "—" : `★ ${rating}`}</strong></div><div><small>Відгуків</small><strong>{employee.reviews.length}</strong></div><span className={`status ${isOnline ? "online" : "break"}`}>{isOnline ? "Онлайн" : "Не в мережі"}</span></button>;
+    })}</div></article>}
     {selected && <section className="employee-modal-backdrop" role="presentation" onMouseDown={() => setSelected(null)}><article className="panel employee-profile" role="dialog" aria-modal="true" aria-label={`Профіль ${selected.full_name}`} onMouseDown={(event) => event.stopPropagation()}><button className="profile-close" onClick={() => setSelected(null)} aria-label="Закрити">×</button><div className="employee-profile-head"><div className="profile-avatar">{selected.avatar_url ? <img src={selected.avatar_url} alt={`Фото ${selected.full_name}`} /> : selected.full_name.slice(0, 1).toUpperCase()}</div><div><p className="panel-label">ПРАЦІВНИК</p><h2>{selected.full_name}</h2><p>{selected.city} · {selected.age} років</p></div></div><div className="employee-info"><span>Телефон<strong>{selected.phone}</strong></span><span>Прийнятий<strong>{new Date(selected.created_at).toLocaleDateString("uk-UA")}</strong></span></div><div className="reviews-head"><h3>Відгуки клієнтів</h3><span>{selected.reviews.length}</span></div>{selected.reviews.length === 0 ? <p className="no-reviews">Відгуків ще немає. Вони з’являться після запуску чатів підтримки та оцінювання діалогів.</p> : <div className="reviews-list">{selected.reviews.map((review) => <article className="review" key={review.id}><div><strong>{review.client_name}</strong><span>{"★".repeat(review.rating)}</span></div><p>{review.comment}</p><small>{new Date(review.created_at).toLocaleDateString("uk-UA")}</small></article>)}</div>}</article></section>}
   </section>;
 }
@@ -408,7 +422,7 @@ function RoleScreen({ name, onOwnerCode, onWorker }: { name: string; onOwnerCode
   return <main className="auth-page"><section className="auth-card role-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>{mode === "choose" ? <><p className="eyebrow">ВХІД У РОБОЧИЙ ПРОСТІР</p><h1>Вітаємо, {name}.<br /><span>Оберіть роль.</span></h1><p className="auth-copy">Роль визначає, які інструменти будуть доступні у вашому кабінеті.</p><div className="role-options"><button className="role-option" onClick={() => setMode("owner")}><b>◈</b><span><strong>Власник</strong><small>Повна аналітика, команда та налаштування</small></span><i>→</i></button><button className="role-option" onClick={onWorker}><b>◌</b><span><strong>Працівник</strong><small>Подати заявку або перейти до підтримки</small></span><i>→</i></button></div></> : <form onSubmit={submit}><button className="back-link" type="button" onClick={() => setMode("choose")}>← Назад</button><p className="eyebrow">ПІДТВЕРДЖЕННЯ ВЛАСНИКА</p><h1>Введіть<br /><span>код доступу.</span></h1><p className="auth-copy">Код перевіряється безпечно на сервері та ніколи не показується у браузері.</p><input className="owner-code" value={code} onChange={(event) => setCode(event.target.value)} placeholder="Код власника" autoFocus required /><button className="google-button mint-action" disabled={loading}>{loading ? "Перевіряємо…" : "Відкрити панель"}</button>{error && <p className="auth-error">{error}</p>}</form>}</section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
 }
 
-function WorkerScreen({ name, onSubmit, onCheckStatus }: { name: string; onSubmit: (application: { full_name: string; city: string; age: number; phone: string }, document: File, facePhoto: File) => Promise<{ ok: boolean; message: string }>; onCheckStatus: () => Promise<"pending" | "approved" | "rejected" | null> }) {
+function WorkerScreen({ name, onSubmit, onCheckStatus, onPresence }: { name: string; onSubmit: (application: { full_name: string; city: string; age: number; phone: string }, document: File, facePhoto: File) => Promise<{ ok: boolean; message: string }>; onCheckStatus: () => Promise<"pending" | "approved" | "rejected" | null>; onPresence: () => Promise<void> }) {
   const [form, setForm] = useState({ first_name: name, last_name: "", patronymic: "", city: "", age: "", phone: "", document_note: "" });
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [facePhotoFile, setFacePhotoFile] = useState<File | null>(null);
@@ -425,6 +439,13 @@ function WorkerScreen({ name, onSubmit, onCheckStatus }: { name: string; onSubmi
     const interval = window.setInterval(checkStatus, 15000);
     return () => { active = false; window.clearInterval(interval); };
   }, [onCheckStatus]);
+
+  useEffect(() => {
+    if (applicationStatus !== "approved") return;
+    void onPresence();
+    const interval = window.setInterval(() => void onPresence(), 30000);
+    return () => window.clearInterval(interval);
+  }, [applicationStatus, onPresence]);
 
   const update = (field: keyof typeof form, value: string) => setForm((current) => ({ ...current, [field]: value }));
   const submit = async (event: React.FormEvent) => {
