@@ -53,6 +53,35 @@ export async function PATCH(request: Request) {
   return Response.json({ application: updated[0] });
 }
 
+export async function DELETE(request: Request) {
+  const user = await verifyGoogleUser(request);
+  if (!user || !(await verifyOwnerSession(request, user.id))) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const config = adminConfig();
+  if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
+
+  const { id } = await request.json().catch(() => ({ id: "" }));
+  if (typeof id !== "string") return Response.json({ error: "Invalid request" }, { status: 400 });
+  const encodedId = encodeURIComponent(id);
+  const existing = await fetch(`${config.url}/rest/v1/worker_applications?id=eq.${encodedId}&status=eq.rejected&select=document_note,face_photo_path`, {
+    headers: { apikey: config.key, Authorization: `Bearer ${config.key}` },
+  });
+  if (!existing.ok) return Response.json({ error: "Could not load application" }, { status: 502 });
+  const [application] = await existing.json() as Pick<Application, "document_note" | "face_photo_path">[];
+  if (!application) return Response.json({ error: "Archived application was not found" }, { status: 404 });
+
+  const removed = await fetch(`${config.url}/rest/v1/worker_applications?id=eq.${encodedId}&status=eq.rejected`, {
+    method: "DELETE",
+    headers: { apikey: config.key, Authorization: `Bearer ${config.key}`, Prefer: "return=minimal" },
+  });
+  if (!removed.ok) return Response.json({ error: "Could not delete application" }, { status: 502 });
+
+  await Promise.all([application.document_note, application.face_photo_path].filter(Boolean).map((path) => fetch(
+    `${config.url}/storage/v1/object/worker-documents/${path!.split("/").map(encodeURIComponent).join("/")}`,
+    { method: "DELETE", headers: { apikey: config.key, Authorization: `Bearer ${config.key}` } },
+  )));
+  return Response.json({ ok: true });
+}
+
 function adminConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
