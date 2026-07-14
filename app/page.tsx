@@ -396,13 +396,12 @@ export default function Home() {
 
   useEffect(() => {
     if (accessRole !== "owner" || window.innerWidth > 700) return;
-    const topbar = document.querySelector(".topbar") as HTMLElement | null;
-    if (!topbar || topbar.querySelector(".mobile-profile-menu")) return;
+    if (document.querySelector(".mobile-profile-menu")) return;
     const avatarButton = document.createElement("button");
     avatarButton.type = "button";
     avatarButton.className = "mobile-profile-menu";
     avatarButton.textContent = viewerName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "N";
-    avatarButton.style.cssText = "margin-left:auto;width:38px;height:38px;border-radius:50%;border:1px solid #4b5a5a;background:linear-gradient(145deg,#c5a268,#684b34);color:#fff;font:700 11px Arial;cursor:pointer";
+    avatarButton.style.cssText = "position:fixed;top:12px;right:16px;z-index:201;width:42px;height:42px;border-radius:50%;border:1px solid #4b5a5a;background:linear-gradient(145deg,#c5a268,#684b34);color:#fff;font:700 11px Arial;cursor:pointer;box-shadow:0 8px 24px #0008";
     const menu = document.createElement("div");
     menu.style.cssText = "position:fixed;top:68px;right:12px;width:min(280px,calc(100vw - 24px));max-height:calc(100vh - 84px);overflow:auto;padding:10px;background:#121b1d;border:1px solid #344244;border-radius:12px;box-shadow:0 18px 45px #000b;z-index:200";
     menu.hidden = true;
@@ -433,7 +432,7 @@ export default function Home() {
     const close = (event: MouseEvent) => { if (!menu.contains(event.target as Node) && event.target !== avatarButton) menu.hidden = true; };
     avatarButton.addEventListener("click", toggle);
     document.addEventListener("click", close);
-    topbar.appendChild(avatarButton);
+    document.body.appendChild(avatarButton);
     return () => { avatarButton.removeEventListener("click", toggle); document.removeEventListener("click", close); avatarButton.remove(); menu.remove(); };
   }, [accessRole, workspaceMode, active, viewerName]);
 
