@@ -399,8 +399,8 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
     const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
     return { Authorization: `Bearer ${token || ""}`, ...(ownerSession ? { "x-owner-session": ownerSession } : {}) };
   };
-  const load = async () => {
-    const response = await fetch("/api/support/tickets?sync=1", { headers: headers() });
+  const load = async (sync = true) => {
+    const response = await fetch(`/api/support/tickets${sync ? "?sync=1" : ""}`, { headers: headers() });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) setError(result.error || "Не вдалося завантажити звернення.");
     else {
@@ -419,7 +419,13 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
     const response = await fetch("/api/support/tickets", { method: "POST", headers: { "Content-Type": "application/json", ...headers() }, body: JSON.stringify({ action: actionName, ticketId: selected.id, message }) });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) setError(result.error || "Не вдалося виконати дію.");
-    else { setMessage(""); await load(); }
+    else {
+      setMessage("");
+      if (actionName === "skip") {
+        setTickets((current) => current.filter((ticket) => ticket.id !== selected.id));
+        setSelectedId((current) => current === selected.id ? "" : current);
+      } else await load(false);
+    }
     setBusy(false);
   };
   useEffect(() => {
