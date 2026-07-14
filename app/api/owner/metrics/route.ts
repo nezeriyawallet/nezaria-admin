@@ -45,6 +45,12 @@ function scalar(value: unknown): number | string | null {
   const object = value as Record<string, unknown>;
   for (const key of ["value", "total", "count", "amount", "revenue", "result", "data"]) {
     if (typeof object[key] === "number" || typeof object[key] === "string") return object[key] as number | string;
+    const nested = scalar(object[key]);
+    if (nested !== null) return nested;
+  }
+  for (const nestedValue of Object.values(object)) {
+    const nested = scalar(nestedValue);
+    if (nested !== null) return nested;
   }
   return null;
 }
