@@ -316,7 +316,7 @@ export default function Home() {
       <section className="content">
 
         <div className="dashboard">
-          {active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} /> : <>
+          {active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
           <section className="heading-row">
             <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p></div>
             <div className="header-controls"><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>
@@ -343,6 +343,19 @@ export default function Home() {
       {notice && <div className="toast">✓ {notice}</div>}
     </main>
   );
+}
+
+function FinancePanel({ walletMetrics }: { walletMetrics: WalletMetrics | null }) {
+  const value = (key: string, prefix = "") => walletMetrics ? displayMetric(walletMetrics[key], prefix) : "—";
+  const starsNrz = walletMetrics ? metricNumber(walletMetrics.monthlyStars) : 0;
+  const starsUsd = starsNrz * 0.015;
+  const totalIncome = walletMetrics ? metricNumber(walletMetrics.totalCommission) + starsUsd : null;
+  return <section className="finance-page">
+    <section className="heading-row"><div><p className="eyebrow">ФІНАНСИ</p><h1>Фінансова <span>аналітика</span></h1><p className="subtle">Дані синхронізуються з Nezeriya Wallet API.</p></div><span className="live"><i /> LIVE</span></section>
+    <section className="finance-highlight"><article className="panel"><p>Загальна сума доходу</p><strong>{totalIncome === null ? "—" : displayMetric(totalIncome, "$")}</strong><span>Комісії + Telegram Stars</span></article><article className="panel"><p>Загальна комісія</p><strong>{value("totalCommission", "$")}</strong><span>За весь час</span></article><article className="panel"><p>Комісія за місяць</p><strong>{value("monthlyCommission", "$")}</strong><span>Поточний місяць</span></article></section>
+    <section className="finance-grid"><article className="panel finance-card"><p className="panel-label">TELEGRAM STARS</p><h2>Дохід зі Stars</h2><strong>{walletMetrics ? `${displayMetric(starsNrz)} NZR` : "—"}</strong><div><span>Вартість у USD</span><b>{walletMetrics ? displayMetric(starsUsd, "$") : "—"}</b></div><small>Перерахунок: 1 NZR = $0.015</small></article><article className="panel finance-card"><p className="panel-label">РЕФЕРАЛИ</p><h2>Реферальний дохід</h2><strong>{value("referralTotal", "$")}</strong><div><span>Операцій DeDust</span><b>{value("dedustSwaps")}</b></div><small>Показники партнерської активності</small></article><article className="panel finance-card"><p className="panel-label">РУЛЕТКА</p><h2>Втрати рулетки</h2><strong>{value("wheelLoss", " NZR")}</strong><div><span>Невдалих транзакцій</span><b>{value("failedTransactions")}</b></div><small>Контроль ризикових операцій</small></article></section>
+    <article className="panel nzr-finance-panel"><div className="panel-head"><div><p className="panel-label">NZR</p><h2>Операції токена</h2></div></div><div className="nzr-finance-list"><span>Транзакцій NZR<strong>{value("nzrTransactions")}</strong></span><span>Продажі NZR<strong>{value("nzrSwapSell")}</strong></span><span>Купівлі NZR<strong>{value("nzrSwapBuy")}</strong></span><span>Покупки NZR за Stars<strong>{value("nzrStars")}</strong></span></div></article>
+  </section>;
 }
 
 function UsersPanel({ walletMetrics }: { walletMetrics: WalletMetrics | null }) {
