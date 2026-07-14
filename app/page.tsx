@@ -411,7 +411,7 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
     }
     setLoading(false);
   };
-  useEffect(() => { void load(); const interval = window.setInterval(() => void load(), 12000); return () => window.clearInterval(interval); }, []);
+  useEffect(() => { void load(); const interval = window.setInterval(() => void load(), 5000); return () => window.clearInterval(interval); }, []);
   const action = async (actionName: "take" | "skip" | "send" | "close") => {
     if (!selected || busy) return;
     if (actionName === "send" && !message.trim()) return;

@@ -9,6 +9,9 @@ type Config = { url: string; key: string };
 
 export const runtime = "nodejs";
 
+let cachedTelegramClient: TelegramClient | null = null;
+let connectingTelegramClient: Promise<TelegramClient | null> | null = null;
+
 export async function GET(request: Request) {
   const access = await authorize(request);
   if (!access) return Response.json({ error: "Forbidden" }, { status: 403 });
@@ -105,34 +108,39 @@ async function listTickets(config: Config, userId: string) {
 }
 
 async function telegramClient() {
+  if (cachedTelegramClient?.connected) return cachedTelegramClient;
+  if (connectingTelegramClient) return connectingTelegramClient;
   const apiId = Number(process.env.TELEGRAM_API_ID);
   const apiHash = process.env.TELEGRAM_API_HASH;
   const session = process.env.TELEGRAM_SESSION_STRING;
   if (!Number.isInteger(apiId) || !apiHash || !session) return null;
-  const client = new TelegramClient(new StringSession(session), apiId, apiHash, { connectionRetries: 3 });
-  await client.connect();
-  return client;
+  connectingTelegramClient = (async () => {
+    const client = new TelegramClient(new StringSession(session), apiId, apiHash, { connectionRetries: 2 });
+    await client.connect();
+    cachedTelegramClient = client;
+    return client;
+  })();
+  try { return await connectingTelegramClient; }
+  finally { connectingTelegramClient = null; }
 }
 async function sendTelegram(ticket: Ticket, text: string) {
   const client = await telegramClient();
   if (!client) throw new Error("Telegram account is not configured");
-  try {
-    const result = await client.sendMessage(new Api.InputPeerUser({ userId: bigInt(ticket.telegram_peer_id), accessHash: bigInt(ticket.telegram_access_hash) }), { message: text });
-    return result.id;
-  } finally { await client.disconnect(); }
+  const result = await client.sendMessage(new Api.InputPeerUser({ userId: bigInt(ticket.telegram_peer_id), accessHash: bigInt(ticket.telegram_access_hash) }), { message: text });
+  return result.id;
 }
 
 async function syncTelegram(config: Config) {
   const client = await telegramClient();
   if (!client) return;
   try {
-    const dialogs = await client.getDialogs({ limit: 60 });
+    const dialogs = await client.getDialogs({ limit: 25 });
     for (const dialog of dialogs) {
       const entity = dialog.entity as Api.User;
       const peerId = entity?.id?.toString();
       if (!entity || entity.className !== "User" || entity.bot || !entity.accessHash || !peerId || peerId === "777000" || entity.username?.toLowerCase() === "telegram") continue;
       const clientName = [entity.firstName, entity.lastName].filter(Boolean).join(" ") || entity.username || "Клієнт";
-      const messages = await client.getMessages(entity, { limit: 30 });
+      const messages = await client.getMessages(entity, { limit: 15 });
       const incomingMessages = messages.filter((message) => !message.out && !message.action && Boolean(message.message?.trim()));
       if (incomingMessages.length === 0) continue;
       const ticketData = { telegram_peer_id: peerId, telegram_access_hash: entity.accessHash.toString(), client_name: clientName, client_username: entity.username || null, updated_at: new Date().toISOString() };
@@ -155,7 +163,9 @@ async function syncTelegram(config: Config) {
         if (await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: message.id, sender_type: "client", body: text })) await handleFeedback(config, ticket, text);
       }
     }
-  } finally { await client.disconnect(); }
+  } catch {
+    cachedTelegramClient = null;
+  }
 }
 
 async function handleFeedback(config: Config, ticket: Ticket, text: string) {
