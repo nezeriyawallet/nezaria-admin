@@ -87,6 +87,12 @@ async function ticketById(config: Config, id: string) { const response = await r
 async function ticketByPeer(config: Config, peerId: string) { const response = await rest(config, `/support_tickets?telegram_peer_id=eq.${encodeURIComponent(peerId)}&select=*&limit=1`); return response.ok ? (await response.json() as Ticket[])[0] || null : null; }
 async function createTicket(config: Config, data: Record<string, unknown>) { const response = await rest(config, "/support_tickets", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "return=representation" }, body: JSON.stringify(data) }); return response.ok ? (await response.json() as Ticket[])[0] || null : null; }
 async function removeTicketMessages(config: Config, ticketId: string) { await rest(config, `/support_messages?ticket_id=eq.${encodeURIComponent(ticketId)}`, { method: "DELETE" }); }
+async function removeTicketSkips(config: Config, ticketId: string) { await rest(config, `/support_ticket_skips?ticket_id=eq.${encodeURIComponent(ticketId)}`, { method: "DELETE" }); }
+async function latestTicketMessageId(config: Config, ticketId: string) {
+  const response = await rest(config, `/support_messages?ticket_id=eq.${encodeURIComponent(ticketId)}&telegram_message_id=not.is.null&select=telegram_message_id&order=telegram_message_id.desc&limit=1`);
+  const [message] = response.ok ? await response.json() as { telegram_message_id: number }[] : [];
+  return message?.telegram_message_id || 0;
+}
 
 async function listTickets(config: Config, userId: string) {
   const ticketsResponse = await rest(config, "/support_tickets?status=neq.closed&telegram_peer_id=neq.777000&select=*&order=updated_at.desc");
@@ -132,11 +138,14 @@ async function syncTelegram(config: Config) {
       const ticketData = { telegram_peer_id: peerId, telegram_access_hash: entity.accessHash.toString(), client_name: clientName, client_username: entity.username || null, updated_at: new Date().toISOString() };
       let ticket = await ticketByPeer(config, peerId);
       let messagesToSave = incomingMessages;
-      if (ticket?.status === "closed") {
-        const closedAt = new Date(ticket.updated_at).getTime();
-        messagesToSave = incomingMessages.filter((message) => message.date * 1000 > closedAt);
+      const lastMessageId = ticket ? await latestTicketMessageId(config, ticket.id) : 0;
+      const newTelegramMessages = incomingMessages.filter((message) => message.id > lastMessageId);
+      const startsNewRequest = ticket?.status === "awaiting_rating" && !ticket.rating && newTelegramMessages.length > 0 && !/^[1-5]$/.test(newTelegramMessages[0].message.trim());
+      if (ticket && (ticket.status === "closed" || startsNewRequest)) {
+        messagesToSave = newTelegramMessages;
         if (messagesToSave.length === 0) continue;
         await removeTicketMessages(config, ticket.id);
+        await removeTicketSkips(config, ticket.id);
         await patch(config, "support_tickets", `id=eq.${ticket.id}`, { ...ticketData, status: "new", assigned_to: null, assigned_at: null, rating: null, review: null });
         ticket = await ticketById(config, ticket.id);
       } else if (!ticket) ticket = await createTicket(config, ticketData);
