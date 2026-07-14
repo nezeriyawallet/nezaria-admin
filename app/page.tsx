@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 type NavItem = "Огляд" | "Користувачі" | "Фінанси" | "Підтримка" | "Команда" | "Працівники";
 type AccessRole = "owner" | "worker" | null;
+type WorkspaceMode = "ceo" | "admin";
 type WorkerApplication = {
   id: string;
   full_name: string;
@@ -50,6 +51,7 @@ function metricNumber(value: string | number | null | undefined) {
 
 export default function Home() {
   const [active, setActive] = useState<NavItem>("Огляд");
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("ceo");
   const [period, setPeriod] = useState("30 днів");
   const [updated, setUpdated] = useState("Оновлено щойно");
   const [notice, setNotice] = useState<string | null>(null);
@@ -62,6 +64,10 @@ export default function Home() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   const chartPath = useMemo(() => "M0 176 C28 168 36 139 62 150 S100 126 122 135 S154 83 184 107 S226 117 248 82 S283 58 305 74 S342 45 372 65 S406 23 438 41 S482 27 510 18", []);
+
+  useEffect(() => {
+    if (window.localStorage.getItem("nezeriya_workspace_mode") === "admin") setWorkspaceMode("admin");
+  }, []);
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -226,6 +232,12 @@ export default function Home() {
     setAccessRole("worker");
   };
 
+  const switchWorkspace = (mode: WorkspaceMode) => {
+    window.localStorage.setItem("nezeriya_workspace_mode", mode);
+    setWorkspaceMode(mode);
+    setActive(mode === "admin" ? "Підтримка" : "Огляд");
+  };
+
   const submitWorkerApplication = async (application: { full_name: string; city: string; age: number; phone: string }, document: File, facePhoto: File) => {
     const token = window.sessionStorage.getItem("nezaria_access_token");
     if (!token || !supabaseUrl || !supabaseKey || !viewerId) return { ok: false, message: "Не вдалося перевірити ваш вхід. Увійдіть ще раз." };
@@ -299,9 +311,9 @@ export default function Home() {
     <main className="shell">
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>
-        <div className="workspace"><span className="workspace-dot" /> NEZERIYA ADMIN <span className="chevron">⌄</span></div>
+        <div className="workspace-switcher"><button className={`workspace-choice ${workspaceMode === "ceo" ? "selected" : ""}`} onClick={() => switchWorkspace("ceo")}><span className="workspace-dot" />NEZERIYA CEO</button><button className={`workspace-choice ${workspaceMode === "admin" ? "selected" : ""}`} onClick={() => switchWorkspace("admin")}><span className="workspace-dot" />NEZERIYA ADMIN</button></div>
         <nav aria-label="Головна навігація">
-          {navigation.map((item, index) => (
+          {(workspaceMode === "ceo" ? navigation : ["Підтримка"]).map((item, index) => (
             <button key={item} onClick={() => setActive(item)} className={`nav-item ${active === item ? "active" : ""}`}>
               <span className="nav-icon">{["▦", "◎", "◌", "◍", "◫"][index]}</span>{item}
             </button>
@@ -316,7 +328,7 @@ export default function Home() {
       <section className="content">
 
         <div className="dashboard">
-          {active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
+          {workspaceMode === "admin" ? <SupportAdminPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
           <section className="heading-row">
             <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p></div>
             <div className="header-controls"><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>
@@ -343,6 +355,15 @@ export default function Home() {
       {notice && <div className="toast">✓ {notice}</div>}
     </main>
   );
+}
+
+function SupportAdminPanel() {
+  const [available, setAvailable] = useState(true);
+  return <section className="support-admin-page">
+    <section className="heading-row"><div><p className="eyebrow">NEZERIYA ADMIN</p><h1>Кабінет <span>техпідтримки</span></h1><p className="subtle">Режим для роботи зі зверненнями користувачів.</p></div><button className={`availability ${available ? "available" : "away"}`} onClick={() => setAvailable((value) => !value)}><i />{available ? "Доступний" : "Не в мережі"}</button></section>
+    <section className="support-admin-summary"><article className="panel"><p>Нові звернення</p><strong>0</strong><span>Черга зараз порожня</span></article><article className="panel"><p>У роботі</p><strong>0</strong><span>Активних діалогів немає</span></article><article className="panel"><p>Статус працівника</p><strong>{available ? "Онлайн" : "Пауза"}</strong><span>Перемикається кнопкою зверху</span></article></section>
+    <article className="panel support-empty"><div className="support-empty-icon">◌</div><h2>Звернень поки немає</h2><p>Коли підключимо чат або форму звернень з Nezeriya Wallet, усі нові діалоги з’являтимуться тут. Працівник зможе взяти звернення в роботу та відповісти клієнту.</p></article>
+  </section>;
 }
 
 function FinancePanel({ walletMetrics }: { walletMetrics: WalletMetrics | null }) {
