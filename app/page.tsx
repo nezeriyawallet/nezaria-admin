@@ -4,6 +4,16 @@ import { useEffect, useMemo, useState } from "react";
 
 type NavItem = "Огляд" | "Користувачі" | "Фінанси" | "Підтримка" | "Команда";
 type AccessRole = "owner" | "worker" | null;
+type WorkerApplication = {
+  id: string;
+  full_name: string;
+  city: string;
+  age: number;
+  phone: string;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+  photo_url: string | null;
+};
 
 const navigation: NavItem[] = ["Огляд", "Користувачі", "Фінанси", "Підтримка", "Команда"];
 
@@ -93,6 +103,9 @@ export default function Home() {
       body: JSON.stringify({ code }),
     });
     if (!response.ok) return false;
+    const result = await response.json();
+    if (typeof result.ownerSession !== "string") return false;
+    window.sessionStorage.setItem("nezeriya_owner_session", result.ownerSession);
     window.sessionStorage.setItem("nezeriya_access_role", "owner");
     setAccessRole("owner");
     return true;
@@ -164,6 +177,7 @@ export default function Home() {
         </header>
 
         <div className="dashboard">
+          {active === "Команда" ? <ApplicationsPanel /> : <>
           <section className="heading-row">
             <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p><h1>Доброго дня, Nazar <span>✦</span></h1><p className="subtle">{updated} · Дані Nezeriya Wallet</p></div>
             <div className="header-controls"><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>
@@ -182,11 +196,63 @@ export default function Home() {
             <article className="panel table-panel"><div className="panel-head"><div><p className="panel-label">КОМАНДА ПІДТРИМКИ</p><h2>Ефективність працівників</h2></div><button className="text-button" onClick={() => setActive("Команда")}>Вся команда →</button></div><div className="team-table">{team.map((person) => <div className="team-row" key={person.name}><div className="member"><div className="avatar member-avatar">{person.initials}</div><div><strong>{person.name}</strong><small>{person.role}</small></div></div><div><small>Рейтинг</small><strong className="rating">★ {person.rating}</strong></div><div><small>Чатів</small><strong>{person.chats}</strong></div><span className={`status ${person.status === "В чаті" ? "online" : "break"}`}>{person.status}</span></div>)}</div></article>
             <article className="panel queue-panel"><div className="panel-head"><div><p className="panel-label">ПІДТРИМКА</p><h2>Черга звернень</h2></div><span className="queue-count">12</span></div><div className="queue-stat"><strong>03:42</strong><span>середній час відповіді</span></div><div className="queue-progress"><i /></div><div className="queue-info"><span>8 у роботі</span><span>4 очікують</span></div><button className="open-queue" onClick={() => { setActive("Підтримка"); setNotice("Чергу звернень відкрито"); }}>Відкрити звернення <b>→</b></button></article>
           </section>
+          </>}
         </div>
       </section>
       {notice && <div className="toast">✓ {notice}</div>}
     </main>
   );
+}
+
+function ApplicationsPanel() {
+  const [applications, setApplications] = useState<WorkerApplication[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState("");
+
+  const loadApplications = async () => {
+    const token = window.sessionStorage.getItem("nezaria_access_token");
+    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
+    if (!token || !ownerSession) {
+      setError("Сесію власника не знайдено. Вийдіть і увійдіть знову, обравши роль «Власник».");
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const response = await fetch("/api/owner/applications", {
+      headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession },
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) setError(result.error || "Не вдалося завантажити заявки.");
+    else setApplications(result.applications || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { void loadApplications(); }, []);
+
+  const decide = async (id: string, status: "approved" | "rejected") => {
+    const token = window.sessionStorage.getItem("nezaria_access_token");
+    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
+    if (!token || !ownerSession) return;
+    setBusyId(id);
+    const response = await fetch("/api/owner/applications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "x-owner-session": ownerSession },
+      body: JSON.stringify({ id, status }),
+    });
+    if (!response.ok) setError("Не вдалося оновити заявку. Спробуйте ще раз.");
+    else setApplications((items) => items.map((item) => item.id === id ? { ...item, status } : item));
+    setBusyId("");
+  };
+
+  return <section className="applications-page">
+    <section className="heading-row"><div><p className="eyebrow">КОМАНДА</p><h1>Заявки <span>працівників</span></h1><p className="subtle">Перевіряйте дані, фото документа та ухвалюйте рішення.</p></div><button className="sync" onClick={() => void loadApplications()}>↻ Оновити</button></section>
+    {loading ? <article className="panel empty-applications">Завантажуємо заявки…</article> : error ? <article className="panel empty-applications">{error}</article> : applications.length === 0 ? <article className="panel empty-applications">Нових заявок поки немає.</article> : <div className="applications-list">{applications.map((application) => <article className="panel application-card" key={application.id}>
+      <div className="application-main"><div><p className="panel-label">КАНДИДАТ</p><h2>{application.full_name}</h2><p className="application-meta">{application.city} · {application.age} років · {application.phone}</p><p className="application-date">{new Date(application.created_at).toLocaleString("uk-UA")}</p></div><span className={`application-status ${application.status}`}>{application.status === "pending" ? "На розгляді" : application.status === "approved" ? "Прийнято" : "Відхилено"}</span></div>
+      <div className="document-preview">{application.photo_url ? <a href={application.photo_url} target="_blank" rel="noreferrer"><img src={application.photo_url} alt={`Фото документа: ${application.full_name}`} /></a> : <span>Фото недоступне</span>}</div>
+      {application.status === "pending" && <div className="application-actions"><button className="reject" disabled={busyId === application.id} onClick={() => void decide(application.id, "rejected")}>Відхилити</button><button className="approve" disabled={busyId === application.id} onClick={() => void decide(application.id, "approved")}>{busyId === application.id ? "Зберігаємо…" : "Прийняти"}</button></div>}
+    </article>)}</div>}
+  </section>;
 }
 
 function AuthScreen({ checking, onGoogleSignIn }: { checking: boolean; onGoogleSignIn: () => void }) {
