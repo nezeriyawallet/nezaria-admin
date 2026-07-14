@@ -19,7 +19,7 @@ type WorkerApplication = {
 type EmployeeReview = { id: string; client_name: string; rating: number; comment: string; created_at: string };
 type EmployeeProfile = {
   id: string; full_name: string; city: string; age: number; phone: string; created_at: string;
-  avatar_url: string | null; last_active_at: string | null; reviews: EmployeeReview[];
+  avatar_url: string | null; last_active_at: string | null; reviews: EmployeeReview[]; closed_chats: number;
 };
 type WalletMetrics = Record<string, string | number | null>;
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
@@ -505,6 +505,22 @@ function EmployeesPanel() {
   };
 
   useEffect(() => { void loadEmployees(); }, []);
+  useEffect(() => {
+    const summaryCards = document.querySelectorAll(".employees-summary .panel");
+    const total = employees.reduce((sum, employee) => sum + employee.closed_chats, 0);
+    const totalCard = summaryCards[3];
+    if (totalCard) totalCard.innerHTML = `<p>Закриті чати</p><strong>${total}</strong>`;
+    const info = document.querySelector(".employee-profile .employee-info");
+    if (!selected || !info) return;
+    const previous = info.querySelector(".closed-chats-stat");
+    previous?.remove();
+    const stat = document.createElement("span");
+    stat.className = "closed-chats-stat";
+    stat.innerHTML = `Закриті чати<strong>${selected.closed_chats}</strong>`;
+    stat.style.cssText = "display:flex;flex-direction:column;gap:5px;padding:10px;border:1px solid #2c3a3b;border-radius:8px;color:#93a5a2;font-size:11px";
+    info.appendChild(stat);
+    return () => stat.remove();
+  }, [employees, selected]);
   const terminateEmployee = async () => {
     if (!selected || !window.confirm(`Звільнити ${selected.full_name}? Доступ працівника буде припинено.`)) return;
     const token = window.sessionStorage.getItem("nezaria_access_token");

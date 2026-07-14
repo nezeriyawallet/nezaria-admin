@@ -2,6 +2,7 @@ import { verifyGoogleUser, verifyOwnerSession } from "../auth";
 
 type Employee = {
   id: string;
+  user_id: string;
   full_name: string;
   city: string;
   age: number;
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
   const config = adminConfig();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
 
-  const employeesResponse = await fetch(`${config.url}/rest/v1/worker_applications?status=eq.approved&select=id,full_name,city,age,phone,document_note,face_photo_path,last_active_at,created_at&order=created_at.desc`, {
+  const employeesResponse = await fetch(`${config.url}/rest/v1/worker_applications?status=eq.approved&select=id,user_id,full_name,city,age,phone,document_note,face_photo_path,last_active_at,created_at&order=created_at.desc`, {
     headers: headers(config),
   });
   if (!employeesResponse.ok) return Response.json({ error: "Could not load employees" }, { status: 502 });
@@ -38,10 +39,13 @@ export async function GET(request: Request) {
     headers: headers(config),
   });
   const reviews = reviewsResponse.ok ? await reviewsResponse.json() as Review[] : [];
+  const closedTicketsResponse = await fetch(`${config.url}/rest/v1/support_tickets?status=in.(awaiting_rating,closed)&select=assigned_to`, { headers: headers(config) });
+  const closedTickets = closedTicketsResponse.ok ? await closedTicketsResponse.json() as { assigned_to: string | null }[] : [];
   const withDetails = await Promise.all(employees.map(async (employee) => ({
     ...employee,
     avatar_url: employee.face_photo_path ? await signedPhotoUrl(config, employee.face_photo_path) : null,
     reviews: reviews.filter((review) => review.employee_application_id === employee.id),
+    closed_chats: closedTickets.filter((ticket) => ticket.assigned_to === employee.user_id).length,
   })));
 
   return Response.json({ employees: withDetails });
