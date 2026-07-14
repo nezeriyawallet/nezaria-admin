@@ -69,7 +69,8 @@ export default function Home() {
         setViewerName(user.user_metadata?.full_name || user.email?.split("@")[0] || "Користувач");
         setViewerId(user.id);
         const savedRole = window.sessionStorage.getItem("nezeriya_access_role");
-        setAccessRole(savedRole === "owner" || savedRole === "worker" ? savedRole : null);
+        const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
+        setAccessRole(savedRole === "owner" && !ownerSession ? null : savedRole === "owner" || savedRole === "worker" ? savedRole : null);
         setAuthState("signed_in");
       } catch {
         window.sessionStorage.removeItem("nezaria_access_token");
