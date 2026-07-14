@@ -65,7 +65,7 @@ export default function Home() {
 
   const refresh = () => {
     setUpdated("Дані синхронізовано щойно");
-    setNotice("Метрики оновлено з Nezaria API");
+    setNotice("Метрики оновлено з Nezeriya API");
     window.setTimeout(() => setNotice(null), 2600);
   };
 
@@ -85,8 +85,8 @@ export default function Home() {
   return (
     <main className="shell">
       <aside className="sidebar">
-        <div className="brand"><span className="brand-mark">N</span><span>nezaria<span className="brand-light">.wallet</span></span></div>
-        <div className="workspace"><span className="workspace-dot" /> NEZARIA ADMIN <span className="chevron">⌄</span></div>
+        <div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>
+        <div className="workspace"><span className="workspace-dot" /> NEZERIYA ADMIN <span className="chevron">⌄</span></div>
         <nav aria-label="Головна навігація">
           {navigation.map((item, index) => (
             <button key={item} onClick={() => setActive(item)} className={`nav-item ${active === item ? "active" : ""}`}>
@@ -102,13 +102,13 @@ export default function Home() {
 
       <section className="content">
         <header className="topbar">
-          <div className="crumb"><span>Nezaria Wallet</span><b>/</b><strong>{active}</strong></div>
+          <div className="crumb"><span>Nezeriya Wallet</span><b>/</b><strong>{active}</strong></div>
           <div className="top-actions"><button className="icon-button" aria-label="Сповіщення">◔<i /></button><button className="help">?</button><button className="avatar owner" aria-label="Профіль">NK</button></div>
         </header>
 
         <div className="dashboard">
           <section className="heading-row">
-            <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p><h1>Доброго дня, Nazar <span>✦</span></h1><p className="subtle">{updated} · Дані Nezaria Wallet</p></div>
+            <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p><h1>Доброго дня, Nazar <span>✦</span></h1><p className="subtle">{updated} · Дані Nezeriya Wallet</p></div>
             <div className="header-controls"><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>
           </section>
 
@@ -136,14 +136,14 @@ function AuthScreen({ checking, onGoogleSignIn }: { checking: boolean; onGoogleS
   return (
     <main className="auth-page">
       <section className="auth-card">
-        <div className="brand"><span className="brand-mark">N</span><span>nezaria<span className="brand-light">.wallet</span></span></div>
+        <div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>
         <p className="eyebrow">ЗАХИЩЕНА ОПЕРАЦІЙНА ПАНЕЛЬ</p>
-        <h1>Керуйте Nezaria<br /><span>в одному місці.</span></h1>
+        <h1>Керуйте Nezeriya<br /><span>в одному місці.</span></h1>
         <p className="auth-copy">Аналітика гаманця, команда підтримки та фінансові показники доступні лише після авторизації.</p>
         <button className="google-button" onClick={onGoogleSignIn} disabled={checking}>
           <span className="google-mark">G</span>{checking ? "Перевіряємо сесію…" : "Продовжити з Google"}
         </button>
-        <p className="auth-footnote">Вхід призначений для власника та авторизованих працівників Nezaria Wallet.</p>
+        <p className="auth-footnote">Вхід призначений для власника та авторизованих працівників Nezeriya Wallet.</p>
       </section>
       <div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" />
     </main>
