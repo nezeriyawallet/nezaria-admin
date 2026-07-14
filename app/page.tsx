@@ -69,21 +69,57 @@ export default function Home() {
         setAuthState("signed_out");
         return;
       }
+      const persistentKeys = ["nezaria_access_token", "nezaria_refresh_token", "nezeriya_access_role", "nezeriya_owner_session"];
+      persistentKeys.forEach((key) => {
+        const value = window.localStorage.getItem(key);
+        if (value && !window.sessionStorage.getItem(key)) window.sessionStorage.setItem(key, value);
+        const currentValue = window.sessionStorage.getItem(key);
+        if (currentValue && !window.localStorage.getItem(key)) window.localStorage.setItem(key, currentValue);
+      });
       const fragment = new URLSearchParams(window.location.hash.slice(1));
       const redirectedToken = fragment.get("access_token");
-      const accessToken = redirectedToken || window.sessionStorage.getItem("nezaria_access_token");
+      const redirectedRefreshToken = fragment.get("refresh_token");
+      let accessToken = redirectedToken || window.sessionStorage.getItem("nezaria_access_token");
       if (!accessToken) {
         setAuthState("signed_out");
         return;
       }
       if (redirectedToken) {
         window.sessionStorage.setItem("nezaria_access_token", redirectedToken);
+        window.localStorage.setItem("nezaria_access_token", redirectedToken);
+        if (redirectedRefreshToken) {
+          window.sessionStorage.setItem("nezaria_refresh_token", redirectedRefreshToken);
+          window.localStorage.setItem("nezaria_refresh_token", redirectedRefreshToken);
+        }
         window.history.replaceState(null, "", window.location.pathname);
       }
       try {
-        const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+        let response = await fetch(`${supabaseUrl}/auth/v1/user`, {
           headers: { apikey: supabaseKey, Authorization: `Bearer ${accessToken}` },
         });
+        if (!response.ok) {
+          const refreshToken = window.localStorage.getItem("nezaria_refresh_token");
+          if (refreshToken) {
+            const refreshed = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+              method: "POST",
+              headers: { apikey: supabaseKey, "Content-Type": "application/json" },
+              body: JSON.stringify({ refresh_token: refreshToken }),
+            });
+            if (refreshed.ok) {
+              const session = await refreshed.json() as { access_token?: string; refresh_token?: string };
+              if (session.access_token) {
+                accessToken = session.access_token;
+                window.sessionStorage.setItem("nezaria_access_token", accessToken);
+                window.localStorage.setItem("nezaria_access_token", accessToken);
+                if (session.refresh_token) {
+                  window.sessionStorage.setItem("nezaria_refresh_token", session.refresh_token);
+                  window.localStorage.setItem("nezaria_refresh_token", session.refresh_token);
+                }
+                response = await fetch(`${supabaseUrl}/auth/v1/user`, { headers: { apikey: supabaseKey, Authorization: `Bearer ${accessToken}` } });
+              }
+            }
+          }
+        }
         if (!response.ok) throw new Error("Session expired");
         const user = await response.json();
         setViewerName(user.user_metadata?.full_name || user.email?.split("@")[0] || "Користувач");
@@ -93,12 +129,40 @@ export default function Home() {
         setAccessRole(savedRole === "owner" && !ownerSession ? null : savedRole === "owner" || savedRole === "worker" ? savedRole : null);
         setAuthState("signed_in");
       } catch {
-        window.sessionStorage.removeItem("nezaria_access_token");
+        ["nezaria_access_token", "nezaria_refresh_token", "nezeriya_access_role", "nezeriya_owner_session"].forEach((key) => {
+          window.sessionStorage.removeItem(key);
+          window.localStorage.removeItem(key);
+        });
         setAuthState("signed_out");
       }
     };
     void restoreSession();
   }, [supabaseKey, supabaseUrl]);
+
+  useEffect(() => {
+    if (authState !== "signed_in" || !supabaseUrl || !supabaseKey) return;
+    const refreshAccessToken = async () => {
+      const refreshToken = window.localStorage.getItem("nezaria_refresh_token");
+      if (!refreshToken) return;
+      const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: { apikey: supabaseKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      if (!response.ok) return;
+      const session = await response.json() as { access_token?: string; refresh_token?: string };
+      if (session.access_token) {
+        window.sessionStorage.setItem("nezaria_access_token", session.access_token);
+        window.localStorage.setItem("nezaria_access_token", session.access_token);
+      }
+      if (session.refresh_token) {
+        window.sessionStorage.setItem("nezaria_refresh_token", session.refresh_token);
+        window.localStorage.setItem("nezaria_refresh_token", session.refresh_token);
+      }
+    };
+    const interval = window.setInterval(() => void refreshAccessToken(), 45 * 60 * 1000);
+    return () => window.clearInterval(interval);
+  }, [authState, supabaseKey, supabaseUrl]);
 
   useEffect(() => {
     if (accessRole !== "owner") return;
@@ -150,12 +214,15 @@ export default function Home() {
     if (typeof result.ownerSession !== "string") return false;
     window.sessionStorage.setItem("nezeriya_owner_session", result.ownerSession);
     window.sessionStorage.setItem("nezeriya_access_role", "owner");
+    window.localStorage.setItem("nezeriya_owner_session", result.ownerSession);
+    window.localStorage.setItem("nezeriya_access_role", "owner");
     setAccessRole("owner");
     return true;
   };
 
   const selectWorker = () => {
     window.sessionStorage.setItem("nezeriya_access_role", "worker");
+    window.localStorage.setItem("nezeriya_access_role", "worker");
     setAccessRole("worker");
   };
 

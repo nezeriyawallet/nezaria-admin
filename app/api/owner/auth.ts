@@ -15,7 +15,7 @@ export async function verifyGoogleUser(request: Request) {
 export async function createOwnerSession(userId: string) {
   const secret = process.env.OWNER_ACCESS_CODE;
   if (!secret) return null;
-  const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60 * 8;
+  const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30;
   const payload = `${userId}.${expiresAt}`;
   const signature = await sign(payload, secret);
   return `${payload}.${signature}`;
