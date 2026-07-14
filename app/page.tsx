@@ -391,6 +391,7 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
   const [selectedId, setSelectedId] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const selected = tickets.find((ticket) => ticket.id === selectedId) || tickets[0];
@@ -400,16 +401,18 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
     return { Authorization: `Bearer ${token || ""}`, ...(ownerSession ? { "x-owner-session": ownerSession } : {}) };
   };
   const load = async (sync = true) => {
-    const response = await fetch(`/api/support/tickets${sync ? "?sync=1" : ""}`, { headers: headers() });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) setError(result.error || "Не вдалося завантажити звернення.");
-    else {
-      const nextTickets = result.tickets || [];
-      setTickets(nextTickets);
-      setError("");
-      setSelectedId((current) => current && nextTickets.some((ticket: SupportTicket) => ticket.id === current) ? current : (nextTickets[0]?.id || ""));
-    }
-    setLoading(false);
+    if (!loading) setSyncing(true);
+    try {
+      const response = await fetch(`/api/support/tickets${sync ? "?sync=1" : ""}`, { headers: headers() });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) setError(result.error || "Не вдалося завантажити звернення.");
+      else {
+        const nextTickets = result.tickets || [];
+        setTickets(nextTickets);
+        setError("");
+        setSelectedId((current) => current && nextTickets.some((ticket: SupportTicket) => ticket.id === current) ? current : (nextTickets[0]?.id || ""));
+      }
+    } finally { setLoading(false); setSyncing(false); }
   };
   useEffect(() => { void load(); const interval = window.setInterval(() => void load(), 5000); return () => window.clearInterval(interval); }, []);
   const action = async (actionName: "take" | "skip" | "send" | "close") => {
@@ -441,6 +444,16 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
     takeButton.insertAdjacentElement("afterend", skipButton);
     return () => skipButton.remove();
   }, [tickets, selectedId, busy]);
+  useEffect(() => {
+    const header = document.querySelector(".conversation-head");
+    if (!header) return;
+    const current = header.querySelector(".support-typing") as HTMLElement | null;
+    if (!syncing && !busy) { current?.remove(); return; }
+    const indicator = current || document.createElement("span");
+    indicator.className = "support-typing";
+    indicator.innerHTML = `${busy ? "Надсилаємо" : "Оновлюємо чат"}<i></i><i></i><i></i>`;
+    if (!current) header.appendChild(indicator);
+  }, [syncing, busy, selectedId, tickets]);
   const freshCount = tickets.filter((ticket) => ticket.status === "new").length;
   const activeCount = tickets.filter((ticket) => ticket.status === "in_progress").length;
   return <section className="support-desk-page">
