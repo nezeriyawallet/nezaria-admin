@@ -227,15 +227,11 @@ export default function Home() {
       </aside>
 
       <section className="content">
-        <header className="topbar">
-          <div className="crumb"><span>Nezeriya Wallet</span><b>/</b><strong>{active}</strong></div>
-          <div className="top-actions"><button className="icon-button" aria-label="Сповіщення">◔<i /></button><button className="help">?</button><button className="avatar owner" aria-label="Профіль">NK</button></div>
-        </header>
 
         <div className="dashboard">
           {active === "Команда" ? <ApplicationsPanel /> : <>
           <section className="heading-row">
-            <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p><h1>Доброго дня, Nazar <span>✦</span></h1><p className="subtle">{updated} · Дані Nezeriya Wallet</p></div>
+            <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p></div>
             <div className="header-controls"><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>
           </section>
 
@@ -243,7 +239,7 @@ export default function Home() {
             {dashboardMetrics.map((metric) => <article className="metric-card" key={metric.label}><div className={`metric-icon ${metric.tone}`}>{metric.icon}</div><p>{metric.label}</p><div className="metric-value">{metric.value}</div><span className="increase">{metric.change === "live" ? "● LIVE" : <>↑ {metric.change} <em>до минулого періоду</em></>}</span></article>)}
           </section>
 
-          {walletMetrics && <section className="wallet-detail-grid"><article className="panel wallet-detail-panel"><div className="panel-head"><div><p className="panel-label">ОПЕРАЦІЇ ГАМАНЦЯ</p><h2>Детальна статистика</h2></div><span className="live"><i /> LIVE</span></div><div className="wallet-detail-list"><span>Гаманців<strong>{displayMetric(walletMetrics.wallets)}</strong></span><span>Транзакцій<strong>{displayMetric(walletMetrics.transactions)}</strong></span><span>Невдалих транзакцій<strong>{displayMetric(walletMetrics.failedTransactions)}</strong></span><span>DeDust swap<strong>{displayMetric(walletMetrics.dedustSwaps)}</strong></span><span>Реферальний дохід<strong>{displayMetric(walletMetrics.referralTotal, "$")}</strong></span><span>Втрати рулетки<strong>{displayMetric(walletMetrics.wheelLoss, "$")}</strong></span></div></article><article className="panel wallet-detail-panel"><div className="panel-head"><div><p className="panel-label">NZR</p><h2>Активність токена</h2></div></div><div className="wallet-detail-list"><span>NZR транзакцій<strong>{displayMetric(walletMetrics.nzrTransactions)}</strong></span><span>Продажі NZR<strong>{displayMetric(walletMetrics.nzrSwapSell)}</strong></span><span>Купівлі NZR<strong>{displayMetric(walletMetrics.nzrSwapBuy)}</strong></span><span>Покупки NZR за Stars<strong>{displayMetric(walletMetrics.nzrStars)}</strong></span></div></article></section>}
+          {walletMetrics && <section className="wallet-detail-grid"><article className="panel wallet-detail-panel"><div className="panel-head"><div><p className="panel-label">ОПЕРАЦІЇ ГАМАНЦЯ</p><h2>Детальна статистика</h2></div><span className="live"><i /> LIVE</span></div><div className="wallet-detail-list"><span>Гаманців<strong>{displayMetric(walletMetrics.wallets)}</strong></span><span>Транзакцій<strong>{displayMetric(walletMetrics.transactions)}</strong></span><span>Невдалих транзакцій<strong>{displayMetric(walletMetrics.failedTransactions)}</strong></span><span>DeDust swap<strong>{displayMetric(walletMetrics.dedustSwaps)}</strong></span><span>Реферальний дохід<strong>{displayMetric(walletMetrics.referralTotal, "$")}</strong></span><span>Втрати рулетки<strong>{displayMetric(walletMetrics.wheelLoss, " NZR")}</strong></span></div></article><article className="panel wallet-detail-panel"><div className="panel-head"><div><p className="panel-label">NZR</p><h2>Активність токена</h2></div></div><div className="wallet-detail-list"><span>NZR транзакцій<strong>{displayMetric(walletMetrics.nzrTransactions)}</strong></span><span>Продажі NZR<strong>{displayMetric(walletMetrics.nzrSwapSell)}</strong></span><span>Купівлі NZR<strong>{displayMetric(walletMetrics.nzrSwapBuy)}</strong></span><span>Покупки NZR за Stars<strong>{displayMetric(walletMetrics.nzrStars)}</strong></span></div></article></section>}
           {metricsError && <p className="metrics-error">{metricsError}</p>}
 
           <section className="main-grid">
