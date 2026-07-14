@@ -15,6 +15,11 @@ type WorkerApplication = {
   photo_url: string | null;
   face_photo_url: string | null;
 };
+type EmployeeReview = { id: string; client_name: string; rating: number; comment: string; created_at: string };
+type EmployeeProfile = {
+  id: string; full_name: string; city: string; age: number; phone: string; created_at: string;
+  avatar_url: string | null; reviews: EmployeeReview[];
+};
 type WalletMetrics = Record<string, string | number | null>;
 
 const navigation: NavItem[] = ["Огляд", "Користувачі", "Фінанси", "Підтримка", "Команда", "Працівники"];
@@ -259,10 +264,32 @@ export default function Home() {
 }
 
 function EmployeesPanel() {
+  const [employees, setEmployees] = useState<EmployeeProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [selected, setSelected] = useState<EmployeeProfile | null>(null);
+
+  const loadEmployees = async () => {
+    const token = window.sessionStorage.getItem("nezaria_access_token");
+    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
+    if (!token || !ownerSession) { setError("Сесію власника не знайдено. Увійдіть знову як власник."); setLoading(false); return; }
+    setLoading(true);
+    const response = await fetch("/api/owner/employees", { headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) setError(result.error || "Не вдалося завантажити працівників.");
+    else setEmployees(result.employees || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { void loadEmployees(); }, []);
+  const reviewCount = employees.reduce((total, employee) => total + employee.reviews.length, 0);
+  const averageRating = reviewCount ? (employees.reduce((total, employee) => total + employee.reviews.reduce((sum, review) => sum + review.rating, 0), 0) / reviewCount).toFixed(2) : "—";
+
   return <section className="employees-page">
-    <section className="heading-row"><div><p className="eyebrow">ПРАЦІВНИКИ</p><h1>Ефективність <span>команди</span></h1><p className="subtle">Рейтинг, кількість чатів і поточний статус кожного працівника.</p></div></section>
-    <section className="employees-summary"><article className="panel"><p>Усього працівників</p><strong>{team.length}</strong></article><article className="panel"><p>Зараз у чаті</p><strong>{team.filter((person) => person.status === "В чаті").length}</strong></article><article className="panel"><p>Середній рейтинг</p><strong>4.93 ★</strong></article><article className="panel"><p>Усього чатів</p><strong>{team.reduce((total, person) => total + person.chats, 0)}</strong></article></section>
-    <article className="panel employees-table-panel"><div className="panel-head"><div><p className="panel-label">КОМАНДА ПІДТРИМКИ</p><h2>Усі працівники</h2></div></div><div className="team-table employees-table">{team.map((person) => <div className="team-row" key={person.name}><div className="member"><div className="avatar member-avatar">{person.initials}</div><div><strong>{person.name}</strong><small>{person.role}</small></div></div><div><small>Рейтинг</small><strong className="rating">★ {person.rating}</strong></div><div><small>Чатів</small><strong>{person.chats}</strong></div><span className={`status ${person.status === "В чаті" ? "online" : "break"}`}>{person.status}</span></div>)}</div></article>
+    <section className="heading-row"><div><p className="eyebrow">ПРАЦІВНИКИ</p><h1>Ефективність <span>команди</span></h1><p className="subtle">Тут відображаються лише працівники, яких ви реально прийняли.</p></div><button className="sync" onClick={() => void loadEmployees()}>↻ Оновити</button></section>
+    <section className="employees-summary"><article className="panel"><p>Усього працівників</p><strong>{employees.length}</strong></article><article className="panel"><p>Відгуків клієнтів</p><strong>{reviewCount}</strong></article><article className="panel"><p>Середній рейтинг</p><strong>{averageRating === "—" ? "—" : `${averageRating} ★`}</strong></article><article className="panel"><p>Статус даних</p><strong className="employee-live">LIVE</strong></article></section>
+    {loading ? <article className="panel empty-applications">Завантажуємо працівників…</article> : error ? <article className="panel empty-applications">{error}</article> : employees.length === 0 ? <article className="panel empty-applications">Ще немає прийнятих працівників. Приймайте заявки у розділі «Команда».</article> : <article className="panel employees-table-panel"><div className="panel-head"><div><p className="panel-label">КОМАНДА ПІДТРИМКИ</p><h2>Усі працівники</h2></div></div><div className="team-table employees-table">{employees.map((employee) => { const rating = employee.reviews.length ? (employee.reviews.reduce((sum, review) => sum + review.rating, 0) / employee.reviews.length).toFixed(2) : "—"; const initials = employee.full_name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase(); return <button className="team-row employee-row" key={employee.id} onClick={() => setSelected(employee)}><div className="member"><div className="avatar member-avatar employee-avatar">{employee.avatar_url ? <img src={employee.avatar_url} alt={`Фото ${employee.full_name}`} /> : initials}</div><div><strong>{employee.full_name}</strong><small>{employee.city}</small></div></div><div><small>Рейтинг</small><strong className="rating">{rating === "—" ? "—" : `★ ${rating}`}</strong></div><div><small>Відгуків</small><strong>{employee.reviews.length}</strong></div><span className="status online">Прийнято</span></button>; })}</div></article>}
+    {selected && <section className="employee-modal-backdrop" role="presentation" onMouseDown={() => setSelected(null)}><article className="panel employee-profile" role="dialog" aria-modal="true" aria-label={`Профіль ${selected.full_name}`} onMouseDown={(event) => event.stopPropagation()}><button className="profile-close" onClick={() => setSelected(null)} aria-label="Закрити">×</button><div className="employee-profile-head"><div className="profile-avatar">{selected.avatar_url ? <img src={selected.avatar_url} alt={`Фото ${selected.full_name}`} /> : selected.full_name.slice(0, 1).toUpperCase()}</div><div><p className="panel-label">ПРАЦІВНИК</p><h2>{selected.full_name}</h2><p>{selected.city} · {selected.age} років</p></div></div><div className="employee-info"><span>Телефон<strong>{selected.phone}</strong></span><span>Прийнятий<strong>{new Date(selected.created_at).toLocaleDateString("uk-UA")}</strong></span></div><div className="reviews-head"><h3>Відгуки клієнтів</h3><span>{selected.reviews.length}</span></div>{selected.reviews.length === 0 ? <p className="no-reviews">Відгуків ще немає. Вони з’являться після запуску чатів підтримки та оцінювання діалогів.</p> : <div className="reviews-list">{selected.reviews.map((review) => <article className="review" key={review.id}><div><strong>{review.client_name}</strong><span>{"★".repeat(review.rating)}</span></div><p>{review.comment}</p><small>{new Date(review.created_at).toLocaleDateString("uk-UA")}</small></article>)}</div>}</article></section>}
   </section>;
 }
 
