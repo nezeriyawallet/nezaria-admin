@@ -7,6 +7,7 @@ type Employee = {
   city: string;
   age: number;
   phone: string;
+  ton_usdt_wallet: string | null;
   document_note: string;
   face_photo_path: string | null;
   last_active_at: string | null;
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
   const config = adminConfig();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
 
-  const employeesResponse = await fetch(`${config.url}/rest/v1/worker_applications?status=eq.approved&select=id,user_id,full_name,city,age,phone,document_note,face_photo_path,last_active_at,created_at&order=created_at.desc`, {
+  const employeesResponse = await fetch(`${config.url}/rest/v1/worker_applications?status=eq.approved&select=id,user_id,full_name,city,age,phone,ton_usdt_wallet,document_note,face_photo_path,last_active_at,created_at&order=created_at.desc`, {
     headers: headers(config),
   });
   if (!employeesResponse.ok) return Response.json({ error: "Could not load employees" }, { status: 502 });

@@ -1,6 +1,6 @@
 import { verifyGoogleUser } from "../../owner/auth";
 
-type Worker = { id: string; full_name: string; city: string; face_photo_path: string | null; status: string };
+type Worker = { id: string; full_name: string; city: string; face_photo_path: string | null; ton_usdt_wallet: string | null; status: string };
 type Review = { id: string; client_name: string; rating: number; comment: string; created_at: string };
 
 export async function GET(request: Request) {
@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   if (!user) return Response.json({ error: "Forbidden" }, { status: 403 });
   const config = adminConfig();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
-  const workerResponse = await fetch(`${config.url}/rest/v1/worker_applications?user_id=eq.${encodeURIComponent(user.id)}&status=eq.approved&select=id,full_name,city,face_photo_path,status&limit=1`, { headers: headers(config) });
+  const workerResponse = await fetch(`${config.url}/rest/v1/worker_applications?user_id=eq.${encodeURIComponent(user.id)}&status=eq.approved&select=id,full_name,city,face_photo_path,ton_usdt_wallet,status&limit=1`, { headers: headers(config) });
   const [worker] = workerResponse.ok ? await workerResponse.json() as Worker[] : [];
   if (!worker) return Response.json({ error: "Worker profile is unavailable" }, { status: 404 });
   const reviewsResponse = await fetch(`${config.url}/rest/v1/employee_reviews?employee_application_id=eq.${encodeURIComponent(worker.id)}&select=id,client_name,rating,comment,created_at&order=created_at.desc`, { headers: headers(config) });

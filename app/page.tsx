@@ -19,7 +19,7 @@ type WorkerApplication = {
 type EmployeeReview = { id: string; client_name: string; rating: number; comment: string; created_at: string };
 type EmployeeProfile = {
   id: string; full_name: string; city: string; age: number; phone: string; created_at: string;
-  avatar_url: string | null; last_active_at: string | null; reviews: EmployeeReview[]; closed_chats: number;
+  avatar_url: string | null; ton_usdt_wallet: string | null; last_active_at: string | null; reviews: EmployeeReview[]; closed_chats: number;
 };
 type WalletMetrics = Record<string, string | number | null>;
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
@@ -255,7 +255,7 @@ export default function Home() {
     setActive(mode === "admin" ? "Підтримка" : "Огляд");
   };
 
-  const submitWorkerApplication = async (application: { full_name: string; city: string; age: number; phone: string }, document: File, facePhoto: File) => {
+  const submitWorkerApplication = async (application: { full_name: string; city: string; age: number; phone: string; ton_usdt_wallet: string }, document: File, facePhoto: File) => {
     const token = window.sessionStorage.getItem("nezaria_access_token");
     if (!token || !supabaseUrl || !supabaseKey || !viewerId) return { ok: false, message: "Не вдалося перевірити ваш вхід. Увійдіть ще раз." };
     if ([document, facePhoto].some((file) => !file.type.startsWith("image/") || file.size > 8 * 1024 * 1024)) {
@@ -647,7 +647,12 @@ function EmployeesPanel() {
     stat.innerHTML = `Закриті чати<strong>${selected.closed_chats}</strong>`;
     stat.style.cssText = "display:flex;flex-direction:column;gap:5px;padding:10px;border:1px solid #2c3a3b;border-radius:8px;color:#93a5a2;font-size:11px";
     info.appendChild(stat);
-    return () => stat.remove();
+    const wallet = document.createElement("span");
+    wallet.className = "worker-wallet-stat";
+    wallet.innerHTML = `USDT гаманець (TON)<strong>${selected.ton_usdt_wallet || "Не вказано"}</strong>`;
+    wallet.style.cssText = "display:flex;flex-direction:column;gap:5px;padding:10px;border:1px solid #2c3a3b;border-radius:8px;color:#93a5a2;font-size:11px;overflow-wrap:anywhere";
+    info.appendChild(wallet);
+    return () => { stat.remove(); wallet.remove(); };
   }, [employees, selected]);
   const terminateEmployee = async () => {
     if (!selected || !window.confirm(`Звільнити ${selected.full_name}? Доступ працівника буде припинено.`)) return;
@@ -751,14 +756,14 @@ function WorkerStatusScreen({ name, title, text }: { name: string; title: string
   return <main className="auth-page"><section className="auth-card worker-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div><p className="eyebrow">КАБІНЕТ ПРАЦІВНИКА</p><h1>Вітаємо, {name}.<br /><span>{title}</span></h1><p className="auth-copy">{text}</p><div className="worker-status"><i /> Оновлюється автоматично після перезавантаження сторінки</div></section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
 }
 
-type WorkerPortalProfile = { full_name: string; city: string; avatar_url: string | null; reviews: EmployeeReview[] };
+type WorkerPortalProfile = { full_name: string; city: string; avatar_url: string | null; ton_usdt_wallet: string | null; reviews: EmployeeReview[] };
 
 function WorkerWorkspace({ name }: { name: string }) {
   return <WorkerPortal name={name} />;
 }
 
 function WorkerPortal({ name }: { name: string }) {
-  const [view, setView] = useState<"chats" | "reviews" | "ratings">("chats");
+  const [view, setView] = useState<"chats" | "reviews" | "ratings" | "salary">("chats");
   const [profile, setProfile] = useState<WorkerPortalProfile | null>(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -769,6 +774,32 @@ function WorkerPortal({ name }: { name: string }) {
       .then((result) => { if (result?.profile) setProfile(result.profile); })
       .finally(() => setLoading(false));
   }, []);
+  useEffect(() => {
+    const nav = document.querySelector(".worker-portal-nav");
+    if (!nav || nav.querySelector(".worker-salary-nav")) return;
+    const button = document.createElement("button");
+    button.className = "worker-salary-nav";
+    button.textContent = "₮ Зарплата";
+    button.onclick = () => setView("salary");
+    nav.append(button);
+    return () => button.remove();
+  }, []);
+  useEffect(() => {
+    const profileBox = document.querySelector(".worker-profile");
+    if (!profileBox || !profile?.ton_usdt_wallet) return;
+    profileBox.querySelector(".worker-wallet-address")?.remove();
+    const wallet = document.createElement("div");
+    wallet.className = "worker-wallet-address";
+    wallet.innerHTML = `<small>USDT · TON</small><strong>${profile.ton_usdt_wallet}</strong>`;
+    profileBox.insertBefore(wallet, profileBox.querySelector("button"));
+    return () => wallet.remove();
+  }, [profile]);
+  useEffect(() => {
+    if (view !== "salary") return;
+    const content = document.querySelector(".worker-portal-content");
+    if (!content) return;
+    content.innerHTML = `<section class="worker-feedback salary-panel"><p class="eyebrow">ЗАРПЛАТА</p><h1>Моя зарплата</h1><article class="panel"><p>Адреса для виплати USDT (TON)</p><strong>${profile?.ton_usdt_wallet || "Адресу не вказано"}</strong><small>Нарахованих виплат поки немає.</small></article><article class="panel"><p>Історія виплат</p><strong>—</strong><small>Після першого нарахування тут з’являться дата, сума та статус виплати.</small></article></section>`;
+  }, [view, profile]);
   const logout = () => {
     ["nezaria_access_token", "nezaria_refresh_token", "nezeriya_access_role", "nezeriya_owner_session"].forEach((key) => { window.sessionStorage.removeItem(key); window.localStorage.removeItem(key); });
     window.location.reload();
@@ -816,8 +847,8 @@ function RoleScreen({ name, onOwnerCode, onWorker }: { name: string; onOwnerCode
   return <main className="auth-page"><section className="auth-card role-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>{mode === "choose" ? <><p className="eyebrow">ВХІД У РОБОЧИЙ ПРОСТІР</p><h1>Вітаємо, {name}.<br /><span>Оберіть роль.</span></h1><p className="auth-copy">Роль визначає, які інструменти будуть доступні у вашому кабінеті.</p><div className="role-options"><button className="role-option" onClick={() => setMode("owner")}><b>◈</b><span><strong>Власник</strong><small>Повна аналітика, команда та налаштування</small></span><i>→</i></button><button className="role-option" onClick={onWorker}><b>◌</b><span><strong>Працівник</strong><small>Подати заявку або перейти до підтримки</small></span><i>→</i></button></div></> : <form onSubmit={submit}><button className="back-link" type="button" onClick={() => setMode("choose")}>← Назад</button><p className="eyebrow">ПІДТВЕРДЖЕННЯ ВЛАСНИКА</p><h1>Введіть<br /><span>код доступу.</span></h1><p className="auth-copy">Код перевіряється безпечно на сервері та ніколи не показується у браузері.</p><input className="owner-code" value={code} onChange={(event) => setCode(event.target.value)} placeholder="Код власника" autoFocus required /><button className="google-button mint-action" disabled={loading}>{loading ? "Перевіряємо…" : "Відкрити панель"}</button>{error && <p className="auth-error">{error}</p>}</form>}</section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
 }
 
-function WorkerScreen({ name, onSubmit, onCheckStatus, onPresence }: { name: string; onSubmit: (application: { full_name: string; city: string; age: number; phone: string }, document: File, facePhoto: File) => Promise<{ ok: boolean; message: string }>; onCheckStatus: () => Promise<"pending" | "approved" | "rejected" | "terminated" | null>; onPresence: () => Promise<void> }) {
-  const [form, setForm] = useState({ first_name: name, last_name: "", patronymic: "", city: "", age: "", phone: "", document_note: "" });
+function WorkerScreen({ name, onSubmit, onCheckStatus, onPresence }: { name: string; onSubmit: (application: { full_name: string; city: string; age: number; phone: string; ton_usdt_wallet: string }, document: File, facePhoto: File) => Promise<{ ok: boolean; message: string }>; onCheckStatus: () => Promise<"pending" | "approved" | "rejected" | "terminated" | null>; onPresence: () => Promise<void> }) {
+  const [form, setForm] = useState({ first_name: name, last_name: "", patronymic: "", city: "", age: "", phone: "", ton_usdt_wallet: "", document_note: "" });
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [facePhotoFile, setFacePhotoFile] = useState<File | null>(null);
   const [consent, setConsent] = useState(false);
@@ -842,17 +873,35 @@ function WorkerScreen({ name, onSubmit, onCheckStatus, onPresence }: { name: str
   }, [applicationStatus, onPresence]);
 
   const update = (field: keyof typeof form, value: string) => setForm((current) => ({ ...current, [field]: value }));
+  useEffect(() => {
+    if (applicationStatus === "checking" || applicationStatus === "approved" || applicationStatus === "pending" || applicationStatus === "terminated") return;
+    const grid = document.querySelector(".worker-card .form-grid");
+    if (!grid || grid.querySelector(".ton-wallet-field")) return;
+    const field = document.createElement("label");
+    field.className = "ton-wallet-field";
+    field.append("USDT гаманець (мережа TON) *");
+    const input = document.createElement("input");
+    input.name = "ton_usdt_wallet";
+    input.required = true;
+    input.autocomplete = "off";
+    input.placeholder = "UQ...";
+    input.value = form.ton_usdt_wallet;
+    input.addEventListener("input", () => update("ton_usdt_wallet", input.value));
+    field.append(input);
+    grid.append(field);
+    return () => field.remove();
+  }, [applicationStatus]);
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setLoading(true);
     setMessage("");
     const full_name = `${form.last_name} ${form.first_name} ${form.patronymic}`.trim();
-    if (!documentFile || !facePhotoFile || !consent) {
+    if (!form.last_name.trim() || !form.first_name.trim() || !form.patronymic.trim() || !form.city.trim() || !form.age || !form.phone.trim() || !form.ton_usdt_wallet.trim() || !documentFile || !facePhotoFile || !consent) {
       setLoading(false);
       setMessage("Додайте обидва фото та підтвердьте згоду на обробку даних.");
       return;
     }
-    const result = await onSubmit({ full_name, city: form.city, age: Number(form.age), phone: form.phone }, documentFile, facePhotoFile);
+    const result = await onSubmit({ full_name, city: form.city, age: Number(form.age), phone: form.phone, ton_usdt_wallet: form.ton_usdt_wallet.trim() }, documentFile, facePhotoFile);
     setLoading(false);
     setMessage(result.message);
     setSubmitted(result.ok);
