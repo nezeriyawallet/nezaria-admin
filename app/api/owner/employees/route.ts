@@ -23,6 +23,7 @@ type Review = {
   created_at: string;
 };
 type ActivityEvent = { user_id: string; occurred_at: string };
+type Payout = { id: string; worker_application_id: string; amount: number; currency: "USDT"; status: "pending" | "paid"; note: string | null; created_at: string; paid_at: string | null };
 
 export async function GET(request: Request) {
   const user = await verifyGoogleUser(request);
@@ -41,6 +42,8 @@ export async function GET(request: Request) {
     headers: headers(config),
   });
   const reviews = reviewsResponse.ok ? await reviewsResponse.json() as Review[] : [];
+  const payoutsResponse = await fetch(`${config.url}/rest/v1/worker_payouts?select=id,worker_application_id,amount,currency,status,note,created_at,paid_at&order=created_at.desc`, { headers: headers(config) });
+  const payouts = payoutsResponse.ok ? await payoutsResponse.json() as Payout[] : [];
   const closedTicketsResponse = await fetch(`${config.url}/rest/v1/support_tickets?status=in.(awaiting_rating,closed)&select=assigned_to`, { headers: headers(config) });
   const closedTickets = closedTicketsResponse.ok ? await closedTicketsResponse.json() as { assigned_to: string | null }[] : [];
   const since = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
@@ -55,6 +58,7 @@ export async function GET(request: Request) {
     ...employee,
     avatar_url: employee.face_photo_path ? await signedPhotoUrl(config, employee.face_photo_path) : null,
     reviews: reviews.filter((review) => review.employee_application_id === employee.id),
+    payouts: payouts.filter((payout) => payout.worker_application_id === employee.id),
     closed_chats: closedTickets.filter((ticket) => ticket.assigned_to === employee.user_id).length,
     daily_activity: Array.from({ length: 30 }, (_, index) => {
       const date = new Date(Date.now() - (29 - index) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -71,7 +75,24 @@ export async function PATCH(request: Request) {
   const config = adminConfig();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
   const body = await request.json().catch(() => null);
-  if (!body || typeof body.id !== "string" || body.action !== "terminate") return Response.json({ error: "Invalid request" }, { status: 400 });
+  if (!body || typeof body.action !== "string") return Response.json({ error: "Invalid request" }, { status: 400 });
+  if (body.action === "create_payout") {
+    if (typeof body.id !== "string" || typeof body.amount !== "number" || body.amount <= 0 || body.amount > 1000000) return Response.json({ error: "Invalid payout" }, { status: 400 });
+    const employeeResponse = await fetch(`${config.url}/rest/v1/worker_applications?id=eq.${encodeURIComponent(body.id)}&status=eq.approved&select=id&limit=1`, { headers: headers(config) });
+    const employee = employeeResponse.ok ? await employeeResponse.json() as { id: string }[] : [];
+    if (!employee.length) return Response.json({ error: "Employee is unavailable" }, { status: 404 });
+    const status = body.status === "paid" ? "paid" : "pending";
+    const response = await fetch(`${config.url}/rest/v1/worker_payouts`, { method: "POST", headers: { ...headers(config), "Content-Type": "application/json", Prefer: "return=representation" }, body: JSON.stringify({ worker_application_id: body.id, amount: Math.round(body.amount * 100) / 100, status, note: typeof body.note === "string" ? body.note.trim().slice(0, 500) || null : null, created_by: user.id, paid_at: status === "paid" ? new Date().toISOString() : null }) });
+    const payout = response.ok ? await response.json() as Payout[] : [];
+    return payout.length ? Response.json({ ok: true, payout: payout[0] }) : Response.json({ error: "Could not create payout" }, { status: 502 });
+  }
+  if (body.action === "mark_payout_paid") {
+    if (typeof body.payout_id !== "string") return Response.json({ error: "Invalid payout" }, { status: 400 });
+    const response = await fetch(`${config.url}/rest/v1/worker_payouts?id=eq.${encodeURIComponent(body.payout_id)}&status=eq.pending`, { method: "PATCH", headers: { ...headers(config), "Content-Type": "application/json", Prefer: "return=representation" }, body: JSON.stringify({ status: "paid", paid_at: new Date().toISOString() }) });
+    const payout = response.ok ? await response.json() as Payout[] : [];
+    return payout.length ? Response.json({ ok: true, payout: payout[0] }) : Response.json({ error: "Could not update payout" }, { status: 502 });
+  }
+  if (typeof body.id !== "string" || body.action !== "terminate") return Response.json({ error: "Invalid request" }, { status: 400 });
 
   const response = await fetch(`${config.url}/rest/v1/worker_applications?id=eq.${encodeURIComponent(body.id)}&status=eq.approved`, {
     method: "PATCH",

@@ -17,9 +17,10 @@ type WorkerApplication = {
   face_photo_url: string | null;
 };
 type EmployeeReview = { id: string; client_name: string; rating: number; comment: string; created_at: string };
+type WorkerPayout = { id: string; amount: number; currency: "USDT"; status: "pending" | "paid"; note: string | null; created_at: string; paid_at: string | null };
 type EmployeeProfile = {
   id: string; full_name: string; city: string; age: number; phone: string; created_at: string;
-  avatar_url: string | null; ton_usdt_wallet: string | null; last_active_at: string | null; reviews: EmployeeReview[]; closed_chats: number; daily_activity: number[];
+  avatar_url: string | null; ton_usdt_wallet: string | null; last_active_at: string | null; reviews: EmployeeReview[]; payouts: WorkerPayout[]; closed_chats: number; daily_activity: number[];
 };
 type WalletMetrics = Record<string, string | number | null>;
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
@@ -664,8 +665,16 @@ function EmployeesPanel() {
     const total = employees.reduce((sum, employee) => sum + employee.closed_chats, 0);
     const totalCard = summaryCards[3];
     if (totalCard) totalCard.innerHTML = `<p>Закриті чати</p><strong>${total}</strong>`;
+    const summary = document.querySelector(".employees-summary");
+    summary?.querySelector(".payroll-summary")?.remove();
+    const payrollSummary = document.createElement("article");
+    payrollSummary.className = "panel payroll-summary";
+    const paid = employees.reduce((sum, employee) => sum + employee.payouts.filter((payout) => payout.status === "paid").reduce((value, payout) => value + Number(payout.amount), 0), 0);
+    const pending = employees.reduce((sum, employee) => sum + employee.payouts.filter((payout) => payout.status === "pending").reduce((value, payout) => value + Number(payout.amount), 0), 0);
+    payrollSummary.innerHTML = `<p>Зарплата команди</p><strong>${paid.toFixed(2)} USDT</strong><span>До сплати: ${pending.toFixed(2)} USDT</span>`;
+    summary?.appendChild(payrollSummary);
     const info = document.querySelector(".employee-profile .employee-info");
-    if (!selected || !info) return;
+    if (!selected || !info) return () => payrollSummary.remove();
     const previous = info.querySelector(".closed-chats-stat");
     previous?.remove();
     const stat = document.createElement("span");
@@ -690,7 +699,7 @@ function EmployeesPanel() {
     const max = Math.max(1, ...values);
     chart.innerHTML = `<p>Робочі години за кожен день · 30 днів</p><div>${values.map((value, day) => `<i data-tooltip="${day === 29 ? "Сьогодні" : `${29 - day} дн. тому`}: ${value} год." title="${day === 29 ? "Сьогодні" : `${29 - day} дн. тому`}: ${value} год." style="height:${Math.max(4, value / max * 100)}%"></i>`).join("")}</div><div class="work-chart-axis"><span>30 днів тому</span><span>Сьогодні</span></div><small>Наведіть на стовпчик, щоб побачити точну кількість годин.</small>`;
     info.insertAdjacentElement("afterend", chart);
-    return () => { stat.remove(); wallet.remove(); ratingCard.remove(); chart.remove(); };
+    return () => { payrollSummary.remove(); stat.remove(); wallet.remove(); ratingCard.remove(); chart.remove(); };
   }, [employees, selected]);
   useEffect(() => {
     const page = document.querySelector(".employees-page");
@@ -704,6 +713,43 @@ function EmployeesPanel() {
     summary?.insertAdjacentElement("afterend", chart);
     return () => chart.remove();
   }, [monthHours]);
+  useEffect(() => {
+    const modal = document.querySelector(".employee-profile");
+    if (!modal || !selected) return;
+    modal.querySelector(".owner-payroll")?.remove();
+    const payroll = document.createElement("section");
+    payroll.className = "owner-payroll";
+    const payouts = selected.payouts || [];
+    const totalPaid = payouts.filter((payout) => payout.status === "paid").reduce((sum, payout) => sum + Number(payout.amount), 0);
+    const totalPending = payouts.filter((payout) => payout.status === "pending").reduce((sum, payout) => sum + Number(payout.amount), 0);
+    payroll.innerHTML = `<div class="owner-payroll-head"><h3>Зарплата</h3><span>Виплачено: ${totalPaid.toFixed(2)} USDT · До сплати: ${totalPending.toFixed(2)} USDT</span></div><div class="owner-payroll-form"><input class="payroll-amount" type="number" min="0.01" step="0.01" placeholder="Сума USDT" /><input class="payroll-note" maxlength="500" placeholder="Примітка (необов’язково)" /><select class="payroll-status"><option value="pending">До сплати</option><option value="paid">Вже виплачено</option></select><button class="payroll-create">Нарахувати</button></div><div class="owner-payout-list">${payouts.length ? payouts.map((payout) => `<div><span><b>${Number(payout.amount).toFixed(2)} USDT</b><small>${payout.note || "Зарплата"} · ${new Date(payout.created_at).toLocaleDateString("uk-UA")}</small></span><em class="${payout.status}">${payout.status === "paid" ? "Виплачено" : "До сплати"}</em>${payout.status === "pending" ? `<button data-payout-id="${payout.id}">Позначити виплаченою</button>` : ""}</div>`).join("") : "<p>Нарахувань ще немає.</p>"}</div>`;
+    const request = async (body: Record<string, unknown>) => {
+      const token = window.sessionStorage.getItem("nezaria_access_token");
+      const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
+      if (!token || !ownerSession) return;
+      const response = await fetch("/api/owner/employees", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "x-owner-session": ownerSession }, body: JSON.stringify(body) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) { window.alert(result.error || "Не вдалося зберегти виплату."); return; }
+      const payout = result.payout as WorkerPayout;
+      setSelected((current) => current ? { ...current, payouts: body.action === "create_payout" ? [payout, ...current.payouts] : current.payouts.map((item) => item.id === payout.id ? payout : item) } : current);
+      await loadEmployees();
+    };
+    const createButton = payroll.querySelector(".payroll-create") as HTMLButtonElement | null;
+    const onCreate = () => {
+      const amount = Number((payroll.querySelector(".payroll-amount") as HTMLInputElement | null)?.value);
+      const note = (payroll.querySelector(".payroll-note") as HTMLInputElement | null)?.value || "";
+      const status = (payroll.querySelector(".payroll-status") as HTMLSelectElement | null)?.value;
+      if (!Number.isFinite(amount) || amount <= 0) { window.alert("Вкажіть суму зарплати більше нуля."); return; }
+      if (createButton) createButton.disabled = true;
+      void request({ action: "create_payout", id: selected.id, amount, note, status });
+    };
+    createButton?.addEventListener("click", onCreate);
+    const paidButtons = Array.from(payroll.querySelectorAll("[data-payout-id]"));
+    const onPaid = (event: Event) => { const id = (event.currentTarget as HTMLElement).dataset.payoutId; if (id) void request({ action: "mark_payout_paid", payout_id: id }); };
+    paidButtons.forEach((button) => button.addEventListener("click", onPaid));
+    modal.insertBefore(payroll, modal.querySelector(".terminate-employee"));
+    return () => { createButton?.removeEventListener("click", onCreate); paidButtons.forEach((button) => button.removeEventListener("click", onPaid)); payroll.remove(); };
+  }, [selected]);
   const terminateEmployee = async () => {
     if (!selected || !window.confirm(`Звільнити ${selected.full_name}? Доступ працівника буде припинено.`)) return;
     const token = window.sessionStorage.getItem("nezaria_access_token");
@@ -806,7 +852,7 @@ function WorkerStatusScreen({ name, title, text }: { name: string; title: string
   return <main className="auth-page"><section className="auth-card worker-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div><p className="eyebrow">КАБІНЕТ ПРАЦІВНИКА</p><h1>Вітаємо, {name}.<br /><span>{title}</span></h1><p className="auth-copy">{text}</p><div className="worker-status"><i /> Оновлюється автоматично після перезавантаження сторінки</div></section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
 }
 
-type WorkerPortalProfile = { full_name: string; city: string; avatar_url: string | null; ton_usdt_wallet: string | null; reviews: EmployeeReview[] };
+type WorkerPortalProfile = { full_name: string; city: string; avatar_url: string | null; ton_usdt_wallet: string | null; reviews: EmployeeReview[]; payouts: WorkerPayout[] };
 
 function WorkerWorkspace({ name }: { name: string }) {
   return <WorkerPortal name={name} />;
@@ -868,6 +914,12 @@ function WorkerPortal({ name }: { name: string }) {
     const content = document.querySelector(".worker-portal-content");
     if (!content) return;
     content.innerHTML = `<section class="worker-feedback salary-panel"><p class="eyebrow">ЗАРПЛАТА</p><h1>Моя зарплата</h1><article class="panel"><p>Адреса для виплати USDT (TON)</p><label class="salary-wallet-label">USDT гаманець · мережа TON<input class="salary-wallet-input" placeholder="UQ..." autocomplete="off" /></label><div class="salary-wallet-actions"><button class="salary-wallet-save">Зберегти</button><small class="salary-wallet-message">Вкажіть адресу для отримання майбутніх виплат.</small></div></article><article class="panel"><p>Історія виплат</p><strong>—</strong><small>Після першого нарахування тут з’являться дата, сума та статус виплати.</small></article></section>`;
+    const payouts = profile?.payouts || [];
+    const history = content.querySelector(".salary-panel article:last-child");
+    if (history) {
+      const pending = payouts.filter((payout) => payout.status === "pending").reduce((sum, payout) => sum + Number(payout.amount), 0);
+      history.innerHTML = `<p>Історія виплат</p><strong>${pending ? `${pending.toFixed(2)} USDT` : "—"}</strong><small>${pending ? "Очікує на виплату" : "Немає виплат, що очікують"}</small>${payouts.length ? `<div class="payout-history">${payouts.map((payout) => `<div><span><b>${Number(payout.amount).toFixed(2)} USDT</b><small>${payout.note || "Зарплата"} · ${new Date(payout.created_at).toLocaleDateString("uk-UA")}</small></span><em class="${payout.status}">${payout.status === "paid" ? "Виплачено" : "До сплати"}</em></div>`).join("")}</div>` : ""}`;
+    }
     const input = content.querySelector(".salary-wallet-input") as HTMLInputElement | null;
     const button = content.querySelector(".salary-wallet-save") as HTMLButtonElement | null;
     const message = content.querySelector(".salary-wallet-message") as HTMLElement | null;
