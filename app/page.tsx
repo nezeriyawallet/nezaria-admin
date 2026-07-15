@@ -774,6 +774,17 @@ function WorkerPortal({ name }: { name: string }) {
       .then((result) => { if (result?.profile) setProfile(result.profile); })
       .finally(() => setLoading(false));
   }, []);
+  const saveWallet = async (wallet: string) => {
+    const value = wallet.trim();
+    if (!value) return { ok: false, message: "Вкажіть адресу USDT-гаманця в мережі TON." };
+    const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
+    if (!token) return { ok: false, message: "Сесія завершилася. Увійдіть ще раз." };
+    const response = await fetch("/api/worker/profile", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ ton_usdt_wallet: value }) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) return { ok: false, message: result.error || "Не вдалося зберегти адресу." };
+    setProfile((current) => current ? { ...current, ton_usdt_wallet: result.ton_usdt_wallet } : current);
+    return { ok: true, message: "Адресу гаманця збережено." };
+  };
   useEffect(() => {
     const nav = document.querySelector(".worker-portal-nav");
     if (!nav || nav.querySelector(".worker-salary-nav")) return;
@@ -798,7 +809,24 @@ function WorkerPortal({ name }: { name: string }) {
     if (view !== "salary") return;
     const content = document.querySelector(".worker-portal-content");
     if (!content) return;
-    content.innerHTML = `<section class="worker-feedback salary-panel"><p class="eyebrow">ЗАРПЛАТА</p><h1>Моя зарплата</h1><article class="panel"><p>Адреса для виплати USDT (TON)</p><strong>${profile?.ton_usdt_wallet || "Адресу не вказано"}</strong><small>Нарахованих виплат поки немає.</small></article><article class="panel"><p>Історія виплат</p><strong>—</strong><small>Після першого нарахування тут з’являться дата, сума та статус виплати.</small></article></section>`;
+    content.innerHTML = `<section class="worker-feedback salary-panel"><p class="eyebrow">ЗАРПЛАТА</p><h1>Моя зарплата</h1><article class="panel"><p>Адреса для виплати USDT (TON)</p><label class="salary-wallet-label">USDT гаманець · мережа TON<input class="salary-wallet-input" placeholder="UQ..." autocomplete="off" /></label><div class="salary-wallet-actions"><button class="salary-wallet-save">Зберегти</button><small class="salary-wallet-message">Вкажіть адресу для отримання майбутніх виплат.</small></div></article><article class="panel"><p>Історія виплат</p><strong>—</strong><small>Після першого нарахування тут з’являться дата, сума та статус виплати.</small></article></section>`;
+    const input = content.querySelector(".salary-wallet-input") as HTMLInputElement | null;
+    const button = content.querySelector(".salary-wallet-save") as HTMLButtonElement | null;
+    const message = content.querySelector(".salary-wallet-message") as HTMLElement | null;
+    if (!input || !button || !message) return;
+    input.value = profile?.ton_usdt_wallet || "";
+    button.textContent = profile?.ton_usdt_wallet ? "Зберегти зміни" : "Зберегти";
+    const onSave = async () => {
+      button.disabled = true;
+      button.textContent = "Зберігаємо…";
+      const result = await saveWallet(input.value);
+      message.textContent = result.message;
+      message.classList.toggle("error", !result.ok);
+      button.disabled = false;
+      button.textContent = result.ok ? "Зберегти зміни" : "Зберегти";
+    };
+    button.addEventListener("click", onSave);
+    return () => button.removeEventListener("click", onSave);
   }, [view, profile]);
   const logout = () => {
     ["nezaria_access_token", "nezaria_refresh_token", "nezeriya_access_role", "nezeriya_owner_session"].forEach((key) => { window.sessionStorage.removeItem(key); window.localStorage.removeItem(key); });

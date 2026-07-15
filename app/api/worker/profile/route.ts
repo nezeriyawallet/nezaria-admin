@@ -16,6 +16,24 @@ export async function GET(request: Request) {
   return Response.json({ profile: { ...worker, avatar_url: worker.face_photo_path ? await signedPhotoUrl(config, worker.face_photo_path) : null, reviews } });
 }
 
+export async function PATCH(request: Request) {
+  const user = await verifyGoogleUser(request);
+  if (!user) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const config = adminConfig();
+  if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
+  const body = await request.json().catch(() => null);
+  const wallet = typeof body?.ton_usdt_wallet === "string" ? body.ton_usdt_wallet.trim() : "";
+  if (!wallet || wallet.length > 128) return Response.json({ error: "Вкажіть коректну адресу USDT у мережі TON." }, { status: 400 });
+  const response = await fetch(`${config.url}/rest/v1/worker_applications?user_id=eq.${encodeURIComponent(user.id)}&status=eq.approved`, {
+    method: "PATCH",
+    headers: { ...headers(config), "Content-Type": "application/json", Prefer: "return=representation" },
+    body: JSON.stringify({ ton_usdt_wallet: wallet }),
+  });
+  const rows = response.ok ? await response.json() as Worker[] : [];
+  if (!rows.length) return Response.json({ error: "Не вдалося зберегти адресу." }, { status: 502 });
+  return Response.json({ ok: true, ton_usdt_wallet: rows[0].ton_usdt_wallet });
+}
+
 function adminConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
