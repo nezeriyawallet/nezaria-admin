@@ -92,6 +92,12 @@ export async function PATCH(request: Request) {
     const payout = response.ok ? await response.json() as Payout[] : [];
     return payout.length ? Response.json({ ok: true, payout: payout[0] }) : Response.json({ error: "Could not update payout" }, { status: 502 });
   }
+  if (body.action === "delete_payout") {
+    if (typeof body.payout_id !== "string") return Response.json({ error: "Invalid payout" }, { status: 400 });
+    const response = await fetch(`${config.url}/rest/v1/worker_payouts?id=eq.${encodeURIComponent(body.payout_id)}`, { method: "DELETE", headers: { ...headers(config), Prefer: "return=representation" } });
+    const payout = response.ok ? await response.json() as Payout[] : [];
+    return payout.length ? Response.json({ ok: true, payout: payout[0] }) : Response.json({ error: "Could not delete payout" }, { status: 502 });
+  }
   if (typeof body.id !== "string" || body.action !== "terminate") return Response.json({ error: "Invalid request" }, { status: 400 });
 
   const response = await fetch(`${config.url}/rest/v1/worker_applications?id=eq.${encodeURIComponent(body.id)}&status=eq.approved`, {

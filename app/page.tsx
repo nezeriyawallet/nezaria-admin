@@ -731,7 +731,7 @@ function EmployeesPanel() {
       const result = await response.json().catch(() => ({}));
       if (!response.ok) { window.alert(result.error || "Не вдалося зберегти виплату."); return; }
       const payout = result.payout as WorkerPayout;
-      setSelected((current) => current ? { ...current, payouts: body.action === "create_payout" ? [payout, ...current.payouts] : current.payouts.map((item) => item.id === payout.id ? payout : item) } : current);
+      setSelected((current) => current ? { ...current, payouts: body.action === "create_payout" ? [payout, ...current.payouts] : body.action === "delete_payout" ? current.payouts.filter((item) => item.id !== payout.id) : current.payouts.map((item) => item.id === payout.id ? payout : item) } : current);
       await loadEmployees();
     };
     const createButton = payroll.querySelector(".payroll-create") as HTMLButtonElement | null;
@@ -747,8 +747,23 @@ function EmployeesPanel() {
     const paidButtons = Array.from(payroll.querySelectorAll("[data-payout-id]"));
     const onPaid = (event: Event) => { const id = (event.currentTarget as HTMLElement).dataset.payoutId; if (id) void request({ action: "mark_payout_paid", payout_id: id }); };
     paidButtons.forEach((button) => button.addEventListener("click", onPaid));
+    const payoutItems = Array.from(payroll.querySelectorAll(".owner-payout-list>div"));
+    const onDetails = (event: Event) => {
+      if ((event.target as HTMLElement).closest("button")) return;
+      const payout = payouts[payoutItems.indexOf(event.currentTarget as HTMLElement)];
+      if (!payout) return;
+      modal.querySelector(".payout-detail-modal")?.remove();
+      const detail = document.createElement("div");
+      detail.className = "payout-detail-modal";
+      detail.innerHTML = `<div><button class="payout-detail-close" aria-label="Закрити">×</button><p class="panel-label">ДЕТАЛІ ВИПЛАТИ</p><h3>${Number(payout.amount).toFixed(2)} USDT</h3><p>Статус: <b>${payout.status === "paid" ? "Виплачено" : "До сплати"}</b></p><p>Створено: <b>${new Date(payout.created_at).toLocaleString("uk-UA")}</b></p><p>${payout.paid_at ? `Виплачено: <b>${new Date(payout.paid_at).toLocaleString("uk-UA")}</b>` : "Ще не позначена як виплачена"}</p><p>Примітка: <b>${payout.note || "Без примітки"}</b></p><button class="payout-detail-delete">Видалити виплату</button></div>`;
+      const close = () => detail.remove();
+      detail.querySelector(".payout-detail-close")?.addEventListener("click", close);
+      detail.querySelector(".payout-detail-delete")?.addEventListener("click", () => { if (window.confirm("Видалити цю виплату назавжди?")) { close(); void request({ action: "delete_payout", payout_id: payout.id }); } });
+      modal.append(detail);
+    };
+    payoutItems.forEach((item) => item.addEventListener("click", onDetails));
     modal.insertBefore(payroll, modal.querySelector(".terminate-employee"));
-    return () => { createButton?.removeEventListener("click", onCreate); paidButtons.forEach((button) => button.removeEventListener("click", onPaid)); payroll.remove(); };
+    return () => { createButton?.removeEventListener("click", onCreate); paidButtons.forEach((button) => button.removeEventListener("click", onPaid)); payoutItems.forEach((item) => item.removeEventListener("click", onDetails)); payroll.remove(); };
   }, [selected]);
   const terminateEmployee = async () => {
     if (!selected || !window.confirm(`Звільнити ${selected.full_name}? Доступ працівника буде припинено.`)) return;
@@ -920,6 +935,18 @@ function WorkerPortal({ name }: { name: string }) {
       const pending = payouts.filter((payout) => payout.status === "pending").reduce((sum, payout) => sum + Number(payout.amount), 0);
       history.innerHTML = `<p>Історія виплат</p><strong>${pending ? `${pending.toFixed(2)} USDT` : "—"}</strong><small>${pending ? "Очікує на виплату" : "Немає виплат, що очікують"}</small>${payouts.length ? `<div class="payout-history">${payouts.map((payout) => `<div><span><b>${Number(payout.amount).toFixed(2)} USDT</b><small>${payout.note || "Зарплата"} · ${new Date(payout.created_at).toLocaleDateString("uk-UA")}</small></span><em class="${payout.status}">${payout.status === "paid" ? "Виплачено" : "До сплати"}</em></div>`).join("")}</div>` : ""}`;
     }
+    const payoutRows = Array.from(content.querySelectorAll(".payout-history>div"));
+    const onPayoutDetails = (event: Event) => {
+      const payout = payouts[payoutRows.indexOf(event.currentTarget as HTMLElement)];
+      if (!payout) return;
+      content.querySelector(".worker-payout-detail")?.remove();
+      const detail = document.createElement("div");
+      detail.className = "worker-payout-detail";
+      detail.innerHTML = `<button aria-label="Закрити">×</button><p class="panel-label">ДЕТАЛІ ВИПЛАТИ</p><h2>${Number(payout.amount).toFixed(2)} USDT</h2><p>Статус: <b>${payout.status === "paid" ? "Виплачено" : "До сплати"}</b></p><p>Дата нарахування: <b>${new Date(payout.created_at).toLocaleString("uk-UA")}</b></p><p>${payout.paid_at ? `Дата виплати: <b>${new Date(payout.paid_at).toLocaleString("uk-UA")}</b>` : "Виплата ще очікується"}</p><p>Примітка: <b>${payout.note || "Без примітки"}</b></p>`;
+      detail.querySelector("button")?.addEventListener("click", () => detail.remove());
+      content.querySelector(".salary-panel")?.append(detail);
+    };
+    payoutRows.forEach((row) => row.addEventListener("click", onPayoutDetails));
     const input = content.querySelector(".salary-wallet-input") as HTMLInputElement | null;
     const button = content.querySelector(".salary-wallet-save") as HTMLButtonElement | null;
     const message = content.querySelector(".salary-wallet-message") as HTMLElement | null;
@@ -936,7 +963,7 @@ function WorkerPortal({ name }: { name: string }) {
       button.textContent = result.ok ? "Зберегти зміни" : "Зберегти";
     };
     button.addEventListener("click", onSave);
-    return () => button.removeEventListener("click", onSave);
+    return () => { button.removeEventListener("click", onSave); payoutRows.forEach((row) => row.removeEventListener("click", onPayoutDetails)); };
   }, [view, profile]);
   const logout = () => {
     ["nezaria_access_token", "nezaria_refresh_token", "nezeriya_access_role", "nezeriya_owner_session"].forEach((key) => { window.sessionStorage.removeItem(key); window.localStorage.removeItem(key); });
