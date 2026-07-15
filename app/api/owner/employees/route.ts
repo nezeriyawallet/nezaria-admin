@@ -48,14 +48,18 @@ export async function GET(request: Request) {
   const activity = activityResponse.ok ? await activityResponse.json() as ActivityEvent[] : [];
   const monthHours = Array.from({ length: 30 }, (_, index) => {
     const date = new Date(Date.now() - (29 - index) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    return new Set(activity.filter((event) => event.occurred_at.slice(0, 10) === date).map((event) => `${event.user_id}:${event.occurred_at.slice(0, 13)}`)).size;
+    const total = employees.reduce((sum, employee) => sum + new Set(activity.filter((event) => event.user_id === employee.user_id && event.occurred_at.slice(0, 10) === date).map((event) => event.occurred_at.slice(0, 13))).size, 0);
+    return Math.round(total / Math.max(1, employees.length) * 10) / 10;
   });
   const withDetails = await Promise.all(employees.map(async (employee) => ({
     ...employee,
     avatar_url: employee.face_photo_path ? await signedPhotoUrl(config, employee.face_photo_path) : null,
     reviews: reviews.filter((review) => review.employee_application_id === employee.id),
     closed_chats: closedTickets.filter((ticket) => ticket.assigned_to === employee.user_id).length,
-    hourly_activity: Array.from({ length: 24 }, (_, hour) => new Set(activity.filter((event) => event.user_id === employee.user_id && new Date(event.occurred_at).getHours() === hour).map((event) => event.occurred_at.slice(0, 13))).size),
+    daily_activity: Array.from({ length: 30 }, (_, index) => {
+      const date = new Date(Date.now() - (29 - index) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      return new Set(activity.filter((event) => event.user_id === employee.user_id && event.occurred_at.slice(0, 10) === date).map((event) => event.occurred_at.slice(0, 13))).size;
+    }),
   })));
 
   return Response.json({ employees: withDetails, month_hours: monthHours });

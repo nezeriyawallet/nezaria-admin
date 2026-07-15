@@ -19,7 +19,7 @@ type WorkerApplication = {
 type EmployeeReview = { id: string; client_name: string; rating: number; comment: string; created_at: string };
 type EmployeeProfile = {
   id: string; full_name: string; city: string; age: number; phone: string; created_at: string;
-  avatar_url: string | null; ton_usdt_wallet: string | null; last_active_at: string | null; reviews: EmployeeReview[]; closed_chats: number; hourly_activity: number[];
+  avatar_url: string | null; ton_usdt_wallet: string | null; last_active_at: string | null; reviews: EmployeeReview[]; closed_chats: number; daily_activity: number[];
 };
 type WalletMetrics = Record<string, string | number | null>;
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
@@ -678,13 +678,19 @@ function EmployeesPanel() {
     wallet.innerHTML = `USDT гаманець (TON)<strong>${selected.ton_usdt_wallet || "Не вказано"}</strong>`;
     wallet.style.cssText = "display:flex;flex-direction:column;gap:5px;padding:10px;border:1px solid #2c3a3b;border-radius:8px;color:#93a5a2;font-size:11px;overflow-wrap:anywhere";
     info.appendChild(wallet);
+    const rating = selected.reviews.length ? selected.reviews.reduce((sum, review) => sum + review.rating, 0) / selected.reviews.length : 0;
+    const ratingCard = document.createElement("span");
+    ratingCard.className = "employee-rating-stat";
+    ratingCard.innerHTML = `Рейтинг<strong>${rating ? `${rating.toFixed(2)} <b>${"★".repeat(Math.round(rating))}${"☆".repeat(5 - Math.round(rating))}</b>` : "Ще немає оцінок"}</strong>`;
+    ratingCard.style.cssText = "display:flex;flex-direction:column;gap:5px;padding:10px;border:1px solid #2c3a3b;border-radius:8px;color:#93a5a2;font-size:11px";
+    info.appendChild(ratingCard);
     const chart = document.createElement("section");
     chart.className = "employee-hours-chart";
-    const values = selected.hourly_activity || [];
+    const values = selected.daily_activity || [];
     const max = Math.max(1, ...values);
-    chart.innerHTML = `<p>Години активності за останні 24 години</p><div>${values.map((value, hour) => `<i title="${hour}:00 — ${value} год." style="height:${Math.max(4, value / max * 100)}%"></i>`).join("")}</div><small>Кожна позначка — година з активністю у робочому кабінеті.</small>`;
+    chart.innerHTML = `<p>Робочі години за кожен день · 30 днів</p><div>${values.map((value, day) => `<i title="${day === 29 ? "Сьогодні" : `${29 - day} дн. тому`}: ${value} год." style="height:${Math.max(4, value / max * 100)}%"></i>`).join("")}</div><div class="work-chart-axis"><span>30 днів тому</span><span>Сьогодні</span></div><small>Кожна позначка показує, скільки годин працівник був активним у цей день.</small>`;
     info.insertAdjacentElement("afterend", chart);
-    return () => { stat.remove(); wallet.remove(); chart.remove(); };
+    return () => { stat.remove(); wallet.remove(); ratingCard.remove(); chart.remove(); };
   }, [employees, selected]);
   useEffect(() => {
     const page = document.querySelector(".employees-page");
@@ -693,7 +699,7 @@ function EmployeesPanel() {
     const chart = document.createElement("article");
     chart.className = "panel monthly-work-chart";
     const max = Math.max(1, ...monthHours);
-    chart.innerHTML = `<p class="panel-label">РОБОЧИЙ ЧАС КОМАНДИ</p><h2>Активність працівників за 30 днів</h2><div class="monthly-work-bars">${monthHours.map((value, index) => `<i title="День ${index + 1}: ${value} год." style="height:${Math.max(4, value / max * 100)}%"></i>`).join("")}</div><div><span>30 днів тому</span><span>Сьогодні</span></div><small>Години рахуються за активністю працівників у робочому кабінеті.</small>`;
+    chart.innerHTML = `<p class="panel-label">РОБОЧИЙ ЧАС КОМАНДИ</p><h2>Середні робочі години на працівника · 30 днів</h2><div class="monthly-work-bars">${monthHours.map((value, index) => `<i title="День ${index + 1}: у середньому ${value} год. на працівника" style="height:${Math.max(4, value / max * 100)}%"></i>`).join("")}</div><div><span>30 днів тому</span><span>Сьогодні</span></div><small>Середнє рахується з усіх прийнятих працівників, включно з тими, хто цього дня не працював.</small>`;
     const summary = page.querySelector(".employees-summary");
     summary?.insertAdjacentElement("afterend", chart);
     return () => chart.remove();
