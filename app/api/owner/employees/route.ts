@@ -22,6 +22,7 @@ type Review = {
   comment: string;
   created_at: string;
 };
+type ActivityEvent = { user_id: string; occurred_at: string };
 
 export async function GET(request: Request) {
   const user = await verifyGoogleUser(request);
@@ -42,14 +43,22 @@ export async function GET(request: Request) {
   const reviews = reviewsResponse.ok ? await reviewsResponse.json() as Review[] : [];
   const closedTicketsResponse = await fetch(`${config.url}/rest/v1/support_tickets?status=in.(awaiting_rating,closed)&select=assigned_to`, { headers: headers(config) });
   const closedTickets = closedTicketsResponse.ok ? await closedTicketsResponse.json() as { assigned_to: string | null }[] : [];
+  const since = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
+  const activityResponse = await fetch(`${config.url}/rest/v1/worker_activity_events?occurred_at=gte.${encodeURIComponent(since)}&select=user_id,occurred_at`, { headers: headers(config) });
+  const activity = activityResponse.ok ? await activityResponse.json() as ActivityEvent[] : [];
+  const monthHours = Array.from({ length: 30 }, (_, index) => {
+    const date = new Date(Date.now() - (29 - index) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    return new Set(activity.filter((event) => event.occurred_at.slice(0, 10) === date).map((event) => `${event.user_id}:${event.occurred_at.slice(0, 13)}`)).size;
+  });
   const withDetails = await Promise.all(employees.map(async (employee) => ({
     ...employee,
     avatar_url: employee.face_photo_path ? await signedPhotoUrl(config, employee.face_photo_path) : null,
     reviews: reviews.filter((review) => review.employee_application_id === employee.id),
     closed_chats: closedTickets.filter((ticket) => ticket.assigned_to === employee.user_id).length,
+    hourly_activity: Array.from({ length: 24 }, (_, hour) => new Set(activity.filter((event) => event.user_id === employee.user_id && new Date(event.occurred_at).getHours() === hour).map((event) => event.occurred_at.slice(0, 13))).size),
   })));
 
-  return Response.json({ employees: withDetails });
+  return Response.json({ employees: withDetails, month_hours: monthHours });
 }
 
 export async function PATCH(request: Request) {

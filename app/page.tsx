@@ -19,7 +19,7 @@ type WorkerApplication = {
 type EmployeeReview = { id: string; client_name: string; rating: number; comment: string; created_at: string };
 type EmployeeProfile = {
   id: string; full_name: string; city: string; age: number; phone: string; created_at: string;
-  avatar_url: string | null; ton_usdt_wallet: string | null; last_active_at: string | null; reviews: EmployeeReview[]; closed_chats: number;
+  avatar_url: string | null; ton_usdt_wallet: string | null; last_active_at: string | null; reviews: EmployeeReview[]; closed_chats: number; hourly_activity: number[];
 };
 type WalletMetrics = Record<string, string | number | null>;
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
@@ -517,12 +517,16 @@ function SupportAdminPanel({ onPresence }: { onPresence: (online: boolean, keepa
 function SupportDesk({ available, onAvailability }: { available?: boolean; onAvailability?: () => void }) {
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [selectedId, setSelectedId] = useState("");
+  const [ticketSection, setTicketSection] = useState<"orders" | "chats">("orders");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const selected = tickets.find((ticket) => ticket.id === selectedId) || tickets[0];
+  const orders = tickets.filter((ticket) => ticket.status === "new");
+  const chats = tickets.filter((ticket) => ticket.status === "in_progress");
+  const visibleTickets = ticketSection === "orders" ? orders : chats;
+  const selected = visibleTickets.find((ticket) => ticket.id === selectedId) || visibleTickets[0];
   const headers = () => {
     const token = window.sessionStorage.getItem("nezaria_access_token");
     const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
@@ -555,7 +559,10 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
       if (actionName === "skip") {
         setTickets((current) => current.filter((ticket) => ticket.id !== selected.id));
         setSelectedId((current) => current === selected.id ? "" : current);
-      } else await load(false);
+      } else {
+        if (actionName === "take") setTicketSection("chats");
+        await load(false);
+      }
     }
     setBusy(false);
   };
@@ -582,8 +589,26 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
     indicator.innerHTML = `${busy ? "Надсилаємо" : "Оновлюємо чат"}<i></i><i></i><i></i>`;
     if (!current) header.appendChild(indicator);
   }, [syncing, busy, selectedId, tickets]);
-  const freshCount = tickets.filter((ticket) => ticket.status === "new").length;
-  const activeCount = tickets.filter((ticket) => ticket.status === "in_progress").length;
+  useEffect(() => {
+    const list = document.querySelector(".support-desk .ticket-list");
+    if (!list) return;
+    const tabs = list.querySelector(".ticket-sections") || document.createElement("div");
+    tabs.className = "ticket-sections";
+    tabs.innerHTML = `<button class="${ticketSection === "orders" ? "selected" : ""}">Ордери <b>${orders.length}</b></button><button class="${ticketSection === "chats" ? "selected" : ""}">Мої чати <b>${chats.length}</b></button>`;
+    const [ordersButton, chatsButton] = Array.from(tabs.querySelectorAll("button"));
+    ordersButton?.addEventListener("click", () => { setTicketSection("orders"); setSelectedId(orders[0]?.id || ""); });
+    chatsButton?.addEventListener("click", () => { setTicketSection("chats"); setSelectedId(chats[0]?.id || ""); });
+    list.prepend(tabs);
+    list.querySelectorAll(".ticket-item").forEach((item) => {
+      const dot = item.querySelector(".ticket-dot");
+      const isOrder = dot?.classList.contains("new");
+      const isChat = dot?.classList.contains("in_progress");
+      (item as HTMLElement).style.display = (ticketSection === "orders" ? isOrder : isChat) ? "" : "none";
+    });
+    return () => tabs.remove();
+  }, [ticketSection, tickets]);
+  const freshCount = orders.length;
+  const activeCount = chats.length;
   return <section className="support-desk-page">
     <section className="heading-row"><div><p className="eyebrow">NEZERIYA ADMIN</p><h1>Чати <span>підтримки</span></h1><p className="subtle">Нові повідомлення синхронізуються з акаунтом підтримки.</p></div>{onAvailability && <button className={`availability ${available ? "available" : "away"}`} onClick={onAvailability}><i />{available ? "Доступний" : "Не в мережі"}</button>}</section>
     <section className="support-admin-summary"><article className="panel"><p>Нові звернення</p><strong>{freshCount}</strong><span>Очікують працівника</span></article><article className="panel"><p>У роботі</p><strong>{activeCount}</strong><span>Активних діалогів</span></article><article className="panel"><p>Усього чатів</p><strong>{tickets.length}</strong><span>Усі синхронізовані звернення</span></article></section>
@@ -615,6 +640,7 @@ function UsersPanel({ walletMetrics }: { walletMetrics: WalletMetrics | null }) 
 
 function EmployeesPanel() {
   const [employees, setEmployees] = useState<EmployeeProfile[]>([]);
+  const [monthHours, setMonthHours] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<EmployeeProfile | null>(null);
@@ -628,7 +654,7 @@ function EmployeesPanel() {
     const response = await fetch("/api/owner/employees", { headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) setError(result.error || "Не вдалося завантажити працівників.");
-    else setEmployees(result.employees || []);
+    else { setEmployees(result.employees || []); setMonthHours(result.month_hours || []); }
     setLoading(false);
   };
 
@@ -652,8 +678,26 @@ function EmployeesPanel() {
     wallet.innerHTML = `USDT гаманець (TON)<strong>${selected.ton_usdt_wallet || "Не вказано"}</strong>`;
     wallet.style.cssText = "display:flex;flex-direction:column;gap:5px;padding:10px;border:1px solid #2c3a3b;border-radius:8px;color:#93a5a2;font-size:11px;overflow-wrap:anywhere";
     info.appendChild(wallet);
-    return () => { stat.remove(); wallet.remove(); };
+    const chart = document.createElement("section");
+    chart.className = "employee-hours-chart";
+    const values = selected.hourly_activity || [];
+    const max = Math.max(1, ...values);
+    chart.innerHTML = `<p>Години активності за останні 24 години</p><div>${values.map((value, hour) => `<i title="${hour}:00 — ${value} год." style="height:${Math.max(4, value / max * 100)}%"></i>`).join("")}</div><small>Кожна позначка — година з активністю у робочому кабінеті.</small>`;
+    info.insertAdjacentElement("afterend", chart);
+    return () => { stat.remove(); wallet.remove(); chart.remove(); };
   }, [employees, selected]);
+  useEffect(() => {
+    const page = document.querySelector(".employees-page");
+    if (!page) return;
+    page.querySelector(".monthly-work-chart")?.remove();
+    const chart = document.createElement("article");
+    chart.className = "panel monthly-work-chart";
+    const max = Math.max(1, ...monthHours);
+    chart.innerHTML = `<p class="panel-label">РОБОЧИЙ ЧАС КОМАНДИ</p><h2>Активність працівників за 30 днів</h2><div class="monthly-work-bars">${monthHours.map((value, index) => `<i title="День ${index + 1}: ${value} год." style="height:${Math.max(4, value / max * 100)}%"></i>`).join("")}</div><div><span>30 днів тому</span><span>Сьогодні</span></div><small>Години рахуються за активністю працівників у робочому кабінеті.</small>`;
+    const summary = page.querySelector(".employees-summary");
+    summary?.insertAdjacentElement("afterend", chart);
+    return () => chart.remove();
+  }, [monthHours]);
   const terminateEmployee = async () => {
     if (!selected || !window.confirm(`Звільнити ${selected.full_name}? Доступ працівника буде припинено.`)) return;
     const token = window.sessionStorage.getItem("nezaria_access_token");
@@ -773,6 +817,14 @@ function WorkerPortal({ name }: { name: string }) {
       .then((response) => response.ok ? response.json() : null)
       .then((result) => { if (result?.profile) setProfile(result.profile); })
       .finally(() => setLoading(false));
+  }, []);
+  useEffect(() => {
+    const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
+    if (!token) return;
+    const record = () => void fetch("/api/worker/profile", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    record();
+    const interval = window.setInterval(record, 5 * 60 * 1000);
+    return () => window.clearInterval(interval);
   }, []);
   const saveWallet = async (wallet: string) => {
     const value = wallet.trim();

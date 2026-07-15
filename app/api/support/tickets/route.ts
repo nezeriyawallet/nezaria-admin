@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   const config = configForServer();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
   if (new URL(request.url).searchParams.get("sync") === "1") await syncTelegram(config);
-  return Response.json(await listTickets(config, access.userId));
+  return Response.json(await listTickets(config, access.userId, access.owner));
 }
 
 export async function POST(request: Request) {
@@ -97,14 +97,14 @@ async function latestTicketMessageId(config: Config, ticketId: string) {
   return message?.telegram_message_id || 0;
 }
 
-async function listTickets(config: Config, userId: string) {
+async function listTickets(config: Config, userId: string, owner: boolean) {
   const ticketsResponse = await rest(config, "/support_tickets?status=neq.closed&telegram_peer_id=neq.777000&select=*&order=updated_at.desc");
   const messagesResponse = await rest(config, "/support_messages?select=*&order=sent_at.asc");
   const skipsResponse = await rest(config, `/support_ticket_skips?user_id=eq.${encodeURIComponent(userId)}&select=ticket_id`);
   const tickets = ticketsResponse.ok ? await ticketsResponse.json() as Ticket[] : [];
   const messages = messagesResponse.ok ? await messagesResponse.json() as Message[] : [];
   const skipped = new Set(skipsResponse.ok ? (await skipsResponse.json() as { ticket_id: string }[]).map((skip) => skip.ticket_id) : []);
-  return { tickets: tickets.filter((ticket) => !skipped.has(ticket.id)).map((ticket) => ({ ...ticket, messages: messages.filter((message) => message.ticket_id === ticket.id) })) };
+  return { tickets: tickets.filter((ticket) => !skipped.has(ticket.id) && (ticket.status === "new" || owner || ticket.assigned_to === userId)).map((ticket) => ({ ...ticket, messages: messages.filter((message) => message.ticket_id === ticket.id) })) };
 }
 
 async function telegramClient() {
