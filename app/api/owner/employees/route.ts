@@ -24,6 +24,8 @@ type Review = {
 };
 type ActivityEvent = { user_id: string; occurred_at: string };
 type Payout = { id: string; worker_application_id: string; amount: number; currency: "USDT"; status: "pending" | "paid"; note: string | null; created_at: string; paid_at: string | null };
+type SupportTicket = { id: string; assigned_to: string | null; status: string; created_at: string };
+type SupportMessage = { ticket_id: string; sender_type: "client" | "agent" | "system"; sent_at: string };
 
 export async function GET(request: Request) {
   const user = await verifyGoogleUser(request);
@@ -44,8 +46,11 @@ export async function GET(request: Request) {
   const reviews = reviewsResponse.ok ? await reviewsResponse.json() as Review[] : [];
   const payoutsResponse = await fetch(`${config.url}/rest/v1/worker_payouts?select=id,worker_application_id,amount,currency,status,note,created_at,paid_at&order=created_at.desc`, { headers: headers(config) });
   const payouts = payoutsResponse.ok ? await payoutsResponse.json() as Payout[] : [];
-  const closedTicketsResponse = await fetch(`${config.url}/rest/v1/support_tickets?status=in.(awaiting_rating,closed)&select=assigned_to`, { headers: headers(config) });
-  const closedTickets = closedTicketsResponse.ok ? await closedTicketsResponse.json() as { assigned_to: string | null }[] : [];
+  const ticketsResponse = await fetch(`${config.url}/rest/v1/support_tickets?select=id,assigned_to,status,created_at`, { headers: headers(config) });
+  const tickets = ticketsResponse.ok ? await ticketsResponse.json() as SupportTicket[] : [];
+  const closedTickets = tickets.filter((ticket) => ticket.status === "awaiting_rating" || ticket.status === "closed");
+  const messagesResponse = await fetch(`${config.url}/rest/v1/support_messages?select=ticket_id,sender_type,sent_at&order=sent_at.asc`, { headers: headers(config) });
+  const messages = messagesResponse.ok ? await messagesResponse.json() as SupportMessage[] : [];
   const since = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
   const activityResponse = await fetch(`${config.url}/rest/v1/worker_activity_events?occurred_at=gte.${encodeURIComponent(since)}&select=user_id,occurred_at`, { headers: headers(config) });
   const activity = activityResponse.ok ? await activityResponse.json() as ActivityEvent[] : [];
@@ -60,6 +65,15 @@ export async function GET(request: Request) {
     reviews: reviews.filter((review) => review.employee_application_id === employee.id),
     payouts: payouts.filter((payout) => payout.worker_application_id === employee.id),
     closed_chats: closedTickets.filter((ticket) => ticket.assigned_to === employee.user_id).length,
+    first_response_minutes: (() => {
+      const values = tickets.filter((ticket) => ticket.assigned_to === employee.user_id).map((ticket) => {
+        const ticketMessages = messages.filter((message) => message.ticket_id === ticket.id);
+        const client = ticketMessages.find((message) => message.sender_type === "client");
+        const agent = ticketMessages.find((message) => message.sender_type === "agent");
+        return client && agent ? Math.max(0, (new Date(agent.sent_at).getTime() - new Date(client.sent_at).getTime()) / 60000) : null;
+      }).filter((value): value is number => value !== null);
+      return values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : null;
+    })(),
     daily_activity: Array.from({ length: 30 }, (_, index) => {
       const date = new Date(Date.now() - (29 - index) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       return new Set(activity.filter((event) => event.user_id === employee.user_id && event.occurred_at.slice(0, 10) === date).map((event) => event.occurred_at.slice(0, 13))).size;

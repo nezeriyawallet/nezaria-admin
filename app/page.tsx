@@ -20,7 +20,7 @@ type EmployeeReview = { id: string; client_name: string; rating: number; comment
 type WorkerPayout = { id: string; amount: number; currency: "USDT"; status: "pending" | "paid"; note: string | null; created_at: string; paid_at: string | null };
 type EmployeeProfile = {
   id: string; full_name: string; city: string; age: number; phone: string; created_at: string;
-  avatar_url: string | null; ton_usdt_wallet: string | null; last_active_at: string | null; reviews: EmployeeReview[]; payouts: WorkerPayout[]; closed_chats: number; daily_activity: number[];
+  avatar_url: string | null; ton_usdt_wallet: string | null; last_active_at: string | null; reviews: EmployeeReview[]; payouts: WorkerPayout[]; closed_chats: number; first_response_minutes: number | null; daily_activity: number[];
 };
 type WalletMetrics = Record<string, string | number | null>;
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
@@ -765,6 +765,23 @@ function EmployeesPanel() {
     modal.insertBefore(payroll, modal.querySelector(".terminate-employee"));
     return () => { createButton?.removeEventListener("click", onCreate); paidButtons.forEach((button) => button.removeEventListener("click", onPaid)); payoutItems.forEach((item) => item.removeEventListener("click", onDetails)); payroll.remove(); };
   }, [selected]);
+  useEffect(() => {
+    const page = document.querySelector(".employees-page");
+    if (!page || employees.length === 0) return;
+    page.querySelector(".employees-efficiency-table")?.remove();
+    const table = document.createElement("section");
+    table.className = "panel employees-efficiency-table";
+    const formatMinutes = (minutes: number | null) => minutes === null ? "—" : minutes < 60 ? `${minutes} хв` : `${Math.floor(minutes / 60)} год ${minutes % 60} хв`;
+    table.innerHTML = `<p class="panel-label">ЕФЕКТИВНІСТЬ ПІДТРИМКИ</p><h2>Показники працівників</h2><div class="efficiency-head"><span>Працівник</span><span>Рейтинг</span><span>Закриті чати</span><span>1-ша відповідь</span><span>Години / 30 дн.</span><span>Статус</span></div>${employees.map((employee) => {
+      const rating = employee.reviews.length ? (employee.reviews.reduce((sum, review) => sum + review.rating, 0) / employee.reviews.length).toFixed(2) : "—";
+      const hours = (employee.daily_activity || []).reduce((sum, value) => sum + value, 0);
+      const online = employee.last_active_at ? Date.now() - new Date(employee.last_active_at).getTime() < 90000 : false;
+      return `<div class="efficiency-row"><span class="efficiency-name"><b>${employee.full_name}</b><small>${employee.city}</small></span><span class="efficiency-rating">${rating === "—" ? "—" : `★ ${rating}`}</span><span>${employee.closed_chats}</span><span>${formatMinutes(employee.first_response_minutes)}</span><span>${hours} год</span><span class="${online ? "online" : "offline"}">${online ? "Онлайн" : "Не в мережі"}</span></div>`;
+    }).join("")}`;
+    const monthly = page.querySelector(".monthly-work-chart");
+    monthly?.insertAdjacentElement("afterend", table);
+    return () => table.remove();
+  }, [employees]);
   const terminateEmployee = async () => {
     if (!selected || !window.confirm(`Звільнити ${selected.full_name}? Доступ працівника буде припинено.`)) return;
     const token = window.sessionStorage.getItem("nezaria_access_token");
