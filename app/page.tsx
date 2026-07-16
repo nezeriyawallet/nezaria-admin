@@ -131,9 +131,19 @@ export default function Home() {
         }
         if (!response.ok) throw new Error("Session expired");
         const user = await response.json();
+        const previousUserId = window.sessionStorage.getItem("nezeriya_session_user_id") || window.localStorage.getItem("nezeriya_session_user_id");
+        const accountChanged = Boolean(previousUserId && previousUserId !== user.id);
+        if (accountChanged) {
+          ["nezeriya_access_role", "nezeriya_owner_session", "nezeriya_workspace_mode"].forEach((key) => {
+            window.sessionStorage.removeItem(key);
+            window.localStorage.removeItem(key);
+          });
+        }
+        window.sessionStorage.setItem("nezeriya_session_user_id", user.id);
+        window.localStorage.setItem("nezeriya_session_user_id", user.id);
         setViewerName(user.user_metadata?.full_name || user.email?.split("@")[0] || "Користувач");
         setViewerId(user.id);
-        const savedRole = window.sessionStorage.getItem("nezeriya_access_role");
+        const savedRole = accountChanged ? null : window.sessionStorage.getItem("nezeriya_access_role");
         const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
         setAccessRole(savedRole === "owner" && !ownerSession ? null : savedRole === "owner" || savedRole === "worker" || savedRole === "media" ? savedRole : null);
         setAuthState("signed_in");
@@ -207,7 +217,7 @@ export default function Home() {
       return;
     }
     const redirectTo = encodeURIComponent(window.location.origin);
-    window.location.assign(`${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}`);
+    window.location.assign(`${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}&prompt=select_account`);
   };
 
   const verifyOwnerCode = async (code: string) => {
@@ -245,7 +255,7 @@ export default function Home() {
     if (supabaseUrl && supabaseKey && token) {
       await fetch(`${supabaseUrl}/auth/v1/logout`, { method: "POST", headers: { apikey: supabaseKey, Authorization: `Bearer ${token}` } }).catch(() => undefined);
     }
-    ["nezaria_access_token", "nezaria_refresh_token", "nezeriya_access_role", "nezeriya_owner_session", "nezeriya_workspace_mode"].forEach((key) => {
+    ["nezaria_access_token", "nezaria_refresh_token", "nezeriya_access_role", "nezeriya_owner_session", "nezeriya_workspace_mode", "nezeriya_session_user_id"].forEach((key) => {
       window.sessionStorage.removeItem(key);
       window.localStorage.removeItem(key);
     });
