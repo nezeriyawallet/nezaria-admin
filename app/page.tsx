@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-type NavItem = "Огляд" | "Користувачі" | "Фінанси" | "Підтримка" | "Команда" | "Працівники";
-type AccessRole = "owner" | "worker" | null;
+type NavItem = "Огляд" | "Користувачі" | "Фінанси" | "Підтримка" | "Команда" | "Працівники" | "Медійка";
+type AccessRole = "owner" | "worker" | "media" | null;
 type WorkspaceMode = "ceo" | "admin";
 type WorkerApplication = {
   id: string;
@@ -26,7 +26,7 @@ type WalletMetrics = Record<string, string | number | null>;
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
 type SupportTicket = { id: string; client_name: string; client_username: string | null; status: "new" | "in_progress" | "awaiting_rating" | "closed"; assigned_to: string | null; rating: number | null; review: string | null; created_at: string; updated_at: string; messages: SupportMessage[] };
 
-const navigation: NavItem[] = ["Огляд", "Користувачі", "Фінанси", "Підтримка", "Команда", "Працівники"];
+const navigation: NavItem[] = ["Огляд", "Користувачі", "Фінанси", "Підтримка", "Команда", "Працівники", "Медійка"];
 
 const metrics = [
   { label: "Загальна комісія", value: "$84,291.40", change: "+12.8%", icon: "◈", tone: "mint" },
@@ -135,7 +135,7 @@ export default function Home() {
         setViewerId(user.id);
         const savedRole = window.sessionStorage.getItem("nezeriya_access_role");
         const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
-        setAccessRole(savedRole === "owner" && !ownerSession ? null : savedRole === "owner" || savedRole === "worker" ? savedRole : null);
+        setAccessRole(savedRole === "owner" && !ownerSession ? null : savedRole === "owner" || savedRole === "worker" || savedRole === "media" ? savedRole : null);
         setAuthState("signed_in");
       } catch {
         ["nezaria_access_token", "nezaria_refresh_token", "nezeriya_access_role", "nezeriya_owner_session"].forEach((key) => {
@@ -233,6 +233,11 @@ export default function Home() {
     window.sessionStorage.setItem("nezeriya_access_role", "worker");
     window.localStorage.setItem("nezeriya_access_role", "worker");
     setAccessRole("worker");
+  };
+  const selectMedia = () => {
+    window.sessionStorage.setItem("nezeriya_access_role", "media");
+    window.localStorage.setItem("nezeriya_access_role", "media");
+    setAccessRole("media");
   };
 
   const signOut = async () => {
@@ -442,12 +447,13 @@ export default function Home() {
   }
 
   if (!accessRole) {
-    return <RoleScreen name={viewerName} onOwnerCode={verifyOwnerCode} onWorker={selectWorker} />;
+    return <RoleScreen name={viewerName} onOwnerCode={verifyOwnerCode} onWorker={selectWorker} onMedia={selectMedia} />;
   }
 
   if (accessRole === "worker") {
     return <WorkerScreen name={viewerName} onSubmit={submitWorkerApplication} onCheckStatus={getWorkerApplicationStatus} onPresence={sendWorkerPresence} />;
   }
+  if (accessRole === "media") return <MediaScreen />;
 
   return (
     <main className="shell">
@@ -470,7 +476,7 @@ export default function Home() {
       <section className="content">
 
         <div className="dashboard">
-          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
+          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
           <section className="heading-row">
             <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p></div>
             <div className="header-controls"><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>
@@ -993,6 +999,29 @@ function WorkerPortal({ name }: { name: string }) {
   return <main className="worker-portal"><aside className="worker-portal-sidebar"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div><nav className="worker-portal-nav"><button className={view === "chats" ? "selected" : ""} onClick={() => setView("chats")}>◉ Чати</button><button className={view === "reviews" ? "selected" : ""} onClick={() => setView("reviews")}>★ Відгуки</button><button className={view === "ratings" ? "selected" : ""} onClick={() => setView("ratings")}>✦ Оцінки</button></nav><div className="worker-profile"><div className="worker-profile-row">{avatar ? <img src={avatar} alt={`Фото ${displayName}`} /> : <span>{displayName.slice(0, 1).toUpperCase()}</span>}<div><strong>{displayName}</strong><small>{profile?.city || "Працівник підтримки"}</small></div></div><button onClick={logout}>Вийти</button></div></aside><section className="worker-portal-content">{view === "chats" ? <SupportDesk /> : loading ? <article className="panel empty-applications">Завантажуємо дані…</article> : view === "reviews" ? <section className="worker-feedback"><p className="eyebrow">ВІДГУКИ</p><h1>Відгуки клієнтів</h1>{reviews.length === 0 ? <article className="panel empty-applications">Відгуків поки немає.</article> : <div className="worker-review-list">{reviews.map((review) => <article className="panel worker-review" key={review.id}><strong>{review.client_name}</strong><span>{"★".repeat(review.rating)}</span><p>{review.comment}</p><small>{new Date(review.created_at).toLocaleDateString("uk-UA")}</small></article>)}</div>}</section> : <section className="worker-feedback"><p className="eyebrow">ОЦІНКИ</p><h1>Рейтинг акаунта</h1><div className="rating-summary"><article className="panel"><p>Середній показник</p><strong>{average === "—" ? "—" : `${average} ★`}</strong></article><article className="panel"><p>Усього оцінок</p><strong>{reviews.length}</strong></article></div><div className="rating-breakdown">{[5,4,3,2,1].map((rating) => <div key={rating}><span>{rating} ★</span><i><b style={{ width: reviews.length ? `${reviews.filter((review) => review.rating === rating).length / reviews.length * 100}%` : "0%" }} /></i><strong>{reviews.filter((review) => review.rating === rating).length}</strong></div>)}</div></section>}</section></main>;
 }
 
+function MediaScreen() {
+  const [data, setData] = useState<{ application: { status: string } | null; banners: { id: string; title: string; description: string | null; target_url: string | null; image_url: string | null }[] }>({ application: null, banners: [] });
+  const [loading, setLoading] = useState(true); const [message, setMessage] = useState("");
+  const load = async () => { const token = window.sessionStorage.getItem("nezaria_access_token"); const r = await fetch("/api/media", { headers: { Authorization: `Bearer ${token || ""}` } }); if (r.ok) setData(await r.json()); setLoading(false); };
+  useEffect(() => { void load(); }, []);
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); const token = window.sessionStorage.getItem("nezaria_access_token"); const r = await fetch("/api/media", { method: "POST", headers: { Authorization: `Bearer ${token || ""}` }, body: new FormData(event.currentTarget) }); const result = await r.json().catch(() => ({})); setMessage(r.ok ? "Заявку надіслано CEO." : result.error || "Не вдалося надіслати заявку."); if (r.ok) void load(); };
+  if (loading) return <main className="auth-page"><article className="auth-card">Завантажуємо кабінет медійки…</article></main>;
+  if (!data.application || data.application.status === "rejected") return <main className="auth-page"><section className="auth-card media-application"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div><p className="eyebrow">МЕДІЙКА</p><h1>Заявка до<br /><span>медіа-команди.</span></h1><form onSubmit={submit}><input name="full_name" placeholder="ПІБ *" required /><input name="city" placeholder="Місто *" required /><input name="phone" placeholder="Телефон *" required /><input name="telegram_channel" placeholder="Telegram-канал: @nazva_kanalu *" pattern="@[A-Za-z0-9_]{5,}" required /><input name="portfolio_url" type="url" placeholder="Посилання на портфоліо *" required /><label>Фото профілю *<input name="avatar" type="file" accept="image/*" required /></label><button className="google-button mint-action">Надіслати заявку</button>{message && <p className="auth-error">{message}</p>}</form></section></main>;
+  if (data.application.status !== "approved") return <main className="auth-page"><article className="auth-card"><p className="eyebrow">МЕДІЙКА</p><h1>Заявка на <span>розгляді.</span></h1><p className="auth-copy">CEO перевіряє ваші дані. Після прийняття відкриється кабінет із банерами.</p></article></main>;
+  return <main className="media-cabinet"><header className="media-header"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div><strong>Кабінет медійки</strong></header><section className="media-content"><p className="eyebrow">МАТЕРІАЛИ ДЛЯ ПУБЛІКАЦІЙ</p><h1>Доступні банери</h1>{data.banners.length ? <div className="banner-grid">{data.banners.map((banner) => <article className="panel media-banner" key={banner.id}>{banner.image_url && <img src={banner.image_url} alt={banner.title} />}<h2>{banner.title}</h2>{banner.description && <p>{banner.description}</p>}{banner.target_url && <a href={banner.target_url} target="_blank" rel="noreferrer">Відкрити посилання →</a>}</article>)}</div> : <article className="panel empty-applications">CEO ще не додав банери.</article>}</section></main>;
+}
+
+function MediaOwnerPanel() {
+  const [data, setData] = useState<{ applications: { id: string; full_name: string; city: string; phone: string; telegram_channel: string; portfolio_url: string; status: string }[]; banners: { id: string; title: string; description: string | null; target_url: string | null; image_url: string | null }[] }>({ applications: [], banners: [] });
+  const [message, setMessage] = useState("");
+  const headers = () => ({ Authorization: `Bearer ${window.sessionStorage.getItem("nezaria_access_token") || ""}`, "x-owner-session": window.sessionStorage.getItem("nezeriya_owner_session") || "" });
+  const load = async () => { const r = await fetch("/api/owner/media", { headers: headers() }); if (r.ok) setData(await r.json()); };
+  useEffect(() => { void load(); }, []);
+  const decide = async (id: string, status: string) => { await fetch("/api/owner/media", { method: "PATCH", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) }); void load(); };
+  const upload = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); const r = await fetch("/api/owner/media", { method: "POST", headers: headers(), body: new FormData(event.currentTarget) }); const result = await r.json().catch(() => ({})); setMessage(r.ok ? "Банер додано." : result.error || "Не вдалося додати банер."); if (r.ok) { event.currentTarget.reset(); void load(); } };
+  return <section className="media-owner-page"><section className="heading-row"><div><p className="eyebrow">МЕДІЙКА</p><h1>Медіа <span>кабінет</span></h1><p className="subtle">Заявки медійок та банери для публікацій.</p></div><button className="sync" onClick={() => void load()}>↻ Оновити</button></section><article className="panel media-upload"><h2>Додати банер</h2><form onSubmit={upload}><input name="title" placeholder="Назва банера *" required /><input name="target_url" type="url" placeholder="Посилання (необов’язково)" /><textarea name="description" placeholder="Опис" /><input name="image" type="file" accept="image/*" required /><button>Завантажити банер</button></form>{message && <p>{message}</p>}</article><section className="media-owner-grid"><article className="panel"><h2>Заявки медійок</h2>{data.applications.length ? data.applications.map((application) => <div className="media-application-row" key={application.id}><div><strong>{application.full_name}</strong><small>{application.city} · {application.phone} · {application.telegram_channel}</small><a href={application.portfolio_url} target="_blank" rel="noreferrer">Портфоліо</a></div><em className={application.status}>{application.status === "pending" ? "На розгляді" : application.status === "approved" ? "Прийнято" : "Відхилено"}</em>{application.status === "pending" && <span><button onClick={() => void decide(application.id, "approved")}>Прийняти</button><button className="reject" onClick={() => void decide(application.id, "rejected")}>Відхилити</button></span>}</div>) : <p>Заявок поки немає.</p>}</article><article className="panel"><h2>Опубліковані банери</h2><div className="banner-list">{data.banners.map((banner) => <div key={banner.id}>{banner.image_url && <img src={banner.image_url} alt="" />}<strong>{banner.title}</strong></div>)}</div></article></section></section>;
+}
+
 function AuthScreen({ checking, onGoogleSignIn }: { checking: boolean; onGoogleSignIn: () => void }) {
   return (
     <main className="auth-page">
@@ -1011,11 +1040,23 @@ function AuthScreen({ checking, onGoogleSignIn }: { checking: boolean; onGoogleS
   );
 }
 
-function RoleScreen({ name, onOwnerCode, onWorker }: { name: string; onOwnerCode: (code: string) => Promise<boolean>; onWorker: () => void }) {
+function RoleScreen({ name, onOwnerCode, onWorker, onMedia }: { name: string; onOwnerCode: (code: string) => Promise<boolean>; onWorker: () => void; onMedia: () => void }) {
   const [mode, setMode] = useState<"choose" | "owner">("choose");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (mode !== "choose") return;
+    const options = document.querySelector(".role-options");
+    if (!options || options.querySelector(".media-role-option")) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "role-option media-role-option";
+    button.innerHTML = "<b>▣</b><span><strong>Я медійка</strong><small>Подати заявку та отримати банери для публікацій</small></span><i>→</i>";
+    button.onclick = onMedia;
+    options.append(button);
+    return () => button.remove();
+  }, [mode, onMedia]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
