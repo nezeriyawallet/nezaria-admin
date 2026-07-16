@@ -1092,6 +1092,18 @@ function RoleScreen({ name, onOwnerCode, onWorker, onMedia }: { name: string; on
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [language, setLanguage] = useState<"uk" | "ru">("uk");
+  const copy = language === "ru" ? {
+    workspace: "ВХОД В РАБОЧЕЕ ПРОСТРАНСТВО", greeting: "Добро пожаловать", choose: "Выберите роль.", explanation: "Роль определяет, какие инструменты будут доступны в вашем кабинете.",
+    owner: "Владелец", ownerDescription: "Полная аналитика, команда и настройки", worker: "Сотрудник", workerDescription: "Подать заявку или перейти в поддержку", media: "Я медийщик", mediaDescription: "Подать заявку и получить баннеры для публикаций",
+    back: "← Назад", ownerCheck: "ПОДТВЕРЖДЕНИЕ ВЛАДЕЛЬЦА", enter: "Введите", accessCode: "код доступа.", codeDescription: "Код безопасно проверяется на сервере и никогда не показывается в браузере.", codePlaceholder: "Код владельца", open: "Открыть панель", checking: "Проверяем…",
+  } : {
+    workspace: "ВХІД У РОБОЧИЙ ПРОСТІР", greeting: "Вітаємо", choose: "Оберіть роль.", explanation: "Роль визначає, які інструменти будуть доступні у вашому кабінеті.",
+    owner: "Власник", ownerDescription: "Повна аналітика, команда та налаштування", worker: "Працівник", workerDescription: "Подати заявку або перейти до підтримки", media: "Я медійка", mediaDescription: "Подати заявку та отримати банери для публікацій",
+    back: "← Назад", ownerCheck: "ПІДТВЕРДЖЕННЯ ВЛАСНИКА", enter: "Введіть", accessCode: "код доступу.", codeDescription: "Код перевіряється безпечно на сервері та ніколи не показується у браузері.", codePlaceholder: "Код власника", open: "Відкрити панель", checking: "Перевіряємо…",
+  };
+  useEffect(() => { const saved = window.localStorage.getItem("nezeriya_interface_language"); if (saved === "uk" || saved === "ru") setLanguage(saved); }, []);
+  const changeLanguage = (value: "uk" | "ru") => { setLanguage(value); window.localStorage.setItem("nezeriya_interface_language", value); };
   useEffect(() => {
     if (mode !== "choose") return;
     const options = document.querySelector(".role-options");
@@ -1099,11 +1111,11 @@ function RoleScreen({ name, onOwnerCode, onWorker, onMedia }: { name: string; on
     const button = document.createElement("button");
     button.type = "button";
     button.className = "role-option media-role-option";
-    button.innerHTML = "<b>▣</b><span><strong>Я медійка</strong><small>Подати заявку та отримати банери для публікацій</small></span><i>→</i>";
+    button.innerHTML = `<b>▣</b><span><strong>${copy.media}</strong><small>${copy.mediaDescription}</small></span><i>→</i>`;
     button.onclick = onMedia;
     options.append(button);
     return () => button.remove();
-  }, [mode, onMedia]);
+  }, [mode, onMedia, language]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -1114,7 +1126,7 @@ function RoleScreen({ name, onOwnerCode, onWorker, onMedia }: { name: string; on
     if (!valid) setError("Код не підходить. Спробуй ще раз.");
   };
 
-  return <main className="auth-page"><section className="auth-card role-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>{mode === "choose" ? <><p className="eyebrow">ВХІД У РОБОЧИЙ ПРОСТІР</p><h1>Вітаємо, {name}.<br /><span>Оберіть роль.</span></h1><p className="auth-copy">Роль визначає, які інструменти будуть доступні у вашому кабінеті.</p><div className="role-options"><button className="role-option" onClick={() => setMode("owner")}><b>◈</b><span><strong>Власник</strong><small>Повна аналітика, команда та налаштування</small></span><i>→</i></button><button className="role-option" onClick={onWorker}><b>◌</b><span><strong>Працівник</strong><small>Подати заявку або перейти до підтримки</small></span><i>→</i></button></div></> : <form onSubmit={submit}><button className="back-link" type="button" onClick={() => setMode("choose")}>← Назад</button><p className="eyebrow">ПІДТВЕРДЖЕННЯ ВЛАСНИКА</p><h1>Введіть<br /><span>код доступу.</span></h1><p className="auth-copy">Код перевіряється безпечно на сервері та ніколи не показується у браузері.</p><input className="owner-code" value={code} onChange={(event) => setCode(event.target.value)} placeholder="Код власника" autoFocus required /><button className="google-button mint-action" disabled={loading}>{loading ? "Перевіряємо…" : "Відкрити панель"}</button>{error && <p className="auth-error">{error}</p>}</form>}</section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
+  return <main className="auth-page"><section className="auth-card role-card"><label className="language-select">🌐 <select value={language} onChange={(event) => changeLanguage(event.target.value as "uk" | "ru")} aria-label="Мова"><option value="uk">Українська</option><option value="ru">Русский</option></select></label><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>{mode === "choose" ? <><p className="eyebrow">{copy.workspace}</p><h1>{copy.greeting}, {name}.<br /><span>{copy.choose}</span></h1><p className="auth-copy">{copy.explanation}</p><div className="role-options"><button className="role-option" onClick={() => setMode("owner")}><b>◈</b><span><strong>{copy.owner}</strong><small>{copy.ownerDescription}</small></span><i>→</i></button><button className="role-option" onClick={onWorker}><b>◌</b><span><strong>{copy.worker}</strong><small>{copy.workerDescription}</small></span><i>→</i></button></div></> : <form onSubmit={submit}><button className="back-link" type="button" onClick={() => setMode("choose")}>{copy.back}</button><p className="eyebrow">{copy.ownerCheck}</p><h1>{copy.enter}<br /><span>{copy.accessCode}</span></h1><p className="auth-copy">{copy.codeDescription}</p><input className="owner-code" value={code} onChange={(event) => setCode(event.target.value)} placeholder={copy.codePlaceholder} autoFocus required /><button className="google-button mint-action" disabled={loading}>{loading ? copy.checking : copy.open}</button>{error && <p className="auth-error">{error}</p>}</form>}</section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
 }
 
 function WorkerScreen({ name, onSubmit, onCheckStatus, onCancelApplication, onPresence }: { name: string; onSubmit: (application: { full_name: string; city: string; age: number; phone: string; ton_usdt_wallet: string }, document: File, facePhoto: File) => Promise<{ ok: boolean; message: string }>; onCheckStatus: () => Promise<"pending" | "approved" | "rejected" | "terminated" | null>; onCancelApplication: () => Promise<{ ok: boolean; message: string }>; onPresence: () => Promise<void> }) {
