@@ -24,6 +24,18 @@ export async function POST(request: Request) {
   const response = await rest(config, "/media_applications?on_conflict=user_id", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ user_id: user.id, full_name, city, phone, telegram_channel, portfolio_url, avatar_path: path, status: "pending", reviewed_at: null }) });
   return response.ok ? Response.json({ ok: true }) : Response.json({ error: "Не вдалося надіслати заявку." }, { status: 502 });
 }
+export async function DELETE(request: Request) {
+  const user = await verifyGoogleUser(request); if (!user) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const config = getConfig(); if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
+  const filter = `user_id=eq.${encodeURIComponent(user.id)}&status=eq.pending`;
+  const current = await rest(config, `/media_applications?${filter}&select=avatar_path&limit=1`);
+  const [application] = current.ok ? await current.json() as { avatar_path?: string }[] : [];
+  if (!application) return Response.json({ error: "Заявку на розгляді не знайдено." }, { status: 404 });
+  const removed = await rest(config, `/media_applications?${filter}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+  if (!removed.ok) return Response.json({ error: "Не вдалося відмінити заявку." }, { status: 502 });
+  if (application.avatar_path) await fetch(`${config.url}/storage/v1/object/media-assets/${application.avatar_path.split("/").map(encodeURIComponent).join("/")}`, { method: "DELETE", headers: headers(config) });
+  return Response.json({ ok: true });
+}
 function getConfig(): Config | null { const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY; return url && key ? { url, key } : null; }
 function headers(c: Config) { return { apikey: c.key, Authorization: `Bearer ${c.key}` }; }
 function rest(c: Config, path: string, init: RequestInit = {}) { return fetch(`${c.url}/rest/v1${path}`, { ...init, headers: { ...headers(c), ...(init.headers || {}) } }); }
