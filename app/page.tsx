@@ -319,6 +319,14 @@ export default function Home() {
     return status === "pending" || status === "approved" || status === "rejected" || status === "terminated" ? status : null;
   };
 
+  const cancelWorkerApplication = async () => {
+    const token = window.sessionStorage.getItem("nezaria_access_token");
+    if (!token) return { ok: false, message: "Не вдалося перевірити ваш вхід. Увійдіть ще раз." };
+    const response = await fetch("/api/worker/application", { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    const result = await response.json().catch(() => ({}));
+    return response.ok ? { ok: true, message: "Заявку відмінено. Ви можете подати нову." } : { ok: false, message: result.error || "Не вдалося відмінити заявку." };
+  };
+
   const sendWorkerPresence = async () => {
     const token = window.sessionStorage.getItem("nezaria_access_token");
     if (!token || !supabaseUrl || !supabaseKey) return;
@@ -461,7 +469,7 @@ export default function Home() {
   }
 
   if (accessRole === "worker") {
-    return <WorkerScreen name={viewerName} onSubmit={submitWorkerApplication} onCheckStatus={getWorkerApplicationStatus} onPresence={sendWorkerPresence} />;
+    return <WorkerScreen name={viewerName} onSubmit={submitWorkerApplication} onCheckStatus={getWorkerApplicationStatus} onCancelApplication={cancelWorkerApplication} onPresence={sendWorkerPresence} />;
   }
   if (accessRole === "media") return <MediaScreen />;
 
@@ -906,8 +914,19 @@ function ApplicationsPanel() {
   </section>;
 }
 
-function WorkerStatusScreen({ name, title, text }: { name: string; title: string; text: string }) {
-  return <main className="auth-page"><section className="auth-card worker-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div><p className="eyebrow">КАБІНЕТ ПРАЦІВНИКА</p><h1>Вітаємо, {name}.<br /><span>{title}</span></h1><p className="auth-copy">{text}</p><div className="worker-status"><i /> Оновлюється автоматично після перезавантаження сторінки</div></section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
+function WorkerStatusScreen({ name, title, text, onCancel }: { name: string; title: string; text: string; onCancel?: () => Promise<{ ok: boolean; message: string }> }) {
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const cancel = async () => {
+    if (!onCancel || !window.confirm("Відмінити заявку? Внесені дані та фото буде видалено.")) return;
+    setCancelling(true);
+    setCancelError("");
+    const result = await onCancel();
+    setCancelling(false);
+    if (!result.ok) setCancelError(result.message);
+    else window.location.reload();
+  };
+  return <main className="auth-page"><section className="auth-card worker-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div><p className="eyebrow">КАБІНЕТ ПРАЦІВНИКА</p><h1>Вітаємо, {name}.<br /><span>{title}</span></h1><p className="auth-copy">{text}</p><div className="worker-status"><i /> Оновлюється автоматично після перезавантаження сторінки</div>{onCancel && <><button className="back-link cancel-application" type="button" disabled={cancelling} onClick={() => void cancel()}>{cancelling ? "Відміняємо…" : "Відмінити заявку"}</button>{cancelError && <p className="auth-error">{cancelError}</p>}</>}</section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
 }
 
 type WorkerPortalProfile = { full_name: string; city: string; avatar_url: string | null; ton_usdt_wallet: string | null; reviews: EmployeeReview[]; payouts: WorkerPayout[] };
@@ -1090,7 +1109,7 @@ function RoleScreen({ name, onOwnerCode, onWorker, onMedia }: { name: string; on
   return <main className="auth-page"><section className="auth-card role-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>{mode === "choose" ? <><p className="eyebrow">ВХІД У РОБОЧИЙ ПРОСТІР</p><h1>Вітаємо, {name}.<br /><span>Оберіть роль.</span></h1><p className="auth-copy">Роль визначає, які інструменти будуть доступні у вашому кабінеті.</p><div className="role-options"><button className="role-option" onClick={() => setMode("owner")}><b>◈</b><span><strong>Власник</strong><small>Повна аналітика, команда та налаштування</small></span><i>→</i></button><button className="role-option" onClick={onWorker}><b>◌</b><span><strong>Працівник</strong><small>Подати заявку або перейти до підтримки</small></span><i>→</i></button></div></> : <form onSubmit={submit}><button className="back-link" type="button" onClick={() => setMode("choose")}>← Назад</button><p className="eyebrow">ПІДТВЕРДЖЕННЯ ВЛАСНИКА</p><h1>Введіть<br /><span>код доступу.</span></h1><p className="auth-copy">Код перевіряється безпечно на сервері та ніколи не показується у браузері.</p><input className="owner-code" value={code} onChange={(event) => setCode(event.target.value)} placeholder="Код власника" autoFocus required /><button className="google-button mint-action" disabled={loading}>{loading ? "Перевіряємо…" : "Відкрити панель"}</button>{error && <p className="auth-error">{error}</p>}</form>}</section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
 }
 
-function WorkerScreen({ name, onSubmit, onCheckStatus, onPresence }: { name: string; onSubmit: (application: { full_name: string; city: string; age: number; phone: string; ton_usdt_wallet: string }, document: File, facePhoto: File) => Promise<{ ok: boolean; message: string }>; onCheckStatus: () => Promise<"pending" | "approved" | "rejected" | "terminated" | null>; onPresence: () => Promise<void> }) {
+function WorkerScreen({ name, onSubmit, onCheckStatus, onCancelApplication, onPresence }: { name: string; onSubmit: (application: { full_name: string; city: string; age: number; phone: string; ton_usdt_wallet: string }, document: File, facePhoto: File) => Promise<{ ok: boolean; message: string }>; onCheckStatus: () => Promise<"pending" | "approved" | "rejected" | "terminated" | null>; onCancelApplication: () => Promise<{ ok: boolean; message: string }>; onPresence: () => Promise<void> }) {
   const [form, setForm] = useState({ first_name: name, last_name: "", patronymic: "", city: "", age: "", phone: "", ton_usdt_wallet: "", document_note: "" });
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [facePhotoFile, setFacePhotoFile] = useState<File | null>(null);
@@ -1154,7 +1173,7 @@ function WorkerScreen({ name, onSubmit, onCheckStatus, onPresence }: { name: str
   if (applicationStatus === "checking") return <WorkerStatusScreen name={name} title="Перевіряємо заявку…" text="Завантажуємо актуальний статус вашої заявки." />;
   if (applicationStatus === "approved") return <WorkerWorkspace name={name} />;
   if (applicationStatus === "terminated") return <WorkerStatusScreen name={name} title="Співпрацю завершено." text="Ваш доступ до робочого кабінету припинено. Якщо вважаєте це помилкою, зверніться до власника." />;
-  if (applicationStatus === "pending") return <WorkerStatusScreen name={name} title="Заявка на розгляді." text="Власник перевіряє ваші дані. Після прийняття тут відкриється робочий кабінет." />;
+  if (applicationStatus === "pending") return <WorkerStatusScreen name={name} title="Заявка на розгляді." text="Власник перевіряє ваші дані. Після прийняття тут відкриється робочий кабінет." onCancel={onCancelApplication} />;
 
   return <main className="auth-page"><section className="auth-card worker-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>{submitted ? <><p className="eyebrow">ЗАЯВКУ НАДІСЛАНО</p><h1>Дякуємо,<br /><span>{name}.</span></h1><p className="auth-copy">Власник перевірить вашу заявку. Після схвалення тут відкриється кабінет підтримки.</p><div className="worker-status"><i /> {message}</div></> : <form onSubmit={submit}><p className="eyebrow">АНКЕТА ПРАЦІВНИКА</p><h1>Приєднайтесь<br /><span>до команди.</span></h1><p className="auth-copy">Заповніть дані для розгляду заявки. Усі поля з позначкою * обов’язкові.</p><div className="form-grid"><label>Прізвище *<input value={form.last_name} onChange={(event) => update("last_name", event.target.value)} required /></label><label>Ім’я *<input value={form.first_name} onChange={(event) => update("first_name", event.target.value)} required /></label><label>По батькові *<input value={form.patronymic} onChange={(event) => update("patronymic", event.target.value)} required /></label><label>Місто *<input value={form.city} onChange={(event) => update("city", event.target.value)} required /></label><label>Вік *<input type="number" min="16" max="99" value={form.age} onChange={(event) => update("age", event.target.value)} required /></label><label>Телефон *<input value={form.phone} onChange={(event) => update("phone", event.target.value)} required /></label></div><label className="wide-field">Фото паспорта *<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setDocumentFile(event.target.files?.[0] || null)} required /></label><label className="wide-field">Фото обличчя *<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setFacePhotoFile(event.target.files?.[0] || null)} required /></label><label className="consent-check"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} required /><span>Погоджуюсь на обробку моїх персональних даних для розгляду заявки.</span></label><p className="auth-copy">JPG, PNG або WEBP — до 8 МБ кожне.</p><button className="google-button mint-action" disabled={loading}>{loading ? "Надсилаємо…" : "Надіслати заявку"}</button>{message && <p className="auth-error">{message}</p>}</form>}</section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
 }
