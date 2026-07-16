@@ -703,7 +703,12 @@ function EmployeesPanel() {
     chart.className = "employee-hours-chart";
     const values = selected.daily_activity || [];
     const max = Math.max(1, ...values);
-    chart.innerHTML = `<p>Робочі години за кожен день · 30 днів</p><div>${values.map((value, day) => `<i data-tooltip="${day === 29 ? "Сьогодні" : `${29 - day} дн. тому`}: ${value} год." title="${day === 29 ? "Сьогодні" : `${29 - day} дн. тому`}: ${value} год." style="height:${Math.max(4, value / max * 100)}%"></i>`).join("")}</div><div class="work-chart-axis"><span>30 днів тому</span><span>Сьогодні</span></div><small>Наведіть на стовпчик, щоб побачити точну кількість годин.</small>`;
+    const formatChartDate = (index: number) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (29 - index));
+      return new Intl.DateTimeFormat("uk-UA", { day: "numeric", month: "long", year: "numeric" }).format(date);
+    };
+    chart.innerHTML = `<p>Робочі години за кожен день · 30 днів</p><div>${values.map((value, day) => `<i data-tooltip="${formatChartDate(day)}: ${value} год." title="${formatChartDate(day)}: ${value} год." style="height:${Math.max(4, value / max * 100)}%"></i>`).join("")}</div><div class="work-chart-axis"><span>30 днів тому</span><span>Сьогодні</span></div><small>Наведіть на стовпчик, щоб побачити точну кількість годин.</small>`;
     info.insertAdjacentElement("afterend", chart);
     return () => { payrollSummary.remove(); stat.remove(); wallet.remove(); ratingCard.remove(); chart.remove(); };
   }, [employees, selected]);
@@ -714,7 +719,12 @@ function EmployeesPanel() {
     const chart = document.createElement("article");
     chart.className = "panel monthly-work-chart";
     const max = Math.max(1, ...monthHours);
-    chart.innerHTML = `<p class="panel-label">РОБОЧИЙ ЧАС КОМАНДИ</p><h2>Середні робочі години на працівника · 30 днів</h2><div class="monthly-work-bars">${monthHours.map((value, index) => `<i data-tooltip="День ${index + 1}: у середньому ${value} год." title="День ${index + 1}: у середньому ${value} год. на працівника" style="height:${Math.max(4, value / max * 100)}%"></i>`).join("")}</div><div><span>30 днів тому</span><span>Сьогодні</span></div><small>Наведіть на стовпчик, щоб побачити середню кількість годин за день.</small>`;
+    const formatChartDate = (index: number) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (29 - index));
+      return new Intl.DateTimeFormat("uk-UA", { day: "numeric", month: "long", year: "numeric" }).format(date);
+    };
+    chart.innerHTML = `<p class="panel-label">РОБОЧИЙ ЧАС КОМАНДИ</p><h2>Середні робочі години на працівника · 30 днів</h2><div class="monthly-work-bars">${monthHours.map((value, index) => `<i data-tooltip="${formatChartDate(index)}: у середньому ${value} год." title="${formatChartDate(index)}: у середньому ${value} год. на працівника" style="height:${Math.max(4, value / max * 100)}%"></i>`).join("")}</div><div><span>30 днів тому</span><span>Сьогодні</span></div><small>Наведіть на стовпчик, щоб побачити середню кількість годин за день.</small>`;
     const summary = page.querySelector(".employees-summary");
     summary?.insertAdjacentElement("afterend", chart);
     return () => chart.remove();
