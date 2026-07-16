@@ -11,7 +11,7 @@ type WorkerApplication = {
   city: string;
   age: number;
   phone: string;
-  status: "pending" | "approved" | "rejected" | "terminated";
+  status: "pending" | "approved" | "rejected" | "terminated" | "frozen";
   created_at: string;
   photo_url: string | null;
   face_photo_url: string | null;
@@ -19,7 +19,7 @@ type WorkerApplication = {
 type EmployeeReview = { id: string; client_name: string; rating: number; comment: string; created_at: string };
 type WorkerPayout = { id: string; amount: number; currency: "USDT"; status: "pending" | "paid"; note: string | null; created_at: string; paid_at: string | null };
 type EmployeeProfile = {
-  id: string; full_name: string; city: string; age: number; phone: string; created_at: string;
+  id: string; full_name: string; city: string; age: number; phone: string; created_at: string; status: "approved" | "frozen";
   avatar_url: string | null; ton_usdt_wallet: string | null; last_active_at: string | null; reviews: EmployeeReview[]; payouts: WorkerPayout[]; closed_chats: number; first_response_minutes: number | null; daily_activity: number[];
 };
 type WalletMetrics = Record<string, string | number | null>;
@@ -323,7 +323,7 @@ export default function Home() {
     if (!response.ok) return null;
     const rows = await response.json() as { status?: string }[];
     const status = rows[0]?.status;
-    return status === "pending" || status === "approved" || status === "rejected" || status === "terminated" ? status : null;
+    return status === "pending" || status === "approved" || status === "rejected" || status === "terminated" || status === "frozen" ? status : null;
   };
 
   const cancelWorkerApplication = async () => {
@@ -834,6 +834,23 @@ function EmployeesPanel() {
     else setError("Не вдалося звільнити працівника. Спробуйте ще раз.");
     setTerminating(false);
   };
+  const freezeEmployee = async () => {
+    if (!selected) return;
+    const action = selected.status === "frozen" ? "unfreeze" : "freeze";
+    const question = action === "freeze" ? `Заморозити акаунт ${selected.full_name}? Доступ до підтримки буде призупинено.` : `Розморозити акаунт ${selected.full_name}? Доступ до підтримки буде відновлено.`;
+    if (!window.confirm(question)) return;
+    const token = window.sessionStorage.getItem("nezaria_access_token");
+    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
+    if (!token || !ownerSession) return;
+    setTerminating(true);
+    const response = await fetch("/api/owner/employees", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "x-owner-session": ownerSession }, body: JSON.stringify({ id: selected.id, action }) });
+    if (response.ok) {
+      const status = action === "freeze" ? "frozen" : "approved";
+      setEmployees((items) => items.map((employee) => employee.id === selected.id ? { ...employee, status } : employee));
+      setSelected((employee) => employee ? { ...employee, status } : employee);
+    } else setError("Не вдалося змінити статус працівника. Спробуйте ще раз.");
+    setTerminating(false);
+  };
   const reviewCount = employees.reduce((total, employee) => total + employee.reviews.length, 0);
   const averageRating = reviewCount ? (employees.reduce((total, employee) => total + employee.reviews.reduce((sum, review) => sum + review.rating, 0), 0) / reviewCount).toFixed(2) : "—";
 
@@ -843,10 +860,10 @@ function EmployeesPanel() {
     {loading ? <article className="panel empty-applications">Завантажуємо працівників…</article> : error ? <article className="panel empty-applications">{error}</article> : employees.length === 0 ? <article className="panel empty-applications">Ще немає прийнятих працівників. Приймайте заявки у розділі «Команда».</article> : <article className="panel employees-table-panel"><div className="panel-head"><div><p className="panel-label">КОМАНДА ПІДТРИМКИ</p><h2>Усі працівники</h2></div></div><div className="team-table employees-table">{employees.map((employee) => {
       const rating = employee.reviews.length ? (employee.reviews.reduce((sum, review) => sum + review.rating, 0) / employee.reviews.length).toFixed(2) : "—";
       const initials = employee.full_name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
-      const isOnline = Boolean(employee.last_active_at) && Date.now() - new Date(employee.last_active_at!).getTime() < 90000;
-      return <button className="team-row employee-row" key={employee.id} onClick={() => setSelected(employee)}><div className="member"><div className="avatar member-avatar employee-avatar">{employee.avatar_url ? <img src={employee.avatar_url} alt={`Фото ${employee.full_name}`} /> : initials}</div><div><strong>{employee.full_name}</strong><small>{employee.city}</small></div></div><div><small>Рейтинг</small><strong className="rating">{rating === "—" ? "—" : `★ ${rating}`}</strong></div><div><small>Відгуків</small><strong>{employee.reviews.length}</strong></div><span className={`status ${isOnline ? "online" : "break"}`}>{isOnline ? "Онлайн" : "Не в мережі"}</span></button>;
+      const isOnline = employee.status !== "frozen" && Boolean(employee.last_active_at) && Date.now() - new Date(employee.last_active_at!).getTime() < 90000;
+      return <button className="team-row employee-row" key={employee.id} onClick={() => setSelected(employee)}><div className="member"><div className="avatar member-avatar employee-avatar">{employee.avatar_url ? <img src={employee.avatar_url} alt={`Фото ${employee.full_name}`} /> : initials}</div><div><strong>{employee.full_name}</strong><small>{employee.city}</small></div></div><div><small>Рейтинг</small><strong className="rating">{rating === "—" ? "—" : `★ ${rating}`}</strong></div><div><small>Відгуків</small><strong>{employee.reviews.length}</strong></div><span className={`status ${employee.status === "frozen" ? "frozen" : isOnline ? "online" : "break"}`}>{employee.status === "frozen" ? "Заморожено" : isOnline ? "Онлайн" : "Не в мережі"}</span></button>;
     })}</div></article>}
-    {selected && <section className="employee-modal-backdrop" role="presentation" onMouseDown={() => setSelected(null)}><article className="panel employee-profile" role="dialog" aria-modal="true" aria-label={`Профіль ${selected.full_name}`} onMouseDown={(event) => event.stopPropagation()}><button className="profile-close" onClick={() => setSelected(null)} aria-label="Закрити">×</button><div className="employee-profile-head"><div className="profile-avatar">{selected.avatar_url ? <img src={selected.avatar_url} alt={`Фото ${selected.full_name}`} /> : selected.full_name.slice(0, 1).toUpperCase()}</div><div><p className="panel-label">ПРАЦІВНИК</p><h2>{selected.full_name}</h2><p>{selected.city} · {selected.age} років</p></div></div><div className="employee-info"><span>Телефон<strong>{selected.phone}</strong></span><span>Прийнятий<strong>{new Date(selected.created_at).toLocaleDateString("uk-UA")}</strong></span></div><button className="terminate-employee" onClick={() => void terminateEmployee()} disabled={terminating}>{terminating ? "Звільняємо…" : "Звільнити працівника"}</button><div className="reviews-head"><h3>Відгуки клієнтів</h3><span>{selected.reviews.length}</span></div>{selected.reviews.length === 0 ? <p className="no-reviews">Відгуків ще немає. Вони з’являться після запуску чатів підтримки та оцінювання діалогів.</p> : <div className="reviews-list">{selected.reviews.map((review) => <article className="review" key={review.id}><div><strong>{review.client_name}</strong><span>{"★".repeat(review.rating)}</span></div><p>{review.comment}</p><small>{new Date(review.created_at).toLocaleDateString("uk-UA")}</small></article>)}</div>}</article></section>}
+    {selected && <section className="employee-modal-backdrop" role="presentation" onMouseDown={() => setSelected(null)}><article className="panel employee-profile" role="dialog" aria-modal="true" aria-label={`Профіль ${selected.full_name}`} onMouseDown={(event) => event.stopPropagation()}><button className="profile-close" onClick={() => setSelected(null)} aria-label="Закрити">×</button><div className="employee-profile-head"><div className="profile-avatar">{selected.avatar_url ? <img src={selected.avatar_url} alt={`Фото ${selected.full_name}`} /> : selected.full_name.slice(0, 1).toUpperCase()}</div><div><p className="panel-label">ПРАЦІВНИК</p><h2>{selected.full_name}</h2><p>{selected.city} · {selected.age} років</p></div></div><div className="employee-info"><span>Телефон<strong>{selected.phone}</strong></span><span>Прийнятий<strong>{new Date(selected.created_at).toLocaleDateString("uk-UA")}</strong></span></div><button className="freeze-employee" onClick={() => void freezeEmployee()} disabled={terminating}>{terminating ? "Оновлюємо статус…" : selected.status === "frozen" ? "Розморозити акаунт" : "Заморозити акаунт"}</button><button className="terminate-employee" onClick={() => void terminateEmployee()} disabled={terminating}>{terminating ? "Звільняємо…" : "Звільнити працівника"}</button><div className="reviews-head"><h3>Відгуки клієнтів</h3><span>{selected.reviews.length}</span></div>{selected.reviews.length === 0 ? <p className="no-reviews">Відгуків ще немає. Вони з’являться після запуску чатів підтримки та оцінювання діалогів.</p> : <div className="reviews-list">{selected.reviews.map((review) => <article className="review" key={review.id}><div><strong>{review.client_name}</strong><span>{"★".repeat(review.rating)}</span></div><p>{review.comment}</p><small>{new Date(review.created_at).toLocaleDateString("uk-UA")}</small></article>)}</div>}</article></section>}
   </section>;
 }
 
@@ -1129,7 +1146,7 @@ function RoleScreen({ name, onOwnerCode, onWorker, onMedia }: { name: string; on
   return <main className="auth-page"><section className="auth-card role-card"><label className="language-select">🌐 <select value={language} onChange={(event) => changeLanguage(event.target.value as "uk" | "ru")} aria-label="Мова"><option value="uk">Українська</option><option value="ru">Русский</option></select></label><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>{mode === "choose" ? <><p className="eyebrow">{copy.workspace}</p><h1>{copy.greeting}, {name}.<br /><span>{copy.choose}</span></h1><p className="auth-copy">{copy.explanation}</p><div className="role-options"><button className="role-option" onClick={() => setMode("owner")}><b>◈</b><span><strong>{copy.owner}</strong><small>{copy.ownerDescription}</small></span><i>→</i></button><button className="role-option" onClick={onWorker}><b>◌</b><span><strong>{copy.worker}</strong><small>{copy.workerDescription}</small></span><i>→</i></button></div></> : <form onSubmit={submit}><button className="back-link" type="button" onClick={() => setMode("choose")}>{copy.back}</button><p className="eyebrow">{copy.ownerCheck}</p><h1>{copy.enter}<br /><span>{copy.accessCode}</span></h1><p className="auth-copy">{copy.codeDescription}</p><input className="owner-code" value={code} onChange={(event) => setCode(event.target.value)} placeholder={copy.codePlaceholder} autoFocus required /><button className="google-button mint-action" disabled={loading}>{loading ? copy.checking : copy.open}</button>{error && <p className="auth-error">{error}</p>}</form>}</section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
 }
 
-function WorkerScreen({ name, onSubmit, onCheckStatus, onCancelApplication, onPresence }: { name: string; onSubmit: (application: { full_name: string; city: string; age: number; phone: string; ton_usdt_wallet: string }, document: File, facePhoto: File) => Promise<{ ok: boolean; message: string }>; onCheckStatus: () => Promise<"pending" | "approved" | "rejected" | "terminated" | null>; onCancelApplication: () => Promise<{ ok: boolean; message: string }>; onPresence: () => Promise<void> }) {
+function WorkerScreen({ name, onSubmit, onCheckStatus, onCancelApplication, onPresence }: { name: string; onSubmit: (application: { full_name: string; city: string; age: number; phone: string; ton_usdt_wallet: string }, document: File, facePhoto: File) => Promise<{ ok: boolean; message: string }>; onCheckStatus: () => Promise<"pending" | "approved" | "rejected" | "terminated" | "frozen" | null>; onCancelApplication: () => Promise<{ ok: boolean; message: string }>; onPresence: () => Promise<void> }) {
   const [form, setForm] = useState({ first_name: name, last_name: "", patronymic: "", city: "", age: "", phone: "", ton_usdt_wallet: "", document_note: "" });
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [facePhotoFile, setFacePhotoFile] = useState<File | null>(null);
@@ -1137,7 +1154,7 @@ function WorkerScreen({ name, onSubmit, onCheckStatus, onCancelApplication, onPr
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [applicationStatus, setApplicationStatus] = useState<"checking" | "pending" | "approved" | "rejected" | "terminated" | null>("checking");
+  const [applicationStatus, setApplicationStatus] = useState<"checking" | "pending" | "approved" | "rejected" | "terminated" | "frozen" | null>("checking");
 
   useEffect(() => {
     let active = true;
@@ -1156,7 +1173,7 @@ function WorkerScreen({ name, onSubmit, onCheckStatus, onCancelApplication, onPr
 
   const update = (field: keyof typeof form, value: string) => setForm((current) => ({ ...current, [field]: value }));
   useEffect(() => {
-    if (applicationStatus === "checking" || applicationStatus === "approved" || applicationStatus === "pending" || applicationStatus === "terminated") return;
+    if (applicationStatus === "checking" || applicationStatus === "approved" || applicationStatus === "pending" || applicationStatus === "terminated" || applicationStatus === "frozen") return;
     const grid = document.querySelector(".worker-card .form-grid");
     if (!grid || grid.querySelector(".ton-wallet-field")) return;
     const field = document.createElement("label");
@@ -1193,6 +1210,7 @@ function WorkerScreen({ name, onSubmit, onCheckStatus, onCancelApplication, onPr
   if (applicationStatus === "checking") return <WorkerStatusScreen name={name} title="Перевіряємо заявку…" text="Завантажуємо актуальний статус вашої заявки." />;
   if (applicationStatus === "approved") return <WorkerWorkspace name={name} />;
   if (applicationStatus === "terminated") return <WorkerStatusScreen name={name} title="Співпрацю завершено." text="Ваш доступ до робочого кабінету припинено. Якщо вважаєте це помилкою, зверніться до власника." />;
+  if (applicationStatus === "frozen") return <WorkerStatusScreen name={name} title="Акаунт тимчасово заморожено." text="Доступ до кабінету підтримки тимчасово призупинено власником. Зверніться до власника для розморозки." />;
   if (applicationStatus === "pending") return <WorkerStatusScreen name={name} title="Заявка на розгляді." text="Власник перевіряє ваші дані. Після прийняття тут відкриється робочий кабінет." onCancel={onCancelApplication} />;
 
   return <main className="auth-page"><section className="auth-card worker-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>{submitted ? <><p className="eyebrow">ЗАЯВКУ НАДІСЛАНО</p><h1>Дякуємо,<br /><span>{name}.</span></h1><p className="auth-copy">Власник перевірить вашу заявку. Після схвалення тут відкриється кабінет підтримки.</p><div className="worker-status"><i /> {message}</div></> : <form onSubmit={submit}><p className="eyebrow">АНКЕТА ПРАЦІВНИКА</p><h1>Приєднайтесь<br /><span>до команди.</span></h1><p className="auth-copy">Заповніть дані для розгляду заявки. Усі поля з позначкою * обов’язкові.</p><div className="form-grid"><label>Прізвище *<input value={form.last_name} onChange={(event) => update("last_name", event.target.value)} required /></label><label>Ім’я *<input value={form.first_name} onChange={(event) => update("first_name", event.target.value)} required /></label><label>По батькові *<input value={form.patronymic} onChange={(event) => update("patronymic", event.target.value)} required /></label><label>Місто *<input value={form.city} onChange={(event) => update("city", event.target.value)} required /></label><label>Вік *<input type="number" min="16" max="99" value={form.age} onChange={(event) => update("age", event.target.value)} required /></label><label>Телефон *<input value={form.phone} onChange={(event) => update("phone", event.target.value)} required /></label></div><label className="wide-field">Фото паспорта *<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setDocumentFile(event.target.files?.[0] || null)} required /></label><label className="wide-field">Фото обличчя *<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setFacePhotoFile(event.target.files?.[0] || null)} required /></label><label className="consent-check"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} required /><span>Погоджуюсь на обробку моїх персональних даних для розгляду заявки.</span></label><p className="auth-copy">JPG, PNG або WEBP — до 8 МБ кожне.</p><button className="google-button mint-action" disabled={loading}>{loading ? "Надсилаємо…" : "Надіслати заявку"}</button>{message && <p className="auth-error">{message}</p>}</form>}</section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;

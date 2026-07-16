@@ -10,6 +10,7 @@ type Employee = {
   ton_usdt_wallet: string | null;
   document_note: string;
   face_photo_path: string | null;
+  status: "approved" | "frozen";
   last_active_at: string | null;
   created_at: string;
 };
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
   const config = adminConfig();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
 
-  const employeesResponse = await fetch(`${config.url}/rest/v1/worker_applications?status=eq.approved&select=id,user_id,full_name,city,age,phone,ton_usdt_wallet,document_note,face_photo_path,last_active_at,created_at&order=created_at.desc`, {
+  const employeesResponse = await fetch(`${config.url}/rest/v1/worker_applications?status=in.(approved,frozen)&select=id,user_id,full_name,city,age,phone,ton_usdt_wallet,document_note,face_photo_path,last_active_at,created_at,status&order=created_at.desc`, {
     headers: headers(config),
   });
   if (!employeesResponse.ok) return Response.json({ error: "Could not load employees" }, { status: 502 });
@@ -112,12 +113,15 @@ export async function PATCH(request: Request) {
     const payout = response.ok ? await response.json() as Payout[] : [];
     return payout.length ? Response.json({ ok: true, payout: payout[0] }) : Response.json({ error: "Could not delete payout" }, { status: 502 });
   }
-  if (typeof body.id !== "string" || body.action !== "terminate") return Response.json({ error: "Invalid request" }, { status: 400 });
+  if (typeof body.id !== "string" || !["terminate", "freeze", "unfreeze"].includes(body.action)) return Response.json({ error: "Invalid request" }, { status: 400 });
 
-  const response = await fetch(`${config.url}/rest/v1/worker_applications?id=eq.${encodeURIComponent(body.id)}&status=eq.approved`, {
+  const status = body.action === "terminate" ? "terminated" : body.action === "freeze" ? "frozen" : "approved";
+  const expectedStatus = body.action === "unfreeze" ? "frozen" : "approved";
+
+  const response = await fetch(`${config.url}/rest/v1/worker_applications?id=eq.${encodeURIComponent(body.id)}&status=eq.${expectedStatus}`, {
     method: "PATCH",
     headers: { ...headers(config), "Content-Type": "application/json", Prefer: "return=representation" },
-    body: JSON.stringify({ status: "terminated", reviewed_at: new Date().toISOString() }),
+    body: JSON.stringify({ status, reviewed_at: new Date().toISOString() }),
   });
   if (!response.ok) return Response.json({ error: "Could not terminate employee" }, { status: 502 });
   const updated = await response.json() as Employee[];
