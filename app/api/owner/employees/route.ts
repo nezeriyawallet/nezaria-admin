@@ -13,6 +13,11 @@ type Employee = {
   status: "approved" | "frozen";
   last_active_at: string | null;
   created_at: string;
+  can_use_chats: boolean;
+  can_view_reviews: boolean;
+  can_view_ratings: boolean;
+  can_view_salary: boolean;
+  can_view_statistics: boolean;
 };
 
 type Review = {
@@ -35,7 +40,7 @@ export async function GET(request: Request) {
   const config = adminConfig();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
 
-  const employeesResponse = await fetch(`${config.url}/rest/v1/worker_applications?status=in.(approved,frozen)&select=id,user_id,full_name,city,age,phone,ton_usdt_wallet,document_note,face_photo_path,last_active_at,created_at,status&order=created_at.desc`, {
+  const employeesResponse = await fetch(`${config.url}/rest/v1/worker_applications?status=in.(approved,frozen)&select=id,user_id,full_name,city,age,phone,ton_usdt_wallet,document_note,face_photo_path,last_active_at,created_at,status,can_use_chats,can_view_reviews,can_view_ratings,can_view_salary,can_view_statistics&order=created_at.desc`, {
     headers: headers(config),
   });
   if (!employeesResponse.ok) return Response.json({ error: "Could not load employees" }, { status: 502 });
@@ -91,6 +96,23 @@ export async function PATCH(request: Request) {
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
   const body = await request.json().catch(() => null);
   if (!body || typeof body.action !== "string") return Response.json({ error: "Invalid request" }, { status: 400 });
+  if (body.action === "update_permissions") {
+    if (typeof body.id !== "string" || !body.permissions || typeof body.permissions !== "object") return Response.json({ error: "Invalid permissions" }, { status: 400 });
+    const source = body.permissions as Record<string, unknown>;
+    const fields = ["can_use_chats", "can_view_reviews", "can_view_ratings", "can_view_salary", "can_view_statistics"];
+    const permissions: Record<string, boolean> = {};
+    for (const field of fields) {
+      if (typeof source[field] !== "boolean") return Response.json({ error: "All permissions must be specified" }, { status: 400 });
+      permissions[field] = source[field] as boolean;
+    }
+    const response = await fetch(`${config.url}/rest/v1/worker_applications?id=eq.${encodeURIComponent(body.id)}`, {
+      method: "PATCH",
+      headers: { ...headers(config), "Content-Type": "application/json", Prefer: "return=representation" },
+      body: JSON.stringify(permissions),
+    });
+    const updated = response.ok ? await response.json() as Employee[] : [];
+    return updated.length ? Response.json({ ok: true, permissions }) : Response.json({ error: "Could not update permissions" }, { status: 502 });
+  }
   if (body.action === "create_payout") {
     if (typeof body.id !== "string" || typeof body.amount !== "number" || body.amount <= 0 || body.amount > 1000000) return Response.json({ error: "Invalid payout" }, { status: 400 });
     const employeeResponse = await fetch(`${config.url}/rest/v1/worker_applications?id=eq.${encodeURIComponent(body.id)}&status=eq.approved&select=id&limit=1`, { headers: headers(config) });

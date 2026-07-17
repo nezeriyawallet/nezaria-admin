@@ -1,6 +1,6 @@
 import { verifyGoogleUser } from "../../owner/auth";
 
-type Worker = { id: string; full_name: string; city: string; face_photo_path: string | null; ton_usdt_wallet: string | null; status: string };
+type Worker = { id: string; full_name: string; city: string; face_photo_path: string | null; ton_usdt_wallet: string | null; status: string; can_use_chats: boolean; can_view_reviews: boolean; can_view_ratings: boolean; can_view_salary: boolean; can_view_statistics: boolean };
 type Review = { id: string; client_name: string; rating: number; comment: string; created_at: string };
 type Payout = { id: string; amount: number; currency: "USDT"; status: "pending" | "paid"; note: string | null; created_at: string; paid_at: string | null };
 
@@ -9,14 +9,15 @@ export async function GET(request: Request) {
   if (!user) return Response.json({ error: "Forbidden" }, { status: 403 });
   const config = adminConfig();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
-  const workerResponse = await fetch(`${config.url}/rest/v1/worker_applications?user_id=eq.${encodeURIComponent(user.id)}&status=eq.approved&select=id,full_name,city,face_photo_path,ton_usdt_wallet,status&limit=1`, { headers: headers(config) });
+  const workerResponse = await fetch(`${config.url}/rest/v1/worker_applications?user_id=eq.${encodeURIComponent(user.id)}&status=eq.approved&select=id,full_name,city,face_photo_path,ton_usdt_wallet,status,can_use_chats,can_view_reviews,can_view_ratings,can_view_salary,can_view_statistics&limit=1`, { headers: headers(config) });
   const [worker] = workerResponse.ok ? await workerResponse.json() as Worker[] : [];
   if (!worker) return Response.json({ error: "Worker profile is unavailable" }, { status: 404 });
   const reviewsResponse = await fetch(`${config.url}/rest/v1/employee_reviews?employee_application_id=eq.${encodeURIComponent(worker.id)}&select=id,client_name,rating,comment,created_at&order=created_at.desc`, { headers: headers(config) });
   const reviews = reviewsResponse.ok ? await reviewsResponse.json() as Review[] : [];
   const payoutsResponse = await fetch(`${config.url}/rest/v1/worker_payouts?worker_application_id=eq.${encodeURIComponent(worker.id)}&select=id,amount,currency,status,note,created_at,paid_at&order=created_at.desc`, { headers: headers(config) });
   const payouts = payoutsResponse.ok ? await payoutsResponse.json() as Payout[] : [];
-  return Response.json({ profile: { ...worker, avatar_url: worker.face_photo_path ? await signedPhotoUrl(config, worker.face_photo_path) : null, reviews, payouts } });
+  const safeReviews = worker.can_view_reviews ? reviews : worker.can_view_ratings ? reviews.map((review) => ({ ...review, client_name: "", comment: "" })) : [];
+  return Response.json({ profile: { ...worker, avatar_url: worker.face_photo_path ? await signedPhotoUrl(config, worker.face_photo_path) : null, reviews: safeReviews, payouts: worker.can_view_salary ? payouts : [] } });
 }
 
 export async function PATCH(request: Request) {
@@ -27,6 +28,9 @@ export async function PATCH(request: Request) {
   const body = await request.json().catch(() => null);
   const wallet = typeof body?.ton_usdt_wallet === "string" ? body.ton_usdt_wallet.trim() : "";
   if (!wallet || wallet.length > 128) return Response.json({ error: "Вкажіть коректну адресу USDT у мережі TON." }, { status: 400 });
+  const permissionResponse = await fetch(`${config.url}/rest/v1/worker_applications?user_id=eq.${encodeURIComponent(user.id)}&status=eq.approved&select=can_view_salary&limit=1`, { headers: headers(config) });
+  const [permission] = permissionResponse.ok ? await permissionResponse.json() as Pick<Worker, "can_view_salary">[] : [];
+  if (!permission?.can_view_salary) return Response.json({ error: "Доступ до розділу зарплати вимкнений CEO." }, { status: 403 });
   const response = await fetch(`${config.url}/rest/v1/worker_applications?user_id=eq.${encodeURIComponent(user.id)}&status=eq.approved`, {
     method: "PATCH",
     headers: { ...headers(config), "Content-Type": "application/json", Prefer: "return=representation" },

@@ -15,6 +15,7 @@ let connectingTelegramClient: Promise<TelegramClient | null> | null = null;
 export async function GET(request: Request) {
   const access = await authorize(request);
   if (!access) return Response.json({ error: "Forbidden" }, { status: 403 });
+  if (!access.owner && !access.canUseChats) return Response.json({ error: "Chat access is disabled by CEO" }, { status: 403 });
   const config = configForServer();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
   if (new URL(request.url).searchParams.get("sync") === "1") await syncTelegram(config);
@@ -24,6 +25,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const access = await authorize(request);
   if (!access) return Response.json({ error: "Forbidden" }, { status: 403 });
+  if (!access.owner && !access.canUseChats) return Response.json({ error: "Chat access is disabled by CEO" }, { status: 403 });
   const config = configForServer();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
   const body = await request.json().catch(() => null) as { action?: string; ticketId?: string; message?: string } | null;
@@ -69,9 +71,9 @@ async function authorize(request: Request) {
   if (await verifyOwnerSession(request, user.id)) return { userId: user.id, owner: true };
   const config = configForServer();
   if (!config) return null;
-  const response = await rest(config, `/worker_applications?user_id=eq.${encodeURIComponent(user.id)}&status=eq.approved&select=id&limit=1`);
-  const rows = response.ok ? await response.json() as { id: string }[] : [];
-  return rows.length ? { userId: user.id, owner: false } : null;
+  const response = await rest(config, `/worker_applications?user_id=eq.${encodeURIComponent(user.id)}&status=eq.approved&select=id,can_use_chats&limit=1`);
+  const rows = response.ok ? await response.json() as { id: string; can_use_chats: boolean }[] : [];
+  return rows.length ? { userId: user.id, owner: false, canUseChats: rows[0].can_use_chats } : null;
 }
 
 function configForServer(): Config | null {

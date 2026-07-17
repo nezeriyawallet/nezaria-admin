@@ -21,6 +21,7 @@ type WorkerPayout = { id: string; amount: number; currency: "USDT"; status: "pen
 type EmployeeProfile = {
   id: string; full_name: string; city: string; age: number; phone: string; created_at: string; status: "approved" | "frozen";
   avatar_url: string | null; ton_usdt_wallet: string | null; last_active_at: string | null; reviews: EmployeeReview[]; payouts: WorkerPayout[]; closed_chats: number; first_response_minutes: number | null; daily_activity: number[];
+  can_use_chats: boolean; can_view_reviews: boolean; can_view_ratings: boolean; can_view_salary: boolean; can_view_statistics: boolean;
 };
 type WalletMetrics = Record<string, string | number | null>;
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
@@ -855,6 +856,34 @@ function EmployeesPanel() {
     } else setError("Не вдалося змінити статус працівника. Спробуйте ще раз.");
     setTerminating(false);
   };
+  const savePermissions = async (permissions: Pick<EmployeeProfile, "can_use_chats" | "can_view_reviews" | "can_view_ratings" | "can_view_salary" | "can_view_statistics">) => {
+    if (!selected) return;
+    const token = window.sessionStorage.getItem("nezaria_access_token");
+    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
+    if (!token || !ownerSession) return;
+    const response = await fetch("/api/owner/employees", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "x-owner-session": ownerSession }, body: JSON.stringify({ id: selected.id, action: "update_permissions", permissions }) });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) { window.alert(result.error || "Не вдалося зберегти права доступу."); return; }
+    setSelected((current) => current ? { ...current, ...permissions } : current);
+    setEmployees((items) => items.map((employee) => employee.id === selected.id ? { ...employee, ...permissions } : employee));
+  };
+  useEffect(() => {
+    const modal = document.querySelector(".employee-profile");
+    if (!modal || !selected) return;
+    modal.querySelector(".employee-permissions")?.remove();
+    const section = document.createElement("section");
+    section.className = "employee-permissions";
+    const permissionList: [keyof Pick<EmployeeProfile, "can_use_chats" | "can_view_reviews" | "can_view_ratings" | "can_view_salary" | "can_view_statistics">, string][] = [["can_use_chats", "Чати"], ["can_view_reviews", "Відгуки"], ["can_view_ratings", "Оцінки та рейтинг"], ["can_view_salary", "Зарплата"], ["can_view_statistics", "Особиста статистика"]];
+    section.innerHTML = `<p class="panel-label">ПРАВА ДОСТУПУ</p><h3>Розділи працівника</h3><small>CEO може вимкнути окремі розділи. Зміни застосовуються одразу.</small><div>${permissionList.map(([key, label]) => `<label><input type="checkbox" data-permission="${key}" ${selected[key] ? "checked" : ""} />${label}</label>`).join("")}</div>`;
+    const onChange = () => {
+      const permissions = Object.fromEntries(Array.from(section.querySelectorAll<HTMLInputElement>("[data-permission]")).map((input) => [input.dataset.permission!, input.checked])) as Pick<EmployeeProfile, "can_use_chats" | "can_view_reviews" | "can_view_ratings" | "can_view_salary" | "can_view_statistics">;
+      void savePermissions(permissions);
+    };
+    const inputs = Array.from(section.querySelectorAll<HTMLInputElement>("input"));
+    inputs.forEach((input) => input.addEventListener("change", onChange));
+    modal.insertBefore(section, modal.querySelector(".freeze-employee"));
+    return () => { inputs.forEach((input) => input.removeEventListener("change", onChange)); section.remove(); };
+  }, [selected]);
   const reviewCount = employees.reduce((total, employee) => total + employee.reviews.length, 0);
   const averageRating = reviewCount ? (employees.reduce((total, employee) => total + employee.reviews.reduce((sum, review) => sum + review.rating, 0), 0) / reviewCount).toFixed(2) : "—";
   const filteredEmployees = employees.filter((employee) => {
@@ -1030,14 +1059,14 @@ function AccountMenu({ name, role, avatar, onSignOut, onNicknameChange }: { name
   return <div className="account-menu"><button type="button" className="account-menu-toggle" onClick={() => setOpen((value) => !value)}>{avatar ? <img src={avatar} alt="Фото профілю" /> : <span className="account-menu-avatar">{(nickname || name).slice(0, 1).toUpperCase()}</span>}<span><strong>{nickname || name}</strong><small>{role}</small></span><b>•••</b></button>{open && <div className="account-menu-popover"><button type="button" onClick={() => { setSettingsOpen(true); setOpen(false); }}>Налаштування</button><button type="button" className="account-logout" onClick={onSignOut}>Вийти</button></div>}{settingsOpen && <div className="account-settings-backdrop" onMouseDown={() => setSettingsOpen(false)}><section className="account-settings panel" onMouseDown={(event) => event.stopPropagation()}><button className="profile-close" type="button" onClick={() => setSettingsOpen(false)}>×</button><p className="eyebrow">НАЛАШТУВАННЯ ПРОФІЛЮ</p><h2>Мій профіль</h2><label>Нік<input value={nickname} maxLength={40} onChange={(event) => setNickname(event.target.value)} /></label><label>Мова<select value={language} onChange={(event) => setLanguage(event.target.value)}><option value="uk">Українська</option><option value="ru">Русский</option></select></label><label>Валюта<select value={currency} onChange={(event) => setCurrency(event.target.value)}><option value="USD">USD · Долар США</option><option value="EUR">EUR · Євро</option><option value="UAH">UAH · Гривня</option><option value="USDT">USDT</option></select></label><button className="account-save" type="button" onClick={save}>Зберегти зміни</button></section></div>}</div>;
 }
 
-type WorkerPortalProfile = { full_name: string; city: string; avatar_url: string | null; ton_usdt_wallet: string | null; reviews: EmployeeReview[]; payouts: WorkerPayout[] };
+type WorkerPortalProfile = { full_name: string; city: string; avatar_url: string | null; ton_usdt_wallet: string | null; reviews: EmployeeReview[]; payouts: WorkerPayout[]; can_use_chats: boolean; can_view_reviews: boolean; can_view_ratings: boolean; can_view_salary: boolean; can_view_statistics: boolean };
 
 function WorkerWorkspace({ name }: { name: string }) {
   return <WorkerPortal name={name} />;
 }
 
 function WorkerPortal({ name }: { name: string }) {
-  const [view, setView] = useState<"chats" | "reviews" | "ratings" | "salary">("chats");
+  const [view, setView] = useState<"chats" | "reviews" | "ratings" | "salary" | "statistics">("chats");
   const [profile, setProfile] = useState<WorkerPortalProfile | null>(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -1078,6 +1107,25 @@ function WorkerPortal({ name }: { name: string }) {
     return () => button.remove();
   }, []);
   useEffect(() => {
+    const nav = document.querySelector(".worker-portal-nav");
+    if (!nav || nav.querySelector(".worker-statistics-nav")) return;
+    const button = document.createElement("button");
+    button.className = "worker-statistics-nav";
+    button.textContent = "◫ Статистика";
+    button.onclick = () => setView("statistics");
+    nav.append(button);
+    return () => button.remove();
+  }, []);
+  useEffect(() => {
+    if (!profile) return;
+    const nav = document.querySelector(".worker-portal-nav");
+    if (!nav) return;
+    const rules: Record<string, boolean> = { "Чати": profile.can_use_chats, "Відгуки": profile.can_view_reviews, "Оцінки": profile.can_view_ratings, "Зарплата": profile.can_view_salary, "Статистика": profile.can_view_statistics };
+    const targets: [string, "chats" | "reviews" | "ratings" | "salary" | "statistics"][] = [["Чати", "chats"], ["Відгуки", "reviews"], ["Оцінки", "ratings"], ["Зарплата", "salary"], ["Статистика", "statistics"]];
+    nav.querySelectorAll<HTMLButtonElement>("button").forEach((button) => { const key = Object.keys(rules).find((item) => button.textContent?.includes(item)); if (key) button.style.display = rules[key] ? "" : "none"; });
+    if (!targets.some(([text, targetView]) => targetView === view && rules[text])) setView(targets.find(([text]) => rules[text])?.[1] || "chats");
+  }, [profile, view]);
+  useEffect(() => {
     const profileBox = document.querySelector(".worker-profile");
     if (!profileBox || !profile?.ton_usdt_wallet) return;
     profileBox.querySelector(".worker-wallet-address")?.remove();
@@ -1091,6 +1139,7 @@ function WorkerPortal({ name }: { name: string }) {
     if (view !== "salary") return;
     const content = document.querySelector(".worker-portal-content");
     if (!content) return;
+    if (!profile?.can_view_salary) { content.innerHTML = `<article class="panel empty-applications">Доступ до зарплати вимкнений CEO.</article>`; return; }
     content.innerHTML = `<section class="worker-feedback salary-panel"><p class="eyebrow">ЗАРПЛАТА</p><h1>Моя зарплата</h1><article class="panel"><p>Адреса для виплати USDT (TON)</p><label class="salary-wallet-label">USDT гаманець · мережа TON<input class="salary-wallet-input" placeholder="UQ..." autocomplete="off" /></label><div class="salary-wallet-actions"><button class="salary-wallet-save">Зберегти</button><small class="salary-wallet-message">Вкажіть адресу для отримання майбутніх виплат.</small></div></article><article class="panel"><p>Історія виплат</p><strong>—</strong><small>Після першого нарахування тут з’являться дата, сума та статус виплати.</small></article></section>`;
     const payouts = profile?.payouts || [];
     const history = content.querySelector(".salary-panel article:last-child");
@@ -1127,6 +1176,15 @@ function WorkerPortal({ name }: { name: string }) {
     };
     button.addEventListener("click", onSave);
     return () => { button.removeEventListener("click", onSave); payoutRows.forEach((row) => row.removeEventListener("click", onPayoutDetails)); };
+  }, [view, profile]);
+  useEffect(() => {
+    if (view !== "statistics") return;
+    const content = document.querySelector(".worker-portal-content");
+    if (!content) return;
+    if (!profile?.can_view_statistics) { content.innerHTML = `<article class="panel empty-applications">Доступ до статистики вимкнений CEO.</article>`; return; }
+    const paid = (profile.payouts || []).filter((payout) => payout.status === "paid").reduce((sum, payout) => sum + Number(payout.amount), 0);
+    const rating = profile.reviews.length ? (profile.reviews.reduce((sum, review) => sum + review.rating, 0) / profile.reviews.length).toFixed(2) : "—";
+    content.innerHTML = `<section class="worker-feedback"><p class="eyebrow">СТАТИСТИКА</p><h1>Моя статистика</h1><div class="rating-summary"><article class="panel"><p>Відгуків клієнтів</p><strong>${profile.reviews.length}</strong></article><article class="panel"><p>Середній рейтинг</p><strong>${rating === "—" ? "—" : `${rating} ★`}</strong></article><article class="panel"><p>Виплачено зарплати</p><strong>${paid.toFixed(2)} USDT</strong></article></div></section>`;
   }, [view, profile]);
   const logout = () => {
     ["nezaria_access_token", "nezaria_refresh_token", "nezeriya_access_role", "nezeriya_owner_session"].forEach((key) => { window.sessionStorage.removeItem(key); window.localStorage.removeItem(key); });
