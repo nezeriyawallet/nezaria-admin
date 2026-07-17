@@ -808,7 +808,7 @@ function EmployeesPanel() {
       modal.append(detail);
     };
     payoutItems.forEach((item) => item.addEventListener("click", onDetails));
-    modal.insertBefore(payroll, modal.querySelector(".terminate-employee"));
+    modal.querySelector(".terminate-employee")?.insertAdjacentElement("afterend", payroll);
     return () => { createButton?.removeEventListener("click", onCreate); paidButtons.forEach((button) => button.removeEventListener("click", onPaid)); payoutItems.forEach((item) => item.removeEventListener("click", onDetails)); payroll.remove(); };
   }, [selected]);
   useEffect(() => {
