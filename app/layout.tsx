@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nezeriya Wallet — Admin",
-  description: "Операційна панель Nezeriya Wallet.",
+  title: "NEZERIYA COMPANY — Admin",
+  description: "Операційна панель NEZERIYA COMPANY.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
