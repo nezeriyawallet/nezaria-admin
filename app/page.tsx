@@ -649,6 +649,8 @@ function EmployeesPanel() {
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<EmployeeProfile | null>(null);
   const [terminating, setTerminating] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "online" | "offline" | "frozen">("all");
 
   const loadEmployees = async () => {
     const token = window.sessionStorage.getItem("nezaria_access_token");
@@ -825,11 +827,19 @@ function EmployeesPanel() {
   };
   const reviewCount = employees.reduce((total, employee) => total + employee.reviews.length, 0);
   const averageRating = reviewCount ? (employees.reduce((total, employee) => total + employee.reviews.reduce((sum, review) => sum + review.rating, 0), 0) / reviewCount).toFixed(2) : "—";
+  const filteredEmployees = employees.filter((employee) => {
+    const query = search.trim().toLocaleLowerCase("uk-UA");
+    const matchesQuery = !query || `${employee.full_name} ${employee.city} ${employee.phone}`.toLocaleLowerCase("uk-UA").includes(query);
+    const online = employee.status !== "frozen" && Boolean(employee.last_active_at) && Date.now() - new Date(employee.last_active_at!).getTime() < 90000;
+    const matchesStatus = statusFilter === "all" || statusFilter === "frozen" && employee.status === "frozen" || statusFilter === "online" && online || statusFilter === "offline" && employee.status !== "frozen" && !online;
+    return matchesQuery && matchesStatus;
+  });
 
   return <section className="employees-page">
     <section className="heading-row"><div><p className="eyebrow">ПРАЦІВНИКИ</p><h1>Ефективність <span>команди</span></h1><p className="subtle">Тут відображаються лише працівники, яких ви реально прийняли.</p></div><button className="sync" onClick={() => void loadEmployees()}>↻ Оновити</button></section>
+    <div className="list-filters"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Пошук за ім’ям, містом або телефоном" /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | "online" | "offline" | "frozen")}><option value="all">Усі статуси</option><option value="online">Онлайн</option><option value="offline">Не в мережі</option><option value="frozen">Заморожені</option></select><span>Знайдено: {filteredEmployees.length}</span></div>
     <section className="employees-summary"><article className="panel"><p>Усього працівників</p><strong>{employees.length}</strong></article><article className="panel"><p>Відгуків клієнтів</p><strong>{reviewCount}</strong></article><article className="panel"><p>Середній рейтинг</p><strong>{averageRating === "—" ? "—" : `${averageRating} ★`}</strong></article><article className="panel"><p>Статус даних</p><strong className="employee-live">LIVE</strong></article></section>
-    {loading ? <article className="panel empty-applications">Завантажуємо працівників…</article> : error ? <article className="panel empty-applications">{error}</article> : employees.length === 0 ? <article className="panel empty-applications">Ще немає прийнятих працівників. Приймайте заявки у розділі «Команда».</article> : <article className="panel employees-table-panel"><div className="panel-head"><div><p className="panel-label">КОМАНДА ПІДТРИМКИ</p><h2>Усі працівники</h2></div></div><div className="team-table employees-table">{employees.map((employee) => {
+    {loading ? <article className="panel empty-applications">Завантажуємо працівників…</article> : error ? <article className="panel empty-applications">{error}</article> : employees.length === 0 ? <article className="panel empty-applications">Ще немає прийнятих працівників. Приймайте заявки у розділі «Команда».</article> : filteredEmployees.length === 0 ? <article className="panel empty-applications">За цими фільтрами працівників не знайдено.</article> : <article className="panel employees-table-panel"><div className="panel-head"><div><p className="panel-label">КОМАНДА ПІДТРИМКИ</p><h2>Усі працівники</h2></div></div><div className="team-table employees-table">{filteredEmployees.map((employee) => {
       const rating = employee.reviews.length ? (employee.reviews.reduce((sum, review) => sum + review.rating, 0) / employee.reviews.length).toFixed(2) : "—";
       const initials = employee.full_name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
       const isOnline = employee.status !== "frozen" && Boolean(employee.last_active_at) && Date.now() - new Date(employee.last_active_at!).getTime() < 90000;
@@ -845,6 +855,8 @@ function ApplicationsPanel() {
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState("");
   const [view, setView] = useState<"active" | "archive">("active");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "rejected" | "terminated">("all");
 
   const loadApplications = async () => {
     const token = window.sessionStorage.getItem("nezaria_access_token");
@@ -897,11 +909,18 @@ function ApplicationsPanel() {
     setBusyId("");
   };
 
-  const visibleApplications = applications.filter((application) => view === "archive" ? application.status === "rejected" || application.status === "terminated" : application.status === "pending" || application.status === "approved");
+  const visibleApplications = applications.filter((application) => {
+    const inView = view === "archive" ? application.status === "rejected" || application.status === "terminated" : application.status === "pending" || application.status === "approved";
+    const query = search.trim().toLocaleLowerCase("uk-UA");
+    const matchesQuery = !query || `${application.full_name} ${application.city} ${application.phone}`.toLocaleLowerCase("uk-UA").includes(query);
+    const matchesStatus = statusFilter === "all" || application.status === statusFilter;
+    return inView && matchesQuery && matchesStatus;
+  });
 
   return <section className="applications-page">
     <section className="heading-row"><div><p className="eyebrow">КОМАНДА</p><h1>Заявки <span>працівників</span></h1><p className="subtle">Перевіряйте дані, фото документа та ухвалюйте рішення.</p></div><button className="sync" onClick={() => void loadApplications()}>↻ Оновити</button></section>
     <div className="application-tabs"><button className={view === "active" ? "selected" : ""} onClick={() => setView("active")}>Активні</button><button className={view === "archive" ? "selected" : ""} onClick={() => setView("archive")}>Архів</button></div>
+    <div className="list-filters"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Пошук за ПІБ, містом або телефоном" /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | "pending" | "approved" | "rejected" | "terminated")}><option value="all">Усі статуси</option><option value="pending">На розгляді</option><option value="approved">Прийнято</option><option value="rejected">Відхилено</option><option value="terminated">Звільнено</option></select><span>Знайдено: {visibleApplications.length}</span></div>
     {loading ? <article className="panel empty-applications">Завантажуємо заявки…</article> : error ? <article className="panel empty-applications">{error}</article> : visibleApplications.length === 0 ? <article className="panel empty-applications">{view === "archive" ? "В архіві поки немає заявок." : "Нових заявок поки немає."}</article> : <div className="applications-list">{visibleApplications.map((application) => <article className="panel application-card" key={application.id}>
       <div className="application-main"><div className="candidate-details"><div className="face-square">{application.face_photo_url ? <a href={application.face_photo_url} target="_blank" rel="noreferrer"><img src={application.face_photo_url} alt={`Фото обличчя: ${application.full_name}`} /></a> : <span>Фото</span>}</div><div><p className="panel-label">КАНДИДАТ</p><h2>{application.full_name}</h2><p className="application-meta">{application.city} · {application.age} років · {application.phone}</p><p className="application-date">{new Date(application.created_at).toLocaleString("uk-UA")}</p></div></div><span className={`application-status ${application.status}`}>{application.status === "pending" ? "На розгляді" : application.status === "approved" ? "Прийнято" : application.status === "terminated" ? "Звільнено" : "Відхилено"}</span></div>
       <div><small className="document-label">Фото паспорта</small><div className="document-preview">{application.photo_url ? <a href={application.photo_url} target="_blank" rel="noreferrer"><img src={application.photo_url} alt={`Фото паспорта: ${application.full_name}`} /></a> : <span>Фото недоступне</span>}</div></div>
@@ -1122,6 +1141,18 @@ function MediaOwnerPanel() {
   const headers = () => ({ Authorization: `Bearer ${window.sessionStorage.getItem("nezaria_access_token") || ""}`, "x-owner-session": window.sessionStorage.getItem("nezeriya_owner_session") || "" });
   const load = async () => { const [media, paymentData, analytics] = await Promise.all([fetch("/api/owner/media", { headers: headers() }), fetch("/api/owner/media/payouts", { headers: headers() }), fetch("/api/owner/media/analytics", { headers: headers() })]); if (media.ok) setData(await media.json()); if (paymentData.ok) { const result = await paymentData.json(); setPayouts(result.payouts || []); } if (analytics.ok) { const result = await analytics.json(); setMediaStatistics(result.statistics || []); } };
   useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    const panel = document.querySelector(".media-payroll");
+    const list = panel?.querySelector(".owner-payout-list");
+    if (!panel || !list || panel.querySelector(".payout-filter-bar")) return;
+    const filters = document.createElement("div"); filters.className = "list-filters payout-filter-bar";
+    const input = document.createElement("input"); input.placeholder = "Пошук виплати або медійки";
+    const status = document.createElement("select"); status.innerHTML = "<option value=\"all\">Усі виплати</option><option value=\"pending\">До сплати</option><option value=\"paid\">Виплачено</option>";
+    const count = document.createElement("span");
+    const apply = () => { let visible = 0; list.querySelectorAll(":scope>div").forEach((row) => { const matchesText = row.textContent?.toLocaleLowerCase("uk-UA").includes(input.value.trim().toLocaleLowerCase("uk-UA")) ?? true; const matchesStatus = status.value === "all" || row.querySelector(`em.${status.value}`); const show = matchesText && Boolean(matchesStatus); (row as HTMLElement).style.display = show ? "flex" : "none"; if (show) visible += 1; }); count.textContent = `Знайдено: ${visible}`; };
+    input.addEventListener("input", apply); status.addEventListener("change", apply); filters.append(input, status, count); panel.querySelector(".owner-payroll-form")?.insertAdjacentElement("afterend", filters); apply();
+    return () => filters.remove();
+  }, [payouts]);
   const decide = async (id: string, status: string) => { await fetch("/api/owner/media", { method: "PATCH", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) }); void load(); };
   const upload = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); const r = await fetch("/api/owner/media", { method: "POST", headers: headers(), body: new FormData(event.currentTarget) }); const result = await r.json().catch(() => ({})); setMessage(r.ok ? "Банер додано." : result.error || "Не вдалося додати банер."); if (r.ok) { event.currentTarget.reset(); void load(); } };
   const createPayout = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); const amount = Number(payoutForm.amount); const r = await fetch("/api/owner/media/payouts", { method: "POST", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify({ ...payoutForm, amount }) }); const result = await r.json().catch(() => ({})); setMessage(r.ok ? "Виплату створено." : result.error || "Не вдалося створити виплату."); if (r.ok) { setPayoutForm({ media_application_id: "", amount: "", note: "", status: "pending" }); void load(); } };
