@@ -52,6 +52,9 @@ function metricNumber(value: string | number | null | undefined) {
   return Number.isFinite(number) ? number : 0;
 }
 
+const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
+const SESSION_STORAGE_KEYS = ["nezaria_access_token", "nezaria_refresh_token", "nezeriya_access_role", "nezeriya_owner_session", "nezeriya_workspace_mode", "nezeriya_session_user_id", "nezeriya_session_expires_at"];
+
 export default function Home() {
   const [active, setActive] = useState<NavItem>("Огляд");
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("ceo");
@@ -78,7 +81,7 @@ export default function Home() {
         setAuthState("signed_out");
         return;
       }
-      const persistentKeys = ["nezaria_access_token", "nezaria_refresh_token", "nezeriya_access_role", "nezeriya_owner_session"];
+      const persistentKeys = ["nezaria_access_token", "nezaria_refresh_token", "nezeriya_access_role", "nezeriya_owner_session", "nezeriya_session_expires_at"];
       persistentKeys.forEach((key) => {
         const value = window.localStorage.getItem(key);
         if (value && !window.sessionStorage.getItem(key)) window.sessionStorage.setItem(key, value);
@@ -88,6 +91,21 @@ export default function Home() {
       const fragment = new URLSearchParams(window.location.hash.slice(1));
       const redirectedToken = fragment.get("access_token");
       const redirectedRefreshToken = fragment.get("refresh_token");
+      let expiry = Number(window.sessionStorage.getItem("nezeriya_session_expires_at") || window.localStorage.getItem("nezeriya_session_expires_at"));
+      if (redirectedToken) {
+        expiry = Date.now() + SESSION_DURATION_MS;
+        window.sessionStorage.setItem("nezeriya_session_expires_at", String(expiry));
+        window.localStorage.setItem("nezeriya_session_expires_at", String(expiry));
+      } else if (!Number.isFinite(expiry) || expiry <= 0) {
+        expiry = Date.now() + SESSION_DURATION_MS;
+        window.sessionStorage.setItem("nezeriya_session_expires_at", String(expiry));
+        window.localStorage.setItem("nezeriya_session_expires_at", String(expiry));
+      }
+      if (expiry <= Date.now()) {
+        SESSION_STORAGE_KEYS.forEach((key) => { window.sessionStorage.removeItem(key); window.localStorage.removeItem(key); });
+        setAuthState("signed_out");
+        return;
+      }
       let accessToken = redirectedToken || window.sessionStorage.getItem("nezaria_access_token");
       if (!accessToken) {
         setAuthState("signed_out");
@@ -148,7 +166,7 @@ export default function Home() {
         setAccessRole(savedRole === "owner" && !ownerSession ? null : savedRole === "owner" || savedRole === "worker" || savedRole === "media" ? savedRole : null);
         setAuthState("signed_in");
       } catch {
-        ["nezaria_access_token", "nezaria_refresh_token", "nezeriya_access_role", "nezeriya_owner_session"].forEach((key) => {
+        SESSION_STORAGE_KEYS.forEach((key) => {
           window.sessionStorage.removeItem(key);
           window.localStorage.removeItem(key);
         });
@@ -182,6 +200,18 @@ export default function Home() {
     const interval = window.setInterval(() => void refreshAccessToken(), 45 * 60 * 1000);
     return () => window.clearInterval(interval);
   }, [authState, supabaseKey, supabaseUrl]);
+
+  useEffect(() => {
+    if (authState !== "signed_in") return;
+    const expiresAt = Number(window.localStorage.getItem("nezeriya_session_expires_at"));
+    if (!Number.isFinite(expiresAt)) return;
+    const remaining = Math.max(0, expiresAt - Date.now());
+    const timer = window.setTimeout(() => {
+      SESSION_STORAGE_KEYS.forEach((key) => { window.sessionStorage.removeItem(key); window.localStorage.removeItem(key); });
+      setAccessRole(null); setViewerId(""); setWorkspaceMode("ceo"); setAuthState("signed_out");
+    }, remaining);
+    return () => window.clearTimeout(timer);
+  }, [authState]);
 
   useEffect(() => {
     if (accessRole !== "owner") return;
@@ -262,7 +292,7 @@ export default function Home() {
     if (supabaseUrl && supabaseKey && token) {
       await fetch(`${supabaseUrl}/auth/v1/logout`, { method: "POST", headers: { apikey: supabaseKey, Authorization: `Bearer ${token}` } }).catch(() => undefined);
     }
-    ["nezaria_access_token", "nezaria_refresh_token", "nezeriya_access_role", "nezeriya_owner_session", "nezeriya_workspace_mode", "nezeriya_session_user_id"].forEach((key) => {
+    SESSION_STORAGE_KEYS.forEach((key) => {
       window.sessionStorage.removeItem(key);
       window.localStorage.removeItem(key);
     });
