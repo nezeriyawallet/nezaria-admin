@@ -476,7 +476,7 @@ export default function Home() {
           {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
           <section className="heading-row">
             <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p></div>
-            <div className="header-controls"><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>
+            <div className="header-controls"><NotificationBell role="owner" owner /><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>
           </section>
 
           <section className="metrics-grid">
@@ -925,6 +925,18 @@ function WorkerStatusScreen({ name, title, text, onCancel }: { name: string; tit
   return <main className="auth-page"><section className="auth-card worker-card"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div><p className="eyebrow">КАБІНЕТ ПРАЦІВНИКА</p><h1>Вітаємо, {name}.<br /><span>{title}</span></h1><p className="auth-copy">{text}</p><div className="worker-status"><i /> Оновлюється автоматично після перезавантаження сторінки</div>{onCancel && <><button className="back-link cancel-application" type="button" disabled={cancelling} onClick={() => void cancel()}>{cancelling ? "Відміняємо…" : "Відмінити заявку"}</button>{cancelError && <p className="auth-error">{cancelError}</p>}</>}</section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
 }
 
+function NotificationBell({ role, owner }: { role: "owner" | "worker" | "media"; owner?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<{ id: string; title: string; text: string; created_at: string; tone: string }[]>([]);
+  const [seen, setSeen] = useState<string[]>([]);
+  const key = `nezeriya_seen_notifications_${role}`;
+  const load = async () => { const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token"); if (!token) return; const response = await fetch(`/api/notifications?role=${role}`, { headers: { Authorization: `Bearer ${token}`, ...(owner ? { "x-owner-session": window.sessionStorage.getItem("nezeriya_owner_session") || "" } : {}) } }); if (response.ok) { const result = await response.json(); setItems(result.notifications || []); } };
+  useEffect(() => { try { const saved = JSON.parse(window.localStorage.getItem(key) || "[]"); if (Array.isArray(saved)) setSeen(saved); } catch { /* Ignore invalid browser cache. */ } void load(); const timer = window.setInterval(() => void load(), 60000); return () => window.clearInterval(timer); }, []);
+  const unread = items.filter((item) => !seen.includes(item.id)).length;
+  const markRead = () => { const ids = items.map((item) => item.id); setSeen(ids); window.localStorage.setItem(key, JSON.stringify(ids)); };
+  return <div className="notification-center"><button className="notification-bell" type="button" aria-label="Сповіщення" onClick={() => { setOpen((value) => !value); if (!open) markRead(); }}>♧{unread > 0 && <b>{unread > 9 ? "9+" : unread}</b>}</button>{open && <section className="notification-popover"><header><strong>Сповіщення</strong><button type="button" onClick={markRead}>Прочитано</button></header>{items.length ? <div>{items.map((item) => <article key={item.id}><i className={item.tone} /><span><b>{item.title}</b><small>{item.text} · {new Date(item.created_at).toLocaleDateString("uk-UA")}</small></span></article>)}</div> : <p>Нових подій поки немає.</p>}</section>}</div>;
+}
+
 function AccountMenu({ name, role, avatar, onSignOut, onNicknameChange }: { name: string; role: string; avatar?: string | null; onSignOut: () => void; onNicknameChange?: (value: string) => void }) {
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -945,6 +957,23 @@ function AccountMenu({ name, role, avatar, onSignOut, onNicknameChange }: { name
     setNickname(value);
     setSettingsOpen(false);
   };
+  useEffect(() => {
+    if (role === "Власник") return;
+    const notificationRole = role === "Медіа-команда" ? "media" : "worker";
+    const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
+    if (!token) return;
+    const button = document.createElement("button");
+    button.type = "button"; button.className = "floating-notification-bell"; button.textContent = "♧";
+    const popup = document.createElement("section"); popup.className = "floating-notification-popover"; popup.hidden = true;
+    let items: { id: string; title: string; text: string; created_at: string }[] = [];
+    const cacheKey = `nezeriya_seen_notifications_${notificationRole}`;
+    const seen = () => { try { const value = JSON.parse(window.localStorage.getItem(cacheKey) || "[]"); return Array.isArray(value) ? value : []; } catch { return []; } };
+    const render = () => { const known = seen(); const unread = items.filter((item) => !known.includes(item.id)).length; button.innerHTML = `♧${unread ? `<b>${unread > 9 ? "9+" : unread}</b>` : ""}`; popup.replaceChildren(); const title = document.createElement("header"); const strong = document.createElement("strong"); strong.textContent = "Сповіщення"; const read = document.createElement("button"); read.type = "button"; read.textContent = "Прочитано"; read.onclick = () => { window.localStorage.setItem(cacheKey, JSON.stringify(items.map((item) => item.id))); render(); }; title.append(strong, read); popup.append(title); if (!items.length) { const empty = document.createElement("p"); empty.textContent = "Нових подій поки немає."; popup.append(empty); return; } items.forEach((item) => { const article = document.createElement("article"), dot = document.createElement("i"), text = document.createElement("span"), itemTitle = document.createElement("b"), detail = document.createElement("small"); itemTitle.textContent = item.title; detail.textContent = `${item.text} · ${new Date(item.created_at).toLocaleDateString("uk-UA")}`; text.append(itemTitle, detail); article.append(dot, text); popup.append(article); }); };
+    const load = async () => { const response = await fetch(`/api/notifications?role=${notificationRole}`, { headers: { Authorization: `Bearer ${token}` } }); if (response.ok) { const result = await response.json(); items = result.notifications || []; render(); } };
+    button.onclick = () => { popup.hidden = !popup.hidden; if (!popup.hidden) { window.localStorage.setItem(cacheKey, JSON.stringify(items.map((item) => item.id))); render(); } };
+    document.body.append(button, popup); void load(); const timer = window.setInterval(() => void load(), 60000);
+    return () => { window.clearInterval(timer); button.remove(); popup.remove(); };
+  }, [role]);
   return <div className="account-menu"><button type="button" className="account-menu-toggle" onClick={() => setOpen((value) => !value)}>{avatar ? <img src={avatar} alt="Фото профілю" /> : <span className="account-menu-avatar">{(nickname || name).slice(0, 1).toUpperCase()}</span>}<span><strong>{nickname || name}</strong><small>{role}</small></span><b>•••</b></button>{open && <div className="account-menu-popover"><button type="button" onClick={() => { setSettingsOpen(true); setOpen(false); }}>Налаштування</button><button type="button" className="account-logout" onClick={onSignOut}>Вийти</button></div>}{settingsOpen && <div className="account-settings-backdrop" onMouseDown={() => setSettingsOpen(false)}><section className="account-settings panel" onMouseDown={(event) => event.stopPropagation()}><button className="profile-close" type="button" onClick={() => setSettingsOpen(false)}>×</button><p className="eyebrow">НАЛАШТУВАННЯ ПРОФІЛЮ</p><h2>Мій профіль</h2><label>Нік<input value={nickname} maxLength={40} onChange={(event) => setNickname(event.target.value)} /></label><label>Мова<select value={language} onChange={(event) => setLanguage(event.target.value)}><option value="uk">Українська</option><option value="ru">Русский</option></select></label><label>Валюта<select value={currency} onChange={(event) => setCurrency(event.target.value)}><option value="USD">USD · Долар США</option><option value="EUR">EUR · Євро</option><option value="UAH">UAH · Гривня</option><option value="USDT">USDT</option></select></label><button className="account-save" type="button" onClick={save}>Зберегти зміни</button></section></div>}</div>;
 }
 
