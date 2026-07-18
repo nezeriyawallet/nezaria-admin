@@ -55,6 +55,19 @@ function metricNumber(value: string | number | null | undefined) {
 
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
 const SESSION_STORAGE_KEYS = ["nezaria_access_token", "nezaria_refresh_token", "nezeriya_access_role", "nezeriya_owner_session", "nezeriya_workspace_mode", "nezeriya_session_user_id", "nezeriya_session_expires_at"];
+const CHAT_RESPONSE_SLA_MS = 15 * 60 * 1000;
+
+function responseTimerState(ticket: SupportTicket | undefined, now: number) {
+  if (!ticket || ticket.status !== "in_progress") return null;
+  const lastClient = [...ticket.messages].reverse().find((message) => message.sender_type === "client");
+  const lastAgent = [...ticket.messages].reverse().find((message) => message.sender_type === "agent");
+  const clientAt = lastClient ? Date.parse(lastClient.sent_at) : Number.NaN;
+  const agentAt = lastAgent ? Date.parse(lastAgent.sent_at) : Number.NaN;
+  if (!Number.isFinite(clientAt) || (Number.isFinite(agentAt) && agentAt >= clientAt)) return null;
+  const remaining = clientAt + CHAT_RESPONSE_SLA_MS - now;
+  const seconds = Math.floor(Math.abs(remaining) / 1000);
+  return { overdue: remaining < 0, value: `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}` };
+}
 
 export default function Home() {
   const [active, setActive] = useState<NavItem>("Огляд");
@@ -251,13 +264,13 @@ export default function Home() {
     window.location.assign(`${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}&prompt=select_account`);
   };
 
-  const verifyOwnerCode = async (code: string) => {
+  const verifyOwnerCode = async (code: string, twoFactorCode = "") => {
     const token = window.sessionStorage.getItem("nezaria_access_token");
     if (!token) return false;
     const response = await fetch("/api/owner/verify", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, twoFactorCode }),
     });
     if (!response.ok) return false;
     const result = await response.json();
@@ -554,6 +567,7 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
   const [selectedId, setSelectedId] = useState("");
   const [ticketSection, setTicketSection] = useState<"orders" | "chats">("orders");
   const [message, setMessage] = useState("");
+  const [now, setNow] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
@@ -568,6 +582,7 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
   const chats = tickets.filter((ticket) => ticket.status === "in_progress");
   const visibleTickets = ticketSection === "orders" ? orders : chats;
   const selected = visibleTickets.find((ticket) => ticket.id === selectedId) || visibleTickets[0];
+  const responseTimer = responseTimerState(selected, now);
   const headers = () => {
     const token = window.sessionStorage.getItem("nezaria_access_token");
     const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
@@ -588,6 +603,7 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
     } finally { setLoading(false); setSyncing(false); }
   };
   useEffect(() => { void load(); const interval = window.setInterval(() => void load(), 5000); return () => window.clearInterval(interval); }, []);
+  useEffect(() => { const interval = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(interval); }, []);
   const action = async (actionName: "take" | "skip" | "send" | "close") => {
     if (!selected || busy) return;
     if (actionName === "send" && !message.trim()) return;
@@ -630,6 +646,19 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
     indicator.innerHTML = `${busy ? "Надсилаємо" : "Оновлюємо чат"}<i></i><i></i><i></i>`;
     if (!current) header.appendChild(indicator);
   }, [syncing, busy, selectedId, tickets]);
+  useEffect(() => {
+    const header = document.querySelector(".conversation-head");
+    if (!header) return;
+    header.querySelector(".response-timer")?.remove();
+    if (!responseTimer) return;
+    const timer = document.createElement("span");
+    timer.className = `response-timer ${responseTimer.overdue ? "overdue" : ""}`;
+    timer.title = "15-хвилинний SLA відповіді";
+    timer.textContent = `${responseTimer.overdue ? "Прострочено: " : "Відповісти за: "}${responseTimer.value}`;
+    const actions = header.lastElementChild;
+    header.insertBefore(timer, actions);
+    return () => timer.remove();
+  }, [responseTimer?.value, responseTimer?.overdue, selectedId]);
   useEffect(() => {
     const form = document.querySelector(".conversation .message-form");
     if (!form || form.parentElement?.querySelector(".faq-templates")) return;
@@ -1323,9 +1352,10 @@ function AuthScreen({ checking, onGoogleSignIn }: { checking: boolean; onGoogleS
   );
 }
 
-function RoleScreen({ name, onOwnerCode, onWorker, onMedia }: { name: string; onOwnerCode: (code: string) => Promise<boolean>; onWorker: () => void; onMedia: () => void }) {
+function RoleScreen({ name, onOwnerCode, onWorker, onMedia }: { name: string; onOwnerCode: (code: string, twoFactorCode?: string) => Promise<boolean>; onWorker: () => void; onMedia: () => void }) {
   const [mode, setMode] = useState<"choose" | "owner">("choose");
   const [code, setCode] = useState("");
+  const [twoFactorCode, setTwoFactorCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [language, setLanguage] = useState<"uk" | "ru">("uk");
@@ -1353,11 +1383,32 @@ function RoleScreen({ name, onOwnerCode, onWorker, onMedia }: { name: string; on
     return () => button.remove();
   }, [mode, onMedia, language]);
 
+  useEffect(() => {
+    if (mode !== "owner") return;
+    const form = document.querySelector(".role-card form");
+    const submitButton = form?.querySelector(".mint-action");
+    if (!form || !submitButton || form.querySelector(".owner-two-factor")) return;
+    const input = document.createElement("input");
+    input.className = "owner-code owner-two-factor";
+    input.type = "text";
+    input.inputMode = "numeric";
+    input.autocomplete = "one-time-code";
+    input.maxLength = 6;
+    input.placeholder = "Код 2FA з Authenticator";
+    input.setAttribute("aria-label", "Код двофакторної автентифікації");
+    input.addEventListener("input", () => {
+      input.value = input.value.replace(/\D/g, "").slice(0, 6);
+      setTwoFactorCode(input.value);
+    });
+    form.insertBefore(input, submitButton);
+    return () => input.remove();
+  }, [mode]);
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setLoading(true);
     setError("");
-    const valid = await onOwnerCode(code);
+    const valid = await onOwnerCode(code, twoFactorCode);
     setLoading(false);
     if (!valid) setError("Код не підходить. Спробуй ще раз.");
   };

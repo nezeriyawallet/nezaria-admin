@@ -35,6 +35,14 @@ export async function safeMatch(candidate: string, expected: string) {
   return safeEqual(await hash(candidate), await hash(expected));
 }
 
+/** Uses an authenticator-app TOTP secret, with the legacy static code as a migration fallback. */
+export async function verifyOwnerSecondFactor(code: string) {
+  const totpSecret = process.env.OWNER_2FA_TOTP_SECRET;
+  if (totpSecret) return verifyTotp(code, totpSecret);
+  const fallbackCode = process.env.OWNER_2FA_CODE;
+  return fallbackCode ? safeMatch(code, fallbackCode) : true;
+}
+
 async function sign(value: string, secret: string) {
   const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(value));
@@ -55,4 +63,38 @@ function toBase64Url(bytes: Uint8Array) {
   let value = "";
   bytes.forEach((byte) => { value += String.fromCharCode(byte); });
   return btoa(value).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+
+async function verifyTotp(candidate: string, secret: string) {
+  if (!/^\d{6}$/.test(candidate)) return false;
+  const keyBytes = fromBase32(secret);
+  if (!keyBytes.length) return false;
+  const counter = Math.floor(Date.now() / 1000 / 30);
+  return (await Promise.all([-1, 0, 1].map((offset) => createTotp(keyBytes, counter + offset))))
+    .some((value) => safeEqual(candidate, value));
+}
+
+async function createTotp(secret: Uint8Array, counter: number) {
+  const counterBytes = new Uint8Array(8);
+  let remaining = counter;
+  for (let index = 7; index >= 0; index -= 1) { counterBytes[index] = remaining & 0xff; remaining = Math.floor(remaining / 256); }
+  const key = await crypto.subtle.importKey("raw", secret.buffer as ArrayBuffer, { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
+  const digest = new Uint8Array(await crypto.subtle.sign("HMAC", key, counterBytes));
+  const offset = digest[digest.length - 1] & 0x0f;
+  const number = ((digest[offset] & 0x7f) << 24) | (digest[offset + 1] << 16) | (digest[offset + 2] << 8) | digest[offset + 3];
+  return String(number % 1_000_000).padStart(6, "0");
+}
+
+function fromBase32(value: string) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const cleaned = value.toUpperCase().replace(/[\s=-]/g, "");
+  let buffer = 0, bits = 0;
+  const output: number[] = [];
+  for (const char of cleaned) {
+    const digit = alphabet.indexOf(char);
+    if (digit < 0) return new Uint8Array();
+    buffer = (buffer << 5) | digit; bits += 5;
+    if (bits >= 8) { output.push((buffer >>> (bits - 8)) & 0xff); bits -= 8; }
+  }
+  return new Uint8Array(output);
 }
