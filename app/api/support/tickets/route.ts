@@ -159,6 +159,7 @@ async function syncTelegram(config: Config) {
         await patch(config, "support_tickets", `id=eq.${ticket.id}`, { ...ticketData, status: "new", assigned_to: null, assigned_at: null, rating: null, review: null });
         ticket = await ticketById(config, ticket.id);
       } else if (!ticket) ticket = await createTicket(config, ticketData);
+      if (ticket?.status === "new") ticket = await autoAssignTicket(config, ticket);
       if (!ticket) continue;
       for (const message of messagesToSave) {
         const text = message.message.trim();
@@ -168,6 +169,25 @@ async function syncTelegram(config: Config) {
   } catch {
     cachedTelegramClient = null;
   }
+}
+
+async function autoAssignTicket(config: Config, ticket: Ticket) {
+  const workersResponse = await rest(config, `/worker_applications?status=eq.approved&can_use_chats=eq.true&last_active_at=gte.${encodeURIComponent(new Date(Date.now() - 3 * 60 * 1000).toISOString())}&select=user_id&order=last_active_at.desc`);
+  const workers = workersResponse.ok ? await workersResponse.json() as { user_id: string }[] : [];
+  if (!workers.length) return ticket;
+  const activeResponse = await rest(config, "/support_tickets?status=eq.in_progress&assigned_to=not.is.null&select=assigned_to");
+  const activeTickets = activeResponse.ok ? await activeResponse.json() as Pick<Ticket, "assigned_to">[] : [];
+  const workloads = new Map(workers.map((worker) => [worker.user_id, 0]));
+  activeTickets.forEach((item) => { if (item.assigned_to && workloads.has(item.assigned_to)) workloads.set(item.assigned_to, (workloads.get(item.assigned_to) || 0) + 1); });
+  const agentId = [...workloads.entries()].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))[0]?.[0];
+  if (!agentId) return ticket;
+  const greeting = "Вітаємо вас у технічній підтримці Nezeriya Wallet";
+  try {
+    const telegramMessageId = await sendTelegram(ticket, greeting);
+    await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: telegramMessageId, sender_type: "agent", body: greeting });
+  } catch { return ticket; }
+  await patch(config, "support_tickets", `id=eq.${ticket.id}&status=eq.new`, { status: "in_progress", assigned_to: agentId, assigned_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+  return await ticketById(config, ticket.id) || ticket;
 }
 
 async function handleFeedback(config: Config, ticket: Ticket, text: string) {

@@ -558,6 +558,12 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const faqTemplates = [
+    { title: "Вітання", text: "Вітаємо вас у технічній підтримці Nezeriya Wallet. Опишіть, будь ласка, вашу проблему — ми допоможемо." },
+    { title: "Статус платежу", text: "Перевіряємо інформацію щодо платежу. Будь ласка, надішліть ID транзакції або скріншот операції." },
+    { title: "Telegram Stars", text: "Щоб перевірити поповнення Telegram Stars, надішліть, будь ласка, скріншот або номер операції." },
+    { title: "Технічна проблема", text: "Опишіть проблему детальніше та надішліть скріншот. Це допоможе нам швидше знайти рішення." },
+  ];
   const orders = tickets.filter((ticket) => ticket.status === "new");
   const chats = tickets.filter((ticket) => ticket.status === "in_progress");
   const visibleTickets = ticketSection === "orders" ? orders : chats;
@@ -624,6 +630,25 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
     indicator.innerHTML = `${busy ? "Надсилаємо" : "Оновлюємо чат"}<i></i><i></i><i></i>`;
     if (!current) header.appendChild(indicator);
   }, [syncing, busy, selectedId, tickets]);
+  useEffect(() => {
+    const form = document.querySelector(".conversation .message-form");
+    if (!form || form.parentElement?.querySelector(".faq-templates")) return;
+    const templates = document.createElement("div");
+    templates.className = "faq-templates";
+    const title = document.createElement("span");
+    title.textContent = "FAQ:";
+    templates.append(title);
+    faqTemplates.forEach((template) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = template.title;
+      button.title = template.text;
+      button.onclick = () => setMessage(template.text);
+      templates.append(button);
+    });
+    form.insertAdjacentElement("beforebegin", templates);
+    return () => templates.remove();
+  }, [selectedId, tickets]);
   useEffect(() => {
     const list = document.querySelector(".support-desk .ticket-list");
     if (!list) return;
@@ -1023,20 +1048,41 @@ function AccountMenu({ name, role, avatar, onSignOut, onNicknameChange }: { name
   const [nickname, setNickname] = useState(name);
   const [language, setLanguage] = useState("uk");
   const [currency, setCurrency] = useState("USD");
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
   useEffect(() => {
     setNickname(window.localStorage.getItem("nezeriya_profile_nickname") || name);
     setLanguage(window.localStorage.getItem("nezeriya_interface_language") || "uk");
     setCurrency(window.localStorage.getItem("nezeriya_display_currency") || "USD");
+    setTheme((window.localStorage.getItem("nezeriya_interface_theme") as "dark" | "light") || "dark");
   }, [name]);
   const save = () => {
     const value = nickname.trim() || name;
     window.localStorage.setItem("nezeriya_profile_nickname", value);
     window.localStorage.setItem("nezeriya_interface_language", language);
     window.localStorage.setItem("nezeriya_display_currency", currency);
+    window.localStorage.setItem("nezeriya_interface_theme", theme);
+    document.documentElement.dataset.theme = theme;
     onNicknameChange?.(value);
     setNickname(value);
     setSettingsOpen(false);
   };
+  useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const settings = document.querySelector(".account-settings");
+    if (!settings || settings.querySelector(".theme-setting")) return;
+    const label = document.createElement("label");
+    label.className = "theme-setting";
+    label.textContent = "Тема";
+    const select = document.createElement("select");
+    select.innerHTML = `<option value="dark">Темна</option><option value="light">Світла</option>`;
+    select.value = theme;
+    const change = () => setTheme(select.value as "dark" | "light");
+    select.addEventListener("change", change);
+    label.append(select);
+    settings.insertBefore(label, settings.querySelector(".account-save"));
+    return () => { select.removeEventListener("change", change); label.remove(); };
+  }, [settingsOpen, theme]);
   useEffect(() => {
     if (role === "Власник") return;
     const notificationRole = role === "Медіа-команда" ? "media" : "worker";
