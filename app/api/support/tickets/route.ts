@@ -6,6 +6,7 @@ import { verifyGoogleUser, verifyOwnerSession } from "../../owner/auth";
 type Ticket = { id: string; telegram_peer_id: string; telegram_access_hash: string; client_name: string; client_username: string | null; status: string; assigned_to: string | null; rating: number | null; review: string | null; created_at: string; updated_at: string };
 type Message = { id: string; ticket_id: string; telegram_message_id: number | null; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
 type Config = { url: string; key: string };
+const MAX_ACTIVE_CHATS_PER_WORKER = 5;
 
 export const runtime = "nodejs";
 
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
   }
   if (body.action === "take") {
     if (ticket.status !== "new") return Response.json({ error: "Ticket is already taken" }, { status: 409 });
+    if (!access.owner && await activeChatCount(config, access.userId) >= MAX_ACTIVE_CHATS_PER_WORKER) return Response.json({ error: `Досягнуто ліміту: максимум ${MAX_ACTIVE_CHATS_PER_WORKER} активних чатів.` }, { status: 409 });
     const greeting = "Вітаємо вас у технічній підтримці Nezeriya Wallet";
     const telegramMessageId = await sendTelegram(ticket, greeting);
     await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: telegramMessageId, sender_type: "agent", body: greeting });
@@ -97,6 +99,10 @@ async function latestTicketMessageId(config: Config, ticketId: string) {
   const response = await rest(config, `/support_messages?ticket_id=eq.${encodeURIComponent(ticketId)}&telegram_message_id=not.is.null&select=telegram_message_id&order=telegram_message_id.desc&limit=1`);
   const [message] = response.ok ? await response.json() as { telegram_message_id: number }[] : [];
   return message?.telegram_message_id || 0;
+}
+async function activeChatCount(config: Config, userId: string) {
+  const response = await rest(config, `/support_tickets?status=eq.in_progress&assigned_to=eq.${encodeURIComponent(userId)}&select=id`);
+  return response.ok ? (await response.json() as { id: string }[]).length : MAX_ACTIVE_CHATS_PER_WORKER;
 }
 
 async function listTickets(config: Config, userId: string, owner: boolean) {
@@ -179,7 +185,7 @@ async function autoAssignTicket(config: Config, ticket: Ticket) {
   const activeTickets = activeResponse.ok ? await activeResponse.json() as Pick<Ticket, "assigned_to">[] : [];
   const workloads = new Map(workers.map((worker) => [worker.user_id, 0]));
   activeTickets.forEach((item) => { if (item.assigned_to && workloads.has(item.assigned_to)) workloads.set(item.assigned_to, (workloads.get(item.assigned_to) || 0) + 1); });
-  const agentId = [...workloads.entries()].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))[0]?.[0];
+  const agentId = [...workloads.entries()].filter(([, count]) => count < MAX_ACTIVE_CHATS_PER_WORKER).sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))[0]?.[0];
   if (!agentId) return ticket;
   const greeting = "Вітаємо вас у технічній підтримці Nezeriya Wallet";
   try {
