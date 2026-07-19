@@ -165,7 +165,10 @@ async function syncTelegram(config: Config) {
         await patch(config, "support_tickets", `id=eq.${ticket.id}`, { ...ticketData, status: "new", assigned_to: null, assigned_at: null, rating: null, review: null });
         ticket = await ticketById(config, ticket.id);
       } else if (!ticket) ticket = await createTicket(config, ticketData);
-      if (ticket?.status === "new") ticket = await autoAssignTicket(config, ticket);
+      if (ticket?.status === "new") {
+        await sendAutomaticReply(config, ticket);
+        ticket = await autoAssignTicket(config, ticket);
+      }
       if (!ticket) continue;
       for (const message of messagesToSave) {
         const text = message.message.trim();
@@ -174,6 +177,18 @@ async function syncTelegram(config: Config) {
     }
   } catch {
     cachedTelegramClient = null;
+  }
+}
+
+async function sendAutomaticReply(config: Config, ticket: Ticket) {
+  const existing = await rest(config, `/support_messages?ticket_id=eq.${encodeURIComponent(ticket.id)}&sender_type=eq.system&select=id&limit=1`);
+  if (existing.ok && (await existing.json() as unknown[]).length > 0) return;
+  const text = "Дякуємо за звернення до підтримки Nezeriya Wallet. Ваш запит отримано — оператор відповість найближчим часом.";
+  try {
+    const telegramMessageId = await sendTelegram(ticket, text);
+    await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: telegramMessageId, sender_type: "system", body: text });
+  } catch {
+    // The chat remains in the queue if Telegram is temporarily unavailable.
   }
 }
 
