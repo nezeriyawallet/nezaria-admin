@@ -1135,6 +1135,8 @@ function WorkerPortal({ name }: { name: string }) {
     return { ok: true, message: "Адресу гаманця збережено." };
   };
   useEffect(() => {
+    // Navigation is rendered by React below. Do not mutate React-owned DOM here.
+    return;
     const nav = document.querySelector(".worker-portal-nav");
     if (!nav || nav.querySelector(".worker-salary-nav")) return;
     const button = document.createElement("button");
@@ -1145,6 +1147,8 @@ function WorkerPortal({ name }: { name: string }) {
     return () => button.remove();
   }, []);
   useEffect(() => {
+    // Navigation is rendered by React below. Do not mutate React-owned DOM here.
+    return;
     const nav = document.querySelector(".worker-portal-nav");
     if (!nav || nav.querySelector(".worker-statistics-nav")) return;
     const button = document.createElement("button");
@@ -1155,6 +1159,8 @@ function WorkerPortal({ name }: { name: string }) {
     return () => button.remove();
   }, []);
   useEffect(() => {
+    // Access controls are rendered by React. Manual DOM updates crash on refresh.
+    return;
     if (!profile) return;
     const nav = document.querySelector(".worker-portal-nav");
     if (!nav) return;
@@ -1164,6 +1170,8 @@ function WorkerPortal({ name }: { name: string }) {
     if (!targets.some(([text, targetView]) => targetView === view && rules[text])) setView(targets.find(([text]) => rules[text])?.[1] || "chats");
   }, [profile, view]);
   useEffect(() => {
+    // Wallet information is rendered by React. Keep the React tree intact.
+    return;
     const profileBox = document.querySelector(".worker-profile");
     if (!profileBox || !profile?.ton_usdt_wallet) return;
     profileBox.querySelector(".worker-wallet-address")?.remove();
@@ -1174,6 +1182,8 @@ function WorkerPortal({ name }: { name: string }) {
     return () => wallet.remove();
   }, [profile]);
   useEffect(() => {
+    // Salary view is being migrated to React; never overwrite its DOM node.
+    return;
     if (view !== "salary") return;
     const content = document.querySelector(".worker-portal-content");
     if (!content) return;
@@ -1216,6 +1226,8 @@ function WorkerPortal({ name }: { name: string }) {
     return () => { button.removeEventListener("click", onSave); payoutRows.forEach((row) => row.removeEventListener("click", onPayoutDetails)); };
   }, [view, profile]);
   useEffect(() => {
+    // Statistics view is being migrated to React; never overwrite its DOM node.
+    return;
     if (view !== "statistics") return;
     const content = document.querySelector(".worker-portal-content");
     if (!content) return;
