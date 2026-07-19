@@ -19,7 +19,11 @@ export async function GET(request: Request) {
   if (!access.owner && !access.canUseChats) return Response.json({ error: "Chat access is disabled by CEO" }, { status: 403 });
   const config = configForServer();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
-  if (new URL(request.url).searchParams.get("sync") === "1") await syncTelegram(config);
+  if (new URL(request.url).searchParams.get("sync") === "1") {
+    await syncTelegram(config);
+    await closeInactiveChats(config);
+    await markInactiveOperatorsOffline(config);
+  }
   return Response.json(await listTickets(config, access.userId, access.owner));
 }
 
@@ -142,6 +146,28 @@ async function sendTelegram(ticket: Ticket, text: string) {
   if (!client) throw new Error("Telegram account is not configured");
   const result = await client.sendMessage(new Api.InputPeerUser({ userId: bigInt(ticket.telegram_peer_id), accessHash: bigInt(ticket.telegram_access_hash) }), { message: text });
   return result.id;
+}
+
+async function closeInactiveChats(config: Config) {
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const ticketsResponse = await rest(config, "/support_tickets?status=eq.in_progress&select=id,updated_at");
+  const tickets = ticketsResponse.ok ? await ticketsResponse.json() as Pick<Ticket, "id" | "updated_at">[] : [];
+  for (const ticket of tickets) {
+    if (ticket.updated_at > cutoff) continue;
+    const messagesResponse = await rest(config, `/support_messages?ticket_id=eq.${encodeURIComponent(ticket.id)}&select=sender_type,sent_at&order=sent_at.desc&limit=1`);
+    const [lastMessage] = messagesResponse.ok ? await messagesResponse.json() as Pick<Message, "sender_type" | "sent_at">[] : [];
+    if (!lastMessage || lastMessage.sender_type === "client" || lastMessage.sent_at > cutoff) continue;
+    await patch(config, "support_tickets", `id=eq.${ticket.id}&status=eq.in_progress`, { status: "closed", updated_at: new Date().toISOString() });
+  }
+}
+
+async function markInactiveOperatorsOffline(config: Config) {
+  const cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  await rest(config, `/worker_applications?status=eq.approved&operator_status=eq.online&last_active_at=lt.${encodeURIComponent(cutoff)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
+    body: JSON.stringify({ operator_status: "offline" }),
+  });
 }
 
 async function syncTelegram(config: Config) {

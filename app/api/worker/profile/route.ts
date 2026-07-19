@@ -63,6 +63,8 @@ export async function POST(request: Request) {
   const worker = await fetch(`${config.url}/rest/v1/worker_applications?user_id=eq.${encodeURIComponent(user.id)}&status=eq.approved&select=id&limit=1`, { headers: headers(config) });
   if (!worker.ok || !(await worker.json() as unknown[]).length) return Response.json({ error: "Worker profile is unavailable" }, { status: 403 });
   const response = await fetch(`${config.url}/rest/v1/worker_activity_events`, { method: "POST", headers: { ...headers(config), "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify({ user_id: user.id }) });
+  if (response.ok) await fetch(`${config.url}/rest/v1/worker_applications?user_id=eq.${encodeURIComponent(user.id)}&status=eq.approved`, { method: "PATCH", headers: { ...headers(config), "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify({ last_active_at: new Date().toISOString() }) });
+  if (response.ok) await fetch(`${config.url}/rest/v1/worker_applications?user_id=eq.${encodeURIComponent(user.id)}&status=eq.approved&operator_status=eq.offline`, { method: "PATCH", headers: { ...headers(config), "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify({ operator_status: "online", last_active_at: new Date().toISOString() }) });
   return response.ok ? Response.json({ ok: true }) : Response.json({ error: "Could not record activity" }, { status: 502 });
 }
 
