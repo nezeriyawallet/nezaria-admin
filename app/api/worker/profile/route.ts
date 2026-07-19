@@ -3,6 +3,7 @@ import { verifyGoogleUser } from "../../owner/auth";
 type Worker = { id: string; full_name: string; city: string; face_photo_path: string | null; ton_usdt_wallet: string | null; status: string; can_use_chats: boolean; can_view_reviews: boolean; can_view_ratings: boolean; can_view_salary: boolean; can_view_statistics: boolean };
 type Review = { id: string; client_name: string; rating: number; comment: string; created_at: string };
 type Payout = { id: string; amount: number; currency: "USDT"; status: "pending" | "paid"; note: string | null; created_at: string; paid_at: string | null };
+type TicketProgress = { id: string; rating: number | null };
 
 export async function GET(request: Request) {
   const user = await verifyGoogleUser(request);
@@ -14,10 +15,23 @@ export async function GET(request: Request) {
   if (!worker) return Response.json({ error: "Worker profile is unavailable" }, { status: 404 });
   const reviewsResponse = await fetch(`${config.url}/rest/v1/employee_reviews?employee_application_id=eq.${encodeURIComponent(worker.id)}&select=id,client_name,rating,comment,created_at&order=created_at.desc`, { headers: headers(config) });
   const reviews = reviewsResponse.ok ? await reviewsResponse.json() as Review[] : [];
-  const payoutsResponse = await fetch(`${config.url}/rest/v1/worker_payouts?worker_application_id=eq.${encodeURIComponent(worker.id)}&select=id,amount,currency,status,note,created_at,paid_at&order=created_at.desc`, { headers: headers(config) });
+  const [payoutsResponse, ticketsResponse] = await Promise.all([
+    fetch(`${config.url}/rest/v1/worker_payouts?worker_application_id=eq.${encodeURIComponent(worker.id)}&select=id,amount,currency,status,note,created_at,paid_at&order=created_at.desc`, { headers: headers(config) }),
+    fetch(`${config.url}/rest/v1/support_tickets?assigned_to=eq.${encodeURIComponent(user.id)}&status=in.(awaiting_rating,closed)&select=id,rating`, { headers: headers(config) }),
+  ]);
   const payouts = payoutsResponse.ok ? await payoutsResponse.json() as Payout[] : [];
+  const completedTickets = ticketsResponse.ok ? await ticketsResponse.json() as TicketProgress[] : [];
+  const ticketIds = completedTickets.map((ticket) => ticket.id);
+  const messagesResponse = ticketIds.length
+    ? await fetch(`${config.url}/rest/v1/support_messages?ticket_id=in.(${ticketIds.map(encodeURIComponent).join(",")})&sender_type=eq.agent&select=id`, { headers: headers(config) })
+    : null;
+  const messagesSent = messagesResponse?.ok ? (await messagesResponse.json() as { id: string }[]).length : 0;
+  const starsEarned = completedTickets.reduce((sum, ticket) => sum + (ticket.rating || 0), 0);
+  const xp = completedTickets.length * 10 + messagesSent + starsEarned;
+  const level = Math.floor(xp / 1500) + 1;
+  const levelProgress = xp % 1500;
   const safeReviews = worker.can_view_reviews ? reviews : worker.can_view_ratings ? reviews.map((review) => ({ ...review, client_name: "", comment: "" })) : [];
-  return Response.json({ profile: { ...worker, avatar_url: worker.face_photo_path ? await signedPhotoUrl(config, worker.face_photo_path) : null, reviews: safeReviews, payouts: worker.can_view_salary ? payouts : [] } });
+  return Response.json({ profile: { ...worker, avatar_url: worker.face_photo_path ? await signedPhotoUrl(config, worker.face_photo_path) : null, reviews: safeReviews, payouts: worker.can_view_salary ? payouts : [], progression: { xp, level, level_progress: levelProgress, next_level_xp: 1500, closed_chats: completedTickets.length, messages_sent: messagesSent, stars_earned: starsEarned } } });
 }
 
 export async function PATCH(request: Request) {

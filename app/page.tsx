@@ -217,15 +217,31 @@ export default function Home() {
 
   useEffect(() => {
     if (authState !== "signed_in") return;
-    const expiresAt = Number(window.localStorage.getItem("nezeriya_session_expires_at"));
-    if (!Number.isFinite(expiresAt)) return;
-    const remaining = Math.max(0, expiresAt - Date.now());
-    const timer = window.setTimeout(() => {
+    const checkExpiry = () => {
+      const expiresAt = Number(window.localStorage.getItem("nezeriya_session_expires_at"));
+      if (!Number.isFinite(expiresAt) || expiresAt > Date.now()) return;
       SESSION_STORAGE_KEYS.forEach((key) => { window.sessionStorage.removeItem(key); window.localStorage.removeItem(key); });
       setAccessRole(null); setViewerId(""); setWorkspaceMode("ceo"); setAuthState("signed_out");
-    }, remaining);
-    return () => window.clearTimeout(timer);
+    };
+    checkExpiry();
+    const timer = window.setInterval(checkExpiry, 60_000);
+    return () => window.clearInterval(timer);
   }, [authState]);
+
+  useEffect(() => {
+    if (authState !== "signed_in" || accessRole !== "owner") return;
+    let lastRefresh = 0;
+    const refreshInactivityWindow = () => {
+      if (Date.now() - lastRefresh < 60_000) return;
+      lastRefresh = Date.now();
+      const expiry = String(Date.now() + SESSION_DURATION_MS);
+      window.sessionStorage.setItem("nezeriya_session_expires_at", expiry);
+      window.localStorage.setItem("nezeriya_session_expires_at", expiry);
+    };
+    ["pointerdown", "keydown", "touchstart"].forEach((event) => window.addEventListener(event, refreshInactivityWindow, { passive: true }));
+    refreshInactivityWindow();
+    return () => ["pointerdown", "keydown", "touchstart"].forEach((event) => window.removeEventListener(event, refreshInactivityWindow));
+  }, [authState, accessRole]);
 
   useEffect(() => {
     if (accessRole !== "owner") return;
@@ -1113,6 +1129,21 @@ function AccountMenu({ name, role, avatar, onSignOut, onNicknameChange }: { name
     return () => { select.removeEventListener("change", change); label.remove(); };
   }, [settingsOpen, theme]);
   useEffect(() => {
+    if (!settingsOpen || role === "Власник") return;
+    const settings = document.querySelector(".account-settings");
+    if (!settings || settings.querySelector(".level-setting")) return;
+    const saved = window.localStorage.getItem("nezeriya_worker_progress");
+    if (!saved) return;
+    try {
+      const progress = JSON.parse(saved) as { level: number; xp: number; level_progress: number; next_level_xp: number };
+      const level = document.createElement("div");
+      level.className = "level-setting";
+      level.innerHTML = `<small>РІВЕНЬ ПІДТРИМКИ</small><strong>Рівень ${progress.level} · ${progress.xp} XP</strong><span>${progress.level_progress} / ${progress.next_level_xp} XP до наступного рівня</span>`;
+      settings.insertBefore(level, settings.querySelector(".account-save"));
+      return () => level.remove();
+    } catch { return; }
+  }, [settingsOpen, role]);
+  useEffect(() => {
     if (role === "Власник") return;
     const notificationRole = role === "Медіа-команда" ? "media" : "worker";
     const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
@@ -1134,7 +1165,7 @@ function AccountMenu({ name, role, avatar, onSignOut, onNicknameChange }: { name
   return <div className="account-menu"><button type="button" className="account-menu-toggle" onClick={() => setOpen((value) => !value)}>{avatar ? <img src={avatar} alt="Фото профілю" /> : <span className="account-menu-avatar">{(nickname || name).slice(0, 1).toUpperCase()}</span>}<span><strong>{nickname || name}</strong><small>{role}</small></span><b>•••</b></button>{open && <div className="account-menu-popover"><button type="button" onClick={() => { setSettingsOpen(true); setOpen(false); }}>Налаштування</button><button type="button" className="account-logout" onClick={onSignOut}>Вийти</button></div>}{settingsOpen && <div className="account-settings-backdrop" onMouseDown={() => setSettingsOpen(false)}><section className="account-settings panel" onMouseDown={(event) => event.stopPropagation()}><button className="profile-close" type="button" onClick={() => setSettingsOpen(false)}>×</button><p className="eyebrow">НАЛАШТУВАННЯ ПРОФІЛЮ</p><h2>Мій профіль</h2><label>Нік<input value={nickname} maxLength={40} onChange={(event) => setNickname(event.target.value)} /></label><label>Мова<select value={language} onChange={(event) => setLanguage(event.target.value)}><option value="uk">Українська</option><option value="ru">Русский</option></select></label><label>Валюта<select value={currency} onChange={(event) => setCurrency(event.target.value)}><option value="USD">USD · Долар США</option><option value="EUR">EUR · Євро</option><option value="UAH">UAH · Гривня</option><option value="USDT">USDT</option></select></label><button className="account-save" type="button" onClick={save}>Зберегти зміни</button></section></div>}</div>;
 }
 
-type WorkerPortalProfile = { full_name: string; city: string; avatar_url: string | null; ton_usdt_wallet: string | null; reviews: EmployeeReview[]; payouts: WorkerPayout[]; can_use_chats: boolean; can_view_reviews: boolean; can_view_ratings: boolean; can_view_salary: boolean; can_view_statistics: boolean };
+type WorkerPortalProfile = { full_name: string; city: string; avatar_url: string | null; ton_usdt_wallet: string | null; reviews: EmployeeReview[]; payouts: WorkerPayout[]; can_use_chats: boolean; can_view_reviews: boolean; can_view_ratings: boolean; can_view_salary: boolean; can_view_statistics: boolean; progression?: { xp: number; level: number; level_progress: number; next_level_xp: number; closed_chats: number; messages_sent: number; stars_earned: number } };
 
 function WorkerWorkspace({ name }: { name: string }) {
   return <WorkerPortal name={name} />;
@@ -1152,6 +1183,20 @@ function WorkerPortal({ name }: { name: string }) {
       .then((result) => { if (result?.profile) setProfile(result.profile); })
       .finally(() => setLoading(false));
   }, []);
+  useEffect(() => {
+    const progress = profile?.progression;
+    if (!progress) return;
+    window.localStorage.setItem("nezeriya_worker_progress", JSON.stringify(progress));
+    const content = document.querySelector(".worker-portal-content");
+    if (!content) return;
+    content.querySelector(".worker-xp-card")?.remove();
+    const card = document.createElement("section");
+    card.className = "worker-xp-card";
+    const percent = Math.min(100, progress.level_progress / progress.next_level_xp * 100);
+    card.innerHTML = `<div><small>РІВЕНЬ ПІДТРИМКИ</small><strong>Рівень ${progress.level}</strong><span>${progress.xp.toLocaleString("uk-UA")} XP</span></div><div class="worker-xp-progress"><span><b style="width:${percent}%"></b></span><small>${progress.level_progress} / ${progress.next_level_xp} XP до рівня ${progress.level + 1}</small></div><p>Закриті чати: <b>${progress.closed_chats}</b> · Повідомлення: <b>${progress.messages_sent}</b> · Зірки: <b>${progress.stars_earned}</b></p>`;
+    content.prepend(card);
+    return () => card.remove();
+  }, [profile, view]);
   useEffect(() => {
     const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
     if (!token) return;
