@@ -18,6 +18,8 @@ type Employee = {
   can_view_ratings: boolean;
   can_view_salary: boolean;
   can_view_statistics: boolean;
+  operator_status: "online" | "break" | "offline";
+  active_chat_limit: number;
 };
 
 type Review = {
@@ -40,7 +42,7 @@ export async function GET(request: Request) {
   const config = adminConfig();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
 
-  const employeesResponse = await fetch(`${config.url}/rest/v1/worker_applications?status=in.(approved,frozen)&select=id,user_id,full_name,city,age,phone,ton_usdt_wallet,document_note,face_photo_path,last_active_at,created_at,status,can_use_chats,can_view_reviews,can_view_ratings,can_view_salary,can_view_statistics&order=created_at.desc`, {
+  const employeesResponse = await fetch(`${config.url}/rest/v1/worker_applications?status=in.(approved,frozen)&select=id,user_id,full_name,city,age,phone,ton_usdt_wallet,document_note,face_photo_path,last_active_at,created_at,status,can_use_chats,can_view_reviews,can_view_ratings,can_view_salary,can_view_statistics,operator_status,active_chat_limit&order=created_at.desc`, {
     headers: headers(config),
   });
   if (!employeesResponse.ok) return Response.json({ error: "Could not load employees" }, { status: 502 });
@@ -112,6 +114,16 @@ export async function PATCH(request: Request) {
     });
     const updated = response.ok ? await response.json() as Employee[] : [];
     return updated.length ? Response.json({ ok: true, permissions }) : Response.json({ error: "Could not update permissions" }, { status: 502 });
+  }
+  if (body.action === "update_operator_settings") {
+    if (typeof body.id !== "string" || !["online", "break", "offline"].includes(body.operator_status) || !Number.isInteger(body.active_chat_limit) || body.active_chat_limit < 1 || body.active_chat_limit > 50) return Response.json({ error: "Invalid operator settings" }, { status: 400 });
+    const response = await fetch(`${config.url}/rest/v1/worker_applications?id=eq.${encodeURIComponent(body.id)}`, {
+      method: "PATCH",
+      headers: { ...headers(config), "Content-Type": "application/json", Prefer: "return=representation" },
+      body: JSON.stringify({ operator_status: body.operator_status, active_chat_limit: body.active_chat_limit }),
+    });
+    const updated = response.ok ? await response.json() as Employee[] : [];
+    return updated.length ? Response.json({ ok: true, operator_status: body.operator_status, active_chat_limit: body.active_chat_limit }) : Response.json({ error: "Could not update operator settings" }, { status: 502 });
   }
   if (body.action === "create_payout") {
     if (typeof body.id !== "string" || typeof body.amount !== "number" || body.amount <= 0 || body.amount > 1000000) return Response.json({ error: "Invalid payout" }, { status: 400 });

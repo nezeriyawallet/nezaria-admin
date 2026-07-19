@@ -881,6 +881,25 @@ function EmployeesPanel() {
     modal.insertBefore(section, modal.querySelector(".freeze-employee"));
     return () => { inputs.forEach((input) => input.removeEventListener("change", onChange)); section.remove(); };
   }, [selected]);
+  useEffect(() => {
+    const modal = document.querySelector(".employee-profile");
+    if (!modal || !selected || modal.querySelector(".operator-settings")) return;
+    const section = document.createElement("section");
+    section.className = "operator-settings";
+    section.innerHTML = `<h3>Налаштування оператора</h3><label>Статус<select><option value="online">Онлайн</option><option value="break">Перерва</option><option value="offline">Офлайн</option></select></label><label>Ліміт активних чатів<input type="number" min="1" max="50" /></label><button>Зберегти налаштування</button>`;
+    const status = section.querySelector("select") as HTMLSelectElement;
+    const limit = section.querySelector("input") as HTMLInputElement;
+    const save = section.querySelector("button") as HTMLButtonElement;
+    status.value = (selected as EmployeeProfile & { operator_status?: string }).operator_status || "online";
+    limit.value = String((selected as EmployeeProfile & { active_chat_limit?: number }).active_chat_limit || 5);
+    save.onclick = async () => {
+      const token = window.sessionStorage.getItem("nezaria_access_token"); const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
+      const response = await fetch("/api/owner/employees", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token || ""}`, "x-owner-session": ownerSession || "" }, body: JSON.stringify({ action: "update_operator_settings", id: selected.id, operator_status: status.value, active_chat_limit: Number(limit.value) }) });
+      if (response.ok) { save.textContent = "Збережено"; void loadEmployees(); }
+    };
+    modal.insertBefore(section, modal.querySelector(".freeze-employee"));
+    return () => section.remove();
+  }, [selected]);
   const reviewCount = employees.reduce((total, employee) => total + employee.reviews.length, 0);
   const averageRating = reviewCount ? (employees.reduce((total, employee) => total + employee.reviews.reduce((sum, review) => sum + review.rating, 0), 0) / reviewCount).toFixed(2) : "—";
   const filteredEmployees = employees.filter((employee) => {
@@ -1100,6 +1119,7 @@ function WorkerWorkspace({ name }: { name: string }) {
 
 function WorkerPortal({ name }: { name: string }) {
   const [view, setView] = useState<"chats" | "reviews" | "ratings" | "salary" | "statistics">("chats");
+  const [operatorStatus, setOperatorStatus] = useState<"online" | "break" | "offline">("online");
   const [profile, setProfile] = useState<WorkerPortalProfile | null>(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -1110,6 +1130,19 @@ function WorkerPortal({ name }: { name: string }) {
       .then((result) => { if (result?.profile) setProfile(result.profile); })
       .finally(() => setLoading(false));
   }, []);
+  useEffect(() => {
+    const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
+    if (!token) return;
+    void fetch("/api/worker/status", { headers: { Authorization: `Bearer ${token}` } }).then((response) => response.ok ? response.json() : null).then((result) => {
+      if (result?.operator_status === "online" || result?.operator_status === "break" || result?.operator_status === "offline") setOperatorStatus(result.operator_status);
+    });
+  }, []);
+  const changeOperatorStatus = async (status: "online" | "break" | "offline") => {
+    const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
+    if (!token) return;
+    const response = await fetch("/api/worker/status", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ operator_status: status }) });
+    if (response.ok) setOperatorStatus(status);
+  };
   useEffect(() => {
     const progress = profile?.progression;
     if (!progress) return;
