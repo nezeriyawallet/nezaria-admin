@@ -1919,39 +1919,26 @@ button {
 .users-primary strong {
   color: #5fe7c4;
 }
-.users-info-panel {
-  min-height: 230px;
-}
-.users-info-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 15px;
-  margin-top: 25px;
-}
-.users-info-grid > div {
-  border: 1px solid #2c393a;
-  border-radius: 9px;
-  padding: 17px;
-  background: #101819;
-}
-.users-info-grid h3 {
-  font-size: 13px;
-  margin: 0 0 9px;
-}
-.users-info-grid p {
-  margin: 0;
-  color: #8f9c9b;
-  font-size: 12px;
-  line-height: 1.6;
-}
+.users-table-panel { padding: 20px; }
+.users-table-panel .panel-head > span { color: #809092; font-size: 12px; }
+.users-table-wrap { overflow-x: auto; margin-top: 20px; }
+.users-table { width: 100%; border-collapse: collapse; min-width: 720px; }
+.users-table th { color: #7d8d8e; text-align: left; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; padding: 0 12px 12px; }
+.users-table td { border-top: 1px solid #263334; color: #c6d0cf; font-size: 13px; padding: 14px 12px; }
+.users-table td strong, .users-table td small { display: block; }
+.users-table td small { color: #7d8d8e; margin-top: 3px; }
+.nzr-points { color: #55e5bf !important; font-weight: 700; }
+.premium-badge, .standard-badge { display: inline-block; border-radius: 999px; font-size: 11px; padding: 5px 9px; }
+.premium-badge { background: #273051; color: #bfb0ff; }
+.standard-badge { background: #1c2929; color: #8fa09f; }
+.users-empty { color: #849293; margin: 20px 0 0; }
 @media (max-width: 900px) {
   .users-summary {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 @media (max-width: 560px) {
-  .users-summary,
-  .users-info-grid {
+  .users-summary {
     grid-template-columns: 1fr;
   }
 }

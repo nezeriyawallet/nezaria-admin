@@ -24,6 +24,7 @@ type EmployeeProfile = {
   can_use_chats: boolean; can_view_reviews: boolean; can_view_ratings: boolean; can_view_salary: boolean; can_view_statistics: boolean;
 };
 type WalletMetrics = Record<string, string | number | null>;
+type WalletUser = { id: number; username: string; name: string; premium: boolean; nzrPoints: number; walletIds: number[] };
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
 type SupportTicket = { id: string; client_name: string; client_username: string | null; status: "new" | "in_progress" | "awaiting_rating" | "closed"; assigned_to: string | null; rating: number | null; review: string | null; created_at: string; updated_at: string; messages: SupportMessage[] };
 
@@ -80,6 +81,7 @@ export default function Home() {
   const [viewerId, setViewerId] = useState("");
   const [accessRole, setAccessRole] = useState<AccessRole>(null);
   const [walletMetrics, setWalletMetrics] = useState<WalletMetrics | null>(null);
+  const [walletUsers, setWalletUsers] = useState<WalletUser[]>([]);
   const [metricsError, setMetricsError] = useState("");
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -255,6 +257,16 @@ export default function Home() {
         else setMetricsError(body.error || "Статистика тимчасово недоступна");
       })
       .catch(() => setMetricsError("Статистика тимчасово недоступна"));
+  }, [accessRole]);
+
+  useEffect(() => {
+    if (accessRole !== "owner") return;
+    const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
+    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session") || window.localStorage.getItem("nezeriya_owner_session");
+    if (!token || !ownerSession) return;
+    void fetch("/api/owner/users", { headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } })
+      .then(async (response) => ({ ok: response.ok, body: await response.json().catch(() => ({})) }))
+      .then(({ ok, body }) => { if (ok) setWalletUsers(Array.isArray(body.items) ? body.items : []); });
   }, [accessRole]);
 
   const refresh = () => {
@@ -533,7 +545,7 @@ export default function Home() {
       <section className="content">
 
         <div className="dashboard">
-          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
+          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
           <section className="heading-row">
             <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p></div>
             <div className="header-controls"><NotificationBell role="owner" owner /><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>
@@ -661,14 +673,14 @@ function FinancePanel({ walletMetrics }: { walletMetrics: WalletMetrics | null }
   </section>;
 }
 
-function UsersPanel({ walletMetrics }: { walletMetrics: WalletMetrics | null }) {
+function UsersPanel({ walletMetrics, users }: { walletMetrics: WalletMetrics | null; users: WalletUser[] }) {
   const registered = walletMetrics ? displayMetric(walletMetrics.users) : "—";
   const premium = walletMetrics ? displayMetric(walletMetrics.premiumUsers) : "—";
   const standard = walletMetrics ? displayMetric(Math.max(0, metricNumber(walletMetrics.users) - metricNumber(walletMetrics.premiumUsers))) : "—";
   return <section className="users-page">
     <section className="heading-row"><div><p className="eyebrow">КОРИСТУВАЧІ</p><h1>Аудиторія <span>Nezeriya Wallet</span></h1><p className="subtle">Актуальні дані з адміністративного API гаманця.</p></div><span className="live"><i /> LIVE</span></section>
     <section className="users-summary"><article className="panel users-primary"><p>Зареєстровано користувачів</p><strong>{registered}</strong><span>Усього за весь час</span></article><article className="panel"><p>Premium-користувачі</p><strong>{premium}</strong><span>Актуальний статус Telegram Premium</span></article><article className="panel"><p>Звичайні користувачі</p><strong>{standard}</strong><span>Без активного Telegram Premium</span></article><article className="panel"><p>Нові за період</p><strong>—</strong><span>Потрібна статистика за датами</span></article></section>
-    <article className="panel users-info-panel"><div className="panel-head"><div><p className="panel-label">ДОСТУПНІ ДАНІ</p><h2>Статистика користувачів</h2></div></div><div className="users-info-grid"><div><h3>Загальна база</h3><p>Показник «Зареєстровано користувачів» отримується напряму з Nezeriya Wallet API.</p></div><div><h3>Що додамо після API</h3><p>Premium / без Premium, країни й регіони, активність за день і персональний список користувачів.</p></div></div></article>
+    <article className="panel users-table-panel"><div className="panel-head"><div><p className="panel-label">РЕЄСТР ГАМАНЦІВ</p><h2>Користувачі та NZR поінти</h2></div><span>{users.length} показано</span></div>{users.length === 0 ? <p className="users-empty">Список користувачів завантажується з Nezeriya Wallet API.</p> : <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Telegram ID</th><th>Користувач</th><th>Wallet ID</th><th>NZR поінти</th><th>Premium</th></tr></thead><tbody>{users.map((user) => <tr key={user.id}><td>{user.id}</td><td><strong>{user.username ? `@${user.username}` : user.name || "Без username"}</strong>{user.name && user.username && <small>{user.name}</small>}</td><td>{user.walletIds.length ? user.walletIds.join(", ") : "—"}</td><td className="nzr-points">{displayMetric(user.nzrPoints)} NZR</td><td><span className={user.premium ? "premium-badge" : "standard-badge"}>{user.premium ? "Premium" : "Звичайний"}</span></td></tr>)}</tbody></table></div>}</article>
   </section>;
 }
 
