@@ -6,6 +6,7 @@ const endpoints = {
   monthlyStars: "/admin/api/stars/monthly",
   users: "/admin/api/users/count",
   premiumUsers: "/admin/api/users/premium/count",
+  maxNzrBalance: "/admin/api/users/nzr/max",
   wallets: "/admin/api/wallets/count",
   wheelLoss: "/admin/api/wheel/loss",
   failedTransactions: "/admin/api/transactions/failed",
