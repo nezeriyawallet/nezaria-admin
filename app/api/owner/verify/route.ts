@@ -3,6 +3,10 @@ import { createOwnerSession, safeMatch, verifyGoogleUser, verifyOwnerSecondFacto
 export async function POST(request: Request) {
   const ownerCode = process.env.OWNER_ACCESS_CODE;
   if (!ownerCode) return Response.json({ ok: false }, { status: 401 });
+  if (!process.env.OWNER_2FA_TOTP_SECRET && !process.env.OWNER_2FA_CODE) {
+    return Response.json({ ok: false, error: "Двофакторна автентифікація CEO не налаштована." }, { status: 503 });
+  }
+
   const user = await verifyGoogleUser(request);
   if (!user) return Response.json({ ok: false }, { status: 401 });
 
