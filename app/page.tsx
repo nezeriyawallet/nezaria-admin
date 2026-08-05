@@ -663,9 +663,11 @@ function FinancePanel({ walletMetrics }: { walletMetrics: WalletMetrics | null }
 
 function UsersPanel({ walletMetrics }: { walletMetrics: WalletMetrics | null }) {
   const registered = walletMetrics ? displayMetric(walletMetrics.users) : "—";
+  const premium = walletMetrics ? displayMetric(walletMetrics.premiumUsers) : "—";
+  const standard = walletMetrics ? displayMetric(Math.max(0, metricNumber(walletMetrics.users) - metricNumber(walletMetrics.premiumUsers))) : "—";
   return <section className="users-page">
     <section className="heading-row"><div><p className="eyebrow">КОРИСТУВАЧІ</p><h1>Аудиторія <span>Nezeriya Wallet</span></h1><p className="subtle">Актуальні дані з адміністративного API гаманця.</p></div><span className="live"><i /> LIVE</span></section>
-    <section className="users-summary"><article className="panel users-primary"><p>Зареєстровано користувачів</p><strong>{registered}</strong><span>Усього за весь час</span></article><article className="panel"><p>Premium-користувачі</p><strong>—</strong><span>Потрібен endpoint Premium</span></article><article className="panel"><p>Звичайні користувачі</p><strong>—</strong><span>Потрібен endpoint статусів</span></article><article className="panel"><p>Нові за період</p><strong>—</strong><span>Потрібна статистика за датами</span></article></section>
+    <section className="users-summary"><article className="panel users-primary"><p>Зареєстровано користувачів</p><strong>{registered}</strong><span>Усього за весь час</span></article><article className="panel"><p>Premium-користувачі</p><strong>{premium}</strong><span>Актуальний статус Telegram Premium</span></article><article className="panel"><p>Звичайні користувачі</p><strong>{standard}</strong><span>Без активного Telegram Premium</span></article><article className="panel"><p>Нові за період</p><strong>—</strong><span>Потрібна статистика за датами</span></article></section>
     <article className="panel users-info-panel"><div className="panel-head"><div><p className="panel-label">ДОСТУПНІ ДАНІ</p><h2>Статистика користувачів</h2></div></div><div className="users-info-grid"><div><h3>Загальна база</h3><p>Показник «Зареєстровано користувачів» отримується напряму з Nezeriya Wallet API.</p></div><div><h3>Що додамо після API</h3><p>Premium / без Premium, країни й регіони, активність за день і персональний список користувачів.</p></div></div></article>
   </section>;
 }

@@ -5,6 +5,7 @@ const endpoints = {
   monthlyCommission: "/admin/api/commission/monthly",
   monthlyStars: "/admin/api/stars/monthly",
   users: "/admin/api/users/count",
+  premiumUsers: "/admin/api/users/premium/count",
   wallets: "/admin/api/wallets/count",
   wheelLoss: "/admin/api/wheel/loss",
   failedTransactions: "/admin/api/transactions/failed",
