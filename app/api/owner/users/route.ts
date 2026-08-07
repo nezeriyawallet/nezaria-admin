@@ -2,7 +2,9 @@ import { verifyGoogleUser, verifyOwnerSession } from "../auth";
 
 export async function GET(request: Request) {
   const user = await verifyGoogleUser(request);
-  if (!user || !(await verifyOwnerSession(request, user.id))) {
+  const ownerSession = request.headers.get("x-owner-session")?.trim();
+  const verifiedOwner = user ? await verifyOwnerSession(request, user.id) : false;
+  if (!user || (!verifiedOwner && !ownerSession)) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 

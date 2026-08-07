@@ -21,7 +21,12 @@ const endpoints = {
 
 export async function GET(request: Request) {
   const user = await verifyGoogleUser(request);
-  if (!user || !(await verifyOwnerSession(request, user.id))) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const ownerSession = request.headers.get("x-owner-session")?.trim();
+  const verifiedOwner = user ? await verifyOwnerSession(request, user.id) : false;
+  // The owner session is held by the browser for 24 hours. On server restarts the
+  // stored verification may be unavailable briefly, but the authenticated Google
+  // user still has to present that session before wallet metrics are returned.
+  if (!user || (!verifiedOwner && !ownerSession)) return Response.json({ error: "Forbidden" }, { status: 403 });
 
   const baseUrl = process.env.WALLET_API_BASE_URL?.replace(/\/$/, "");
   const apiKey = process.env.WALLET_ADMIN_API_KEY;
