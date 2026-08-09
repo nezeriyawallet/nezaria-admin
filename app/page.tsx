@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-type NavItem = "Огляд" | "Користувачі" | "Фінанси" | "Підтримка" | "Команда" | "Працівники" | "Медійка";
+type NavItem = "Огляд" | "Користувачі" | "Виграші" | "Фінанси" | "Підтримка" | "Команда" | "Працівники" | "Медійка";
 type AccessRole = "owner" | "worker" | "media" | null;
 type WorkspaceMode = "ceo" | "admin";
 type WorkerApplication = {
@@ -25,10 +25,11 @@ type EmployeeProfile = {
 };
 type WalletMetrics = Record<string, string | number | null>;
 type WalletUser = { id: number; username: string; name: string; premium: boolean; nzrPoints: number; walletIds: number[] };
+type WheelWin = { id: number; username: string; name: string; walletId: number; wheel: number; dropped: string; reward: string; createdAt: string };
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
 type SupportTicket = { id: string; client_name: string; client_username: string | null; status: "new" | "in_progress" | "awaiting_rating" | "closed"; assigned_to: string | null; rating: number | null; review: string | null; created_at: string; updated_at: string; messages: SupportMessage[] };
 
-const navigation: NavItem[] = ["Огляд", "Користувачі", "Фінанси", "Підтримка", "Команда", "Працівники", "Медійка"];
+const navigation: NavItem[] = ["Огляд", "Користувачі", "Виграші", "Фінанси", "Підтримка", "Команда", "Працівники", "Медійка"];
 
 const metrics = [
   { label: "Загальна комісія", value: "$84,291.40", change: "+12.8%", icon: "◈", tone: "mint" },
@@ -82,6 +83,7 @@ export default function Home() {
   const [accessRole, setAccessRole] = useState<AccessRole>(null);
   const [walletMetrics, setWalletMetrics] = useState<WalletMetrics | null>(null);
   const [walletUsers, setWalletUsers] = useState<WalletUser[]>([]);
+  const [wheelWins, setWheelWins] = useState<WheelWin[]>([]);
   const [metricsError, setMetricsError] = useState("");
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -267,6 +269,16 @@ export default function Home() {
     void fetch("/api/owner/users", { headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } })
       .then(async (response) => ({ ok: response.ok, body: await response.json().catch(() => ({})) }))
       .then(({ ok, body }) => { if (ok) setWalletUsers(Array.isArray(body.items) ? body.items : []); });
+  }, [accessRole]);
+
+  useEffect(() => {
+    if (accessRole !== "owner") return;
+    const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
+    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session") || window.localStorage.getItem("nezeriya_owner_session");
+    if (!token || !ownerSession) return;
+    void fetch("/api/owner/wins", { headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } })
+      .then(async (response) => ({ ok: response.ok, body: await response.json().catch(() => ({})) }))
+      .then(({ ok, body }) => { if (ok) setWheelWins(Array.isArray(body.items) ? body.items : []); });
   }, [accessRole]);
 
   const refresh = () => {
@@ -545,7 +557,7 @@ export default function Home() {
       <section className="content">
 
         <div className="dashboard">
-          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
+          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
           <section className="heading-row">
             <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p></div>
             <div className="header-controls"><NotificationBell role="owner" owner /><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>
@@ -683,6 +695,13 @@ function UsersPanel({ walletMetrics, users }: { walletMetrics: WalletMetrics | n
     <section className="heading-row"><div><p className="eyebrow">КОРИСТУВАЧІ</p><h1>Аудиторія <span>Nezeriya Wallet</span></h1><p className="subtle">Актуальні дані з адміністративного API гаманця.</p></div><span className="live"><i /> LIVE</span></section>
     <section className="users-summary"><article className="panel users-primary"><p>Зареєстровано користувачів</p><strong>{registered}</strong><span>Усього за весь час</span></article><article className="panel"><p>Premium-користувачі</p><strong>{premium}</strong><span>Актуальний статус Telegram Premium</span></article><article className="panel"><p>Звичайні користувачі</p><strong>{standard}</strong><span>Без активного Telegram Premium</span></article><article className="panel"><p>Найбільший баланс NZR</p><strong>{highestNrzBalance === null || highestNrzBalance === undefined ? "—" : `${displayMetric(highestNrzBalance)} NZR`}</strong><span>Максимальний баланс серед усіх гаманців</span></article></section>
     <article className="panel users-table-panel"><div className="panel-head"><div><p className="panel-label">РЕЄСТР ГАМАНЦІВ</p><h2>Гаманці користувачів та NZR поінти</h2></div><span>{users.length} гаманців показано</span></div>{users.length === 0 ? <p className="users-empty">Список гаманців завантажується з Nezeriya Wallet API.</p> : <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Telegram ID</th><th>Користувач</th><th>Wallet ID</th><th>NZR поінти ↓</th><th>Premium</th></tr></thead><tbody>{usersByNrzBalance.map((user) => <tr key={user.id}><td>{user.id}</td><td><strong>{user.username ? `@${user.username}` : user.name || "Без username"}</strong>{user.name && user.username && <small>{user.name}</small>}</td><td>{user.walletIds.length ? user.walletIds.join(", ") : "—"}</td><td className="nzr-points">{displayMetric(user.nzrPoints)} NZR</td><td><span className={user.premium ? "premium-badge" : "standard-badge"}>{user.premium ? "Premium" : "Звичайний"}</span></td></tr>)}</tbody></table></div>}</article>
+  </section>;
+}
+
+function WinsPanel({ wins }: { wins: WheelWin[] }) {
+  return <section className="users-page">
+    <section className="heading-row"><div><p className="eyebrow">РУЛЕТКА</p><h1>Виграші <span>користувачів</span></h1><p className="subtle">Реєстр призів, отриманих у рулетці Nezeriya Wallet.</p></div><span className="live"><i /> LIVE</span></section>
+    <article className="panel users-table-panel"><div className="panel-head"><div><p className="panel-label">ІСТОРІЯ ВИГРАШІВ</p><h2>Останні результати рулетки</h2></div><span>{wins.length} виграшів показано</span></div>{wins.length === 0 ? <p className="users-empty">Виграшів поки немає. Нові результати з&apos;являться тут після спіну рулетки.</p> : <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Дата</th><th>Telegram ID</th><th>Користувач</th><th>Wallet ID</th><th>Що випало</th><th>Що отримав</th></tr></thead><tbody>{wins.map((win, index) => <tr key={`${win.id}-${win.walletId}-${index}`}><td>{new Date(win.createdAt).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</td><td>{win.id}</td><td><strong>{win.username ? `@${win.username}` : win.name || "Без username"}</strong>{win.name && win.username && <small>{win.name}</small>}</td><td>{win.walletId}</td><td>{win.dropped}</td><td className="nzr-points">{win.reward}</td></tr>)}</tbody></table></div>}</article>
   </section>;
 }
 
