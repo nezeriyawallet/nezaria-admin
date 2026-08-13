@@ -285,7 +285,12 @@ export default function Home() {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error();
       setWheelWins(Array.isArray(body.items) ? body.items : []);
-      setWheelWinSummary({ monthlyWonNzr: Number(body.monthlyWonNzr) || 0, monthlyLostNzr: Number(body.monthlyLostNzr) || 0, monthlyCollectedNzr: Number(body.monthlyCollectedNzr) || 0, monthlyNetEarningsNzr: Number(body.monthlyNetEarningsNzr) || 0, monthlyWheelSpentNzr: Number(body.monthlyWheelSpentNzr) || 0, monthlyPlinkoSpentNzr: Number(body.monthlyPlinkoSpentNzr) || 0, monthlyWheelWonNzr: Number(body.monthlyWheelWonNzr) || 0, monthlyPlinkoWonNzr: Number(body.monthlyPlinkoWonNzr) || 0 });
+      const monthlyWonNzr = Number(body.monthlyWonNzr) || 0;
+      const monthlyWheelCollectedNzr = Number(body.monthlyWheelCollectedNzr ?? body.monthlyWheelSpentNzr) || 0;
+      const monthlyPlinkoCollectedNzr = Number(body.monthlyPlinkoCollectedNzr ?? body.monthlyPlinkoSpentNzr) || 0;
+      const monthlyCollectedNzr = Number(body.monthlyCollectedNzr) || monthlyWheelCollectedNzr + monthlyPlinkoCollectedNzr;
+      const monthlyNetEarningsNzr = Number(body.monthlyNetEarningsNzr ?? body.monthlyLostNzr) || monthlyCollectedNzr - monthlyWonNzr;
+      setWheelWinSummary({ monthlyWonNzr, monthlyLostNzr: monthlyNetEarningsNzr, monthlyCollectedNzr, monthlyNetEarningsNzr, monthlyWheelSpentNzr: monthlyWheelCollectedNzr, monthlyPlinkoSpentNzr: monthlyPlinkoCollectedNzr, monthlyWheelWonNzr: Number(body.monthlyWheelWonNzr ?? monthlyWonNzr) || 0, monthlyPlinkoWonNzr: Number(body.monthlyPlinkoWonNzr) || 0 });
       if (showNotice) { setNotice("Дані виграшів оновлено"); window.setTimeout(() => setNotice(null), 2200); }
     } catch {
       if (showNotice) { setNotice("Не вдалося оновити дані. Спробуйте ще раз."); window.setTimeout(() => setNotice(null), 2600); }
