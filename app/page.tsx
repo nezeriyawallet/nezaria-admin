@@ -289,7 +289,9 @@ export default function Home() {
       const monthlyWheelCollectedNzr = Number(body.monthlyWheelCollectedNzr ?? body.monthlyWheelSpentNzr) || 0;
       const monthlyPlinkoCollectedNzr = Number(body.monthlyPlinkoCollectedNzr ?? body.monthlyPlinkoSpentNzr) || 0;
       const monthlyCollectedNzr = Number(body.monthlyCollectedNzr) || monthlyWheelCollectedNzr + monthlyPlinkoCollectedNzr;
-      const monthlyNetEarningsNzr = Number(body.monthlyNetEarningsNzr ?? body.monthlyLostNzr) || monthlyCollectedNzr - monthlyWonNzr;
+      const monthlyNetEarningsNzr = body.monthlyNetEarningsNzr === undefined || body.monthlyNetEarningsNzr === null
+        ? monthlyCollectedNzr - monthlyWonNzr
+        : Number(body.monthlyNetEarningsNzr) || 0;
       setWheelWinSummary({ monthlyWonNzr, monthlyLostNzr: monthlyNetEarningsNzr, monthlyCollectedNzr, monthlyNetEarningsNzr, monthlyWheelSpentNzr: monthlyWheelCollectedNzr, monthlyPlinkoSpentNzr: monthlyPlinkoCollectedNzr, monthlyWheelWonNzr: Number(body.monthlyWheelWonNzr ?? monthlyWonNzr) || 0, monthlyPlinkoWonNzr: Number(body.monthlyPlinkoWonNzr) || 0 });
       if (showNotice) { setNotice("Дані виграшів оновлено"); window.setTimeout(() => setNotice(null), 2200); }
     } catch {
