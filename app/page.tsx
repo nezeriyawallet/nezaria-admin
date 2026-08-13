@@ -26,6 +26,7 @@ type EmployeeProfile = {
 type WalletMetrics = Record<string, string | number | null>;
 type WalletUser = { id: number; username: string; name: string; premium: boolean; nzrPoints: number; walletIds: number[] };
 type WheelWin = { id: number; username: string; name: string; walletId: number; wheel: number; dropped: string; reward: string; createdAt: string };
+type WheelWinSummary = { monthlyWonNzr: number; monthlyLostNzr: number };
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
 type SupportTicket = { id: string; client_name: string; client_username: string | null; status: "new" | "in_progress" | "awaiting_rating" | "closed"; assigned_to: string | null; rating: number | null; review: string | null; created_at: string; updated_at: string; messages: SupportMessage[] };
 
@@ -84,6 +85,7 @@ export default function Home() {
   const [walletMetrics, setWalletMetrics] = useState<WalletMetrics | null>(null);
   const [walletUsers, setWalletUsers] = useState<WalletUser[]>([]);
   const [wheelWins, setWheelWins] = useState<WheelWin[]>([]);
+  const [wheelWinSummary, setWheelWinSummary] = useState<WheelWinSummary>({ monthlyWonNzr: 0, monthlyLostNzr: 0 });
   const [metricsError, setMetricsError] = useState("");
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -278,7 +280,11 @@ export default function Home() {
     if (!token || !ownerSession) return;
     void fetch("/api/owner/wins", { headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } })
       .then(async (response) => ({ ok: response.ok, body: await response.json().catch(() => ({})) }))
-      .then(({ ok, body }) => { if (ok) setWheelWins(Array.isArray(body.items) ? body.items : []); });
+      .then(({ ok, body }) => {
+        if (!ok) return;
+        setWheelWins(Array.isArray(body.items) ? body.items : []);
+        setWheelWinSummary({ monthlyWonNzr: Number(body.monthlyWonNzr) || 0, monthlyLostNzr: Number(body.monthlyLostNzr) || 0 });
+      });
   }, [accessRole]);
 
   const refresh = () => {
@@ -557,7 +563,7 @@ export default function Home() {
       <section className="content">
 
         <div className="dashboard">
-          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
+          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} summary={wheelWinSummary} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
           <section className="heading-row">
             <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p></div>
             <div className="header-controls"><NotificationBell role="owner" owner /><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>
@@ -698,9 +704,10 @@ function UsersPanel({ walletMetrics, users }: { walletMetrics: WalletMetrics | n
   </section>;
 }
 
-function WinsPanel({ wins }: { wins: WheelWin[] }) {
+function WinsPanel({ wins, summary }: { wins: WheelWin[]; summary: WheelWinSummary }) {
   return <section className="users-page">
     <section className="heading-row"><div><p className="eyebrow">РУЛЕТКА</p><h1>Виграші <span>користувачів</span></h1><p className="subtle">Реєстр призів, отриманих у рулетці Nezeriya Wallet.</p></div><span className="live"><i /> LIVE</span></section>
+    <section className="users-summary"><article className="panel users-primary"><p>Виграли за місяць</p><strong>{displayMetric(summary.monthlyWonNzr)} NZR</strong><span>Усі призи в NZR за поточний місяць</span></article><article className="panel"><p>Програли за місяць</p><strong>{displayMetric(summary.monthlyLostNzr)} NZR</strong><span>Втрати після врахування виграшів</span></article></section>
     <article className="panel users-table-panel"><div className="panel-head"><div><p className="panel-label">ІСТОРІЯ ВИГРАШІВ</p><h2>Останні результати рулетки</h2></div><span>{wins.length} виграшів показано</span></div>{wins.length === 0 ? <p className="users-empty">Виграшів поки немає. Нові результати з&apos;являться тут після спіну рулетки.</p> : <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Дата й час</th><th>Telegram ID</th><th>Користувач</th><th>Wallet ID</th><th>Що випало</th><th>Що отримав</th></tr></thead><tbody>{wins.map((win, index) => <tr key={`${win.id}-${win.walletId}-${index}`}><td>{new Date(win.createdAt).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}</td><td>{win.id}</td><td><strong>{win.username ? `@${win.username}` : win.name || "Без username"}</strong>{win.name && win.username && <small>{win.name}</small>}</td><td>{win.walletId}</td><td>{win.dropped}</td><td className="nzr-points">{win.reward}</td></tr>)}</tbody></table></div>}</article>
   </section>;
 }
