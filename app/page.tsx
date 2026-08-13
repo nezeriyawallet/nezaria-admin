@@ -86,6 +86,7 @@ export default function Home() {
   const [walletUsers, setWalletUsers] = useState<WalletUser[]>([]);
   const [wheelWins, setWheelWins] = useState<WheelWin[]>([]);
   const [wheelWinSummary, setWheelWinSummary] = useState<WheelWinSummary>({ monthlyWonNzr: 0, monthlyLostNzr: 0, monthlyWheelSpentNzr: 0, monthlyPlinkoSpentNzr: 0 });
+  const [winsRefreshing, setWinsRefreshing] = useState(false);
   const [metricsError, setMetricsError] = useState("");
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -273,18 +274,26 @@ export default function Home() {
       .then(({ ok, body }) => { if (ok) setWalletUsers(Array.isArray(body.items) ? body.items : []); });
   }, [accessRole]);
 
-  useEffect(() => {
+  const loadWheelWins = async (showNotice = false) => {
     if (accessRole !== "owner") return;
     const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
     const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session") || window.localStorage.getItem("nezeriya_owner_session");
     if (!token || !ownerSession) return;
-    void fetch("/api/owner/wins", { headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } })
-      .then(async (response) => ({ ok: response.ok, body: await response.json().catch(() => ({})) }))
-      .then(({ ok, body }) => {
-        if (!ok) return;
-        setWheelWins(Array.isArray(body.items) ? body.items : []);
-        setWheelWinSummary({ monthlyWonNzr: Number(body.monthlyWonNzr) || 0, monthlyLostNzr: Number(body.monthlyLostNzr) || 0, monthlyWheelSpentNzr: Number(body.monthlyWheelSpentNzr) || 0, monthlyPlinkoSpentNzr: Number(body.monthlyPlinkoSpentNzr) || 0 });
-      });
+    setWinsRefreshing(true);
+    try {
+      const response = await fetch("/api/owner/wins", { headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error();
+      setWheelWins(Array.isArray(body.items) ? body.items : []);
+      setWheelWinSummary({ monthlyWonNzr: Number(body.monthlyWonNzr) || 0, monthlyLostNzr: Number(body.monthlyLostNzr) || 0, monthlyWheelSpentNzr: Number(body.monthlyWheelSpentNzr) || 0, monthlyPlinkoSpentNzr: Number(body.monthlyPlinkoSpentNzr) || 0 });
+      if (showNotice) { setNotice("Дані виграшів оновлено"); window.setTimeout(() => setNotice(null), 2200); }
+    } catch {
+      if (showNotice) { setNotice("Не вдалося оновити дані. Спробуйте ще раз."); window.setTimeout(() => setNotice(null), 2600); }
+    } finally { setWinsRefreshing(false); }
+  };
+
+  useEffect(() => {
+    void loadWheelWins();
   }, [accessRole]);
 
   const refresh = () => {
@@ -563,7 +572,7 @@ export default function Home() {
       <section className="content">
 
         <div className="dashboard">
-          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} summary={wheelWinSummary} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
+          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} summary={wheelWinSummary} refreshing={winsRefreshing} onRefresh={() => void loadWheelWins(true)} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
           <section className="heading-row">
             <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p></div>
             <div className="header-controls"><NotificationBell role="owner" owner /><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>
@@ -704,9 +713,9 @@ function UsersPanel({ walletMetrics, users }: { walletMetrics: WalletMetrics | n
   </section>;
 }
 
-function WinsPanel({ wins, summary }: { wins: WheelWin[]; summary: WheelWinSummary }) {
+function WinsPanel({ wins, summary, refreshing, onRefresh }: { wins: WheelWin[]; summary: WheelWinSummary; refreshing: boolean; onRefresh: () => void }) {
   return <section className="users-page">
-    <section className="heading-row"><div><p className="eyebrow">РУЛЕТКА</p><h1>Виграші <span>користувачів</span></h1><p className="subtle">Реєстр призів, отриманих у рулетці Nezeriya Wallet.</p></div><span className="live"><i /> LIVE</span></section>
+    <section className="heading-row"><div><p className="eyebrow">РУЛЕТКА</p><h1>Виграші <span>користувачів</span></h1><p className="subtle">Реєстр призів, отриманих у рулетці Nezeriya Wallet.</p></div><div className="heading-actions"><button className="outline-button" type="button" onClick={onRefresh} disabled={refreshing}>{refreshing ? "Оновлення..." : "↻ Оновити"}</button><span className="live"><i /> LIVE</span></div></section>
     <section className="users-summary"><article className="panel users-primary"><p>Виграли в рулетці за місяць</p><strong>{displayMetric(summary.monthlyWonNzr)} NZR</strong><span>Усі призи рулетки в NZR</span></article><article className="panel"><p>Витратили в іграх за місяць</p><strong>{displayMetric(summary.monthlyLostNzr)} NZR</strong><span>Рулетка: {displayMetric(summary.monthlyWheelSpentNzr)} · Plinko: {displayMetric(summary.monthlyPlinkoSpentNzr)}</span></article></section>
     <article className="panel users-table-panel"><div className="panel-head"><div><p className="panel-label">ІСТОРІЯ ВИГРАШІВ</p><h2>Останні результати рулетки</h2></div><span>{wins.length} виграшів показано</span></div>{wins.length === 0 ? <p className="users-empty">Виграшів поки немає. Нові результати з&apos;являться тут після спіну рулетки.</p> : <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Дата й час</th><th>Telegram ID</th><th>Користувач</th><th>Wallet ID</th><th>Що випало</th><th>Що отримав</th></tr></thead><tbody>{wins.map((win, index) => <tr key={`${win.id}-${win.walletId}-${index}`}><td>{new Date(win.createdAt).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}</td><td>{win.id}</td><td><strong>{win.username ? `@${win.username}` : win.name || "Без username"}</strong>{win.name && win.username && <small>{win.name}</small>}</td><td>{win.walletId}</td><td>{win.dropped}</td><td className="nzr-points">{win.reward}</td></tr>)}</tbody></table></div>}</article>
   </section>;
