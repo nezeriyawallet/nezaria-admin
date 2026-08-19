@@ -1,5 +1,39 @@
 import { verifyGoogleUser, verifyOwnerSession } from "../auth";
 
+type GameResult = { wheel?: number; dropped?: string; reward?: string; createdAt?: string };
+
+const headersFor = (apiKey: string) => ({ "X-Admin-Key": apiKey, Accept: "application/json" });
+
+function nzrAmount(value: unknown) {
+  const text = String(value ?? "");
+  if (!text.toUpperCase().includes("NZR")) return 0;
+  const found = text.replace(/\s/g, "").match(/-?\d+(?:[.,]\d+)?/);
+  return found ? Number(found[0].replace(",", ".")) : 0;
+}
+
+function plinkoStake(value: unknown) {
+  const found = String(value ?? "").match(/ставка\s*(\d+(?:[.,]\d+)?)/i);
+  return found ? Number(found[1].replace(",", ".")) : 0;
+}
+
+function buildMonthlyTotals(items: GameResult[]) {
+  const now = new Date();
+  const monthStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+  let wheelWon = 0, plinkoWon = 0, wheelCollected = 0, plinkoCollected = 0;
+  for (const item of items) {
+    const createdAt = Date.parse(item.createdAt ?? "");
+    if (!Number.isFinite(createdAt) || createdAt < monthStart) continue;
+    const dropped = String(item.dropped ?? "");
+    const prize = nzrAmount(item.reward);
+    if (/plinko/i.test(dropped)) { plinkoWon += prize; plinkoCollected += plinkoStake(dropped); continue; }
+    const wheel = Number(item.wheel);
+    if (wheel === 1 || wheel === 2) { wheelWon += prize; wheelCollected += wheel === 1 ? 10 : 30; }
+  }
+  const monthlyWonNzr = wheelWon + plinkoWon;
+  const monthlyCollectedNzr = wheelCollected + plinkoCollected;
+  return { monthlyWonNzr, monthlyCollectedNzr, monthlyNetEarningsNzr: monthlyCollectedNzr - monthlyWonNzr, monthlyWheelWonNzr: wheelWon, monthlyPlinkoWonNzr: plinkoWon, monthlyWheelSpentNzr: wheelCollected, monthlyPlinkoSpentNzr: plinkoCollected };
+}
+
 export async function GET(request: Request) {
   const user = await verifyGoogleUser(request);
   const ownerSession = request.headers.get("x-owner-session")?.trim();
@@ -15,12 +49,22 @@ export async function GET(request: Request) {
   }
 
   try {
-    const response = await fetch(`${baseUrl}/admin/api/wheel/wins?size=100`, {
-      headers: { "X-Admin-Key": apiKey, Accept: "application/json" },
-      cache: "no-store",
-    });
+    const response = await fetch(`${baseUrl}/admin/api/wheel/wins?page=0&size=100`, { headers: headersFor(apiKey), cache: "no-store" });
     if (!response.ok) return Response.json({ error: "Wallet API is unavailable" }, { status: response.status });
-    return Response.json(await response.json());
+    const firstPage = await response.json() as Record<string, unknown>;
+    const totalPages = Math.min(Math.max(Number(firstPage.totalPages) || 1, 1), 50);
+    const otherPages = await Promise.all(Array.from({ length: totalPages - 1 }, async (_, index) => {
+      const page = await fetch(`${baseUrl}/admin/api/wheel/wins?page=${index + 1}&size=100`, { headers: headersFor(apiKey), cache: "no-store" });
+      return page.ok ? await page.json() as Record<string, unknown> : null;
+    }));
+    const allItems = [firstPage, ...otherPages.filter(Boolean)].flatMap((page) => Array.isArray(page.items) ? page.items as GameResult[] : []);
+    const calculated = buildMonthlyTotals(allItems);
+    const source = calculated.monthlyCollectedNzr > 0 ? calculated : firstPage;
+    return Response.json({ ...firstPage, items: allItems, totalElements: allItems.length, totalPages: 1,
+      monthlyWonNzr: source.monthlyWonNzr ?? 0, monthlyCollectedNzr: source.monthlyCollectedNzr ?? 0,
+      monthlyNetEarningsNzr: source.monthlyNetEarningsNzr ?? source.monthlyLostNzr ?? 0, monthlyLostNzr: source.monthlyNetEarningsNzr ?? source.monthlyLostNzr ?? 0,
+      monthlyWheelWonNzr: source.monthlyWheelWonNzr ?? 0, monthlyPlinkoWonNzr: source.monthlyPlinkoWonNzr ?? 0,
+      monthlyWheelSpentNzr: source.monthlyWheelSpentNzr ?? 0, monthlyPlinkoSpentNzr: source.monthlyPlinkoSpentNzr ?? 0 });
   } catch {
     return Response.json({ error: "Wallet API is unavailable" }, { status: 503 });
   }
