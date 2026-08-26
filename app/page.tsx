@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-type NavItem = "Огляд" | "Користувачі" | "Виграші" | "Фінанси" | "Підтримка" | "Команда" | "Працівники" | "Медійка";
+type NavItem = "Огляд" | "Користувачі" | "Виграші" | "Магазин" | "Фінанси" | "Підтримка" | "Команда" | "Працівники" | "Медійка";
 type AccessRole = "owner" | "worker" | "media" | null;
 type WorkspaceMode = "ceo" | "admin";
 type WorkerApplication = {
@@ -30,7 +30,7 @@ type WheelWinSummary = { monthlyWonNzr: number; monthlyLostNzr: number; monthlyC
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
 type SupportTicket = { id: string; client_name: string; client_username: string | null; status: "new" | "in_progress" | "awaiting_rating" | "closed"; assigned_to: string | null; rating: number | null; review: string | null; created_at: string; updated_at: string; messages: SupportMessage[] };
 
-const navigation: NavItem[] = ["Огляд", "Користувачі", "Виграші", "Фінанси", "Підтримка", "Команда", "Працівники", "Медійка"];
+const navigation: NavItem[] = ["Огляд", "Користувачі", "Виграші", "Магазин", "Фінанси", "Підтримка", "Команда", "Працівники", "Медійка"];
 
 const metrics = [
   { label: "Загальна комісія", value: "$84,291.40", change: "+12.8%", icon: "◈", tone: "mint" },
@@ -569,7 +569,7 @@ export default function Home() {
         <nav aria-label="Головна навігація">
           {(workspaceMode === "ceo" ? navigation : ["Підтримка"] as NavItem[]).map((item, index) => (
             <button key={item} onClick={() => setActive(item)} className={`nav-item ${active === item ? "active" : ""}`}>
-              <span className="nav-icon">{["▦", "◎", "◌", "◍", "◫"][index]}</span>{item}
+              <span className="nav-icon">{["▦", "◎", "◌", "▣", "◍", "◫", "♟", "◈", "★"][index]}</span>{item}
             </button>
           ))}
         </nav>
@@ -579,7 +579,7 @@ export default function Home() {
       <section className="content">
 
         <div className="dashboard">
-          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} summary={wheelWinSummary} refreshing={winsRefreshing} onRefresh={() => void loadWheelWins(true)} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
+          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} summary={wheelWinSummary} refreshing={winsRefreshing} onRefresh={() => void loadWheelWins(true)} /> : active === "Магазин" ? <ShopPanel walletMetrics={walletMetrics} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
           <section className="heading-row">
             <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p></div>
             <div className="header-controls"><NotificationBell role="owner" owner /><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>
@@ -691,6 +691,17 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
     <section className="heading-row"><div><p className="eyebrow">NEZERIYA ADMIN</p><h1>Чати <span>підтримки</span></h1><p className="subtle">Нові повідомлення синхронізуються з акаунтом підтримки.</p></div>{onAvailability && <button className={`availability ${available ? "available" : "away"}`} onClick={onAvailability}><i />{available ? "Доступний" : "Не в мережі"}</button>}</section>
     <section className="support-admin-summary"><article className="panel"><p>Нові звернення</p><strong>{freshCount}</strong><span>Очікують працівника</span></article><article className="panel"><p>У роботі</p><strong>{activeCount}</strong><span>Активних діалогів</span></article><article className="panel"><p>Усього чатів</p><strong>{tickets.length}</strong><span>Усі синхронізовані звернення</span></article></section>
     {loading ? <article className="panel empty-applications">Синхронізуємо чати…</article> : error ? <article className="panel empty-applications">{error}</article> : <section className="support-desk"><aside className="ticket-list">{tickets.length === 0 ? <p>Нових звернень поки немає.</p> : tickets.map((ticket) => <button key={ticket.id} className={`ticket-item ${selected?.id === ticket.id ? "selected" : ""}`} onClick={() => setSelectedId(ticket.id)}><span className={`ticket-dot ${ticket.status}`} /><div><strong>{ticket.client_name}</strong><small>{ticket.messages.at(-1)?.body || "Нове звернення"}</small></div><em>{ticket.status === "new" ? "Нове" : ticket.status === "in_progress" ? "В роботі" : ticket.status === "awaiting_rating" ? "Оцінка" : "Закрито"}</em></button>)}</aside><article className="panel conversation">{selected ? <><div className="conversation-head"><div><h2>{selected.client_name}</h2><p>{selected.client_username ? `@${selected.client_username}` : "Telegram"}</p></div><div>{selected.status === "new" && <button className="take-ticket" disabled={busy} onClick={() => void action("take")}>Взяти в роботу</button>}{selected.status === "in_progress" && <button className="close-ticket" disabled={busy} onClick={() => void action("close")}>Закрити чат</button>}</div></div><div className="messages">{selected.messages.map((item) => <div className={`message ${item.sender_type}`} key={item.id}>{item.body}</div>)}</div>{selected.status === "in_progress" ? <form className="message-form" onSubmit={(event) => { event.preventDefault(); void action("send"); }}><input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Напишіть відповідь…" maxLength={4000} /><button disabled={busy}>Надіслати</button></form> : <p className="conversation-note">{selected.status === "new" ? "Візьміть чат у роботу, щоб відповісти клієнту." : selected.status === "awaiting_rating" ? "Клієнту надіслано запит на оцінку та відгук." : "Діалог завершено."}</p>}</> : <p>Виберіть звернення зліва.</p>}</article></section>}
+  </section>;
+}
+
+function ShopPanel({ walletMetrics }: { walletMetrics: WalletMetrics | null }) {
+  const value = (key: string) => walletMetrics ? displayMetric(walletMetrics[key]) : "—";
+  const starsIncome = walletMetrics ? metricNumber(walletMetrics.monthlyStars) : 0;
+  const starsUsd = starsIncome * 0.015;
+  return <section className="finance-page">
+    <section className="heading-row"><div><p className="eyebrow">МАГАЗИН</p><h1>Магазин <span>Nezeriya Wallet</span></h1><p className="subtle">Статистика покупок NZR і оплат через Telegram Stars.</p></div><span className="live"><i /> LIVE</span></section>
+    <section className="finance-highlight"><article className="panel users-primary"><p>Покупки NZR за Stars</p><strong>{value("nzrStars")}</strong><span>Успішні покупки токенів</span></article><article className="panel"><p>Дохід Telegram Stars</p><strong>{walletMetrics ? `${displayMetric(starsIncome)} NZR` : "—"}</strong><span>{walletMetrics ? displayMetric(starsUsd, "$") : "—"} за курсом 1 NZR = $0.015</span></article><article className="panel"><p>Продажі NZR</p><strong>{value("nzrSwapSell")}</strong><span>Операції продажу токена</span></article></section>
+    <article className="panel nzr-finance-panel"><div className="panel-head"><div><p className="panel-label">ОПЕРАЦІЇ МАГАЗИНУ</p><h2>Оборот NZR</h2></div></div><div className="nzr-finance-list"><span>Купівлі NZR<strong>{value("nzrSwapBuy")}</strong></span><span>Продажі NZR<strong>{value("nzrSwapSell")}</strong></span><span>Покупки за Stars<strong>{value("nzrStars")}</strong></span><span>NZR транзакцій<strong>{value("nzrTransactions")}</strong></span></div></article>
   </section>;
 }
 
