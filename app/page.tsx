@@ -694,14 +694,10 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
   </section>;
 }
 
-function ShopPanel({ walletMetrics }: { walletMetrics: WalletMetrics | null }) {
-  const value = (key: string) => walletMetrics ? displayMetric(walletMetrics[key]) : "—";
-  const starsIncome = walletMetrics ? metricNumber(walletMetrics.monthlyStars) : 0;
-  const starsUsd = starsIncome * 0.015;
+function ShopPanel({ walletMetrics: _walletMetrics }: { walletMetrics: WalletMetrics | null }) {
   return <section className="finance-page">
-    <section className="heading-row"><div><p className="eyebrow">МАГАЗИН</p><h1>Магазин <span>Nezeriya Wallet</span></h1><p className="subtle">Статистика покупок NZR і оплат через Telegram Stars.</p></div><span className="live"><i /> LIVE</span></section>
-    <section className="finance-highlight"><article className="panel users-primary"><p>Покупки NZR за Stars</p><strong>{value("nzrStars")}</strong><span>Успішні покупки токенів</span></article><article className="panel"><p>Дохід Telegram Stars</p><strong>{walletMetrics ? `${displayMetric(starsIncome)} NZR` : "—"}</strong><span>{walletMetrics ? displayMetric(starsUsd, "$") : "—"} за курсом 1 NZR = $0.015</span></article><article className="panel"><p>Продажі NZR</p><strong>{value("nzrSwapSell")}</strong><span>Операції продажу токена</span></article></section>
-    <article className="panel nzr-finance-panel"><div className="panel-head"><div><p className="panel-label">ОПЕРАЦІЇ МАГАЗИНУ</p><h2>Оборот NZR</h2></div></div><div className="nzr-finance-list"><span>Купівлі NZR<strong>{value("nzrSwapBuy")}</strong></span><span>Продажі NZR<strong>{value("nzrSwapSell")}</strong></span><span>Покупки за Stars<strong>{value("nzrStars")}</strong></span><span>NZR транзакцій<strong>{value("nzrTransactions")}</strong></span></div></article>
+    <section className="heading-row"><div><p className="eyebrow">МАГАЗИН</p><h1>Колекції <span>Nezeriya Wallet</span></h1><p className="subtle">Незабаром тут з&apos;являться колекції.</p></div></section>
+    <article className="panel empty-applications"><p className="panel-label">СКОРО</p><h2>Колекції в розробці</h2><p>Коли колекції будуть готові, тут з&apos;являться їхні картки, ціна та можливість придбати.</p></article>
   </section>;
 }
 
