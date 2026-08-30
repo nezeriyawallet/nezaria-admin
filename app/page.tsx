@@ -368,6 +368,7 @@ export default function Home() {
     { label: "Зареєстровані користувачі", value: displayMetric(walletMetrics.users), change: "live", icon: "◉", tone: "orange" },
   ] : metrics;
   const totalIncome = walletMetrics ? displayMetric(metricNumber(walletMetrics.totalCommission) + metricNumber(walletMetrics.monthlyStars) * 0.015, "$") : "—";
+  const walletOnline = walletMetrics ? displayMetric(walletMetrics.onlineUsers) : "—";
 
   const signInWithGoogle = () => {
     if (!supabaseUrl) {
@@ -646,7 +647,7 @@ export default function Home() {
 
           <section className="main-grid">
             <article className="panel earnings-panel"><div className="panel-head"><div><p className="panel-label">ЗАРОБІТОК</p><h2>Загальна сума доходу</h2></div><button className="dots">•••</button></div><div className="chart-summary"><strong>{totalIncome}</strong></div><p className="income-note">Комісії + дохід Telegram Stars, перерахований за курсом $0.015.</p><div className="chart-wrap"><div className="chart-lines"><span /><span /><span /><span /></div><svg viewBox="0 0 510 205" aria-label="Графік доходу за період" role="img"><defs><linearGradient id="fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#42e8bd" stopOpacity=".28"/><stop offset="100%" stopColor="#42e8bd" stopOpacity="0"/></linearGradient></defs><path d={`${chartPath} L510 205 L0 205 Z`} fill="url(#fill)"/><path d={chartPath} fill="none" stroke="#42e8bd" strokeLinecap="round" strokeWidth="3"/><circle cx="372" cy="65" r="5" fill="#101719" stroke="#42e8bd" strokeWidth="3"/></svg><div className="x-axis"><span>01 лип</span><span>08 лип</span><span>15 лип</span><span>22 лип</span><span>Сьогодні</span></div></div></article>
-            <article className="panel activity-panel"><div className="panel-head"><div><p className="panel-label">ЖИВА АКТИВНІСТЬ</p><h2>Зараз у гаманці</h2></div><span className="live"><i /> LIVE</span></div><div className="live-count">1,284<span> онлайн</span></div><div className="activity-bars">{[45, 72, 52, 89, 60, 96, 77, 48, 69, 87, 65, 92, 75, 50, 71, 86, 59, 76, 94, 80, 65, 90, 72, 83].map((height, index) => <i key={index} style={{ height: `${height}%` }} />)}</div><div className="legend"><span><i className="mint-dot" /> Нові сесії</span><span><i className="gray-dot" /> Повернення</span></div></article>
+            <article className="panel activity-panel"><div className="panel-head"><div><p className="panel-label">ЖИВА АКТИВНІСТЬ</p><h2>Зараз у гаманці</h2></div><span className="live"><i /> LIVE</span></div><div className="live-count">{walletOnline}<span> онлайн</span></div><p className="subtle">Активні Mini App сесії за останні 45 секунд.</p><div className="activity-bars">{[45, 72, 52, 89, 60, 96, 77, 48, 69, 87, 65, 92, 75, 50, 71, 86, 59, 76, 94, 80, 65, 90, 72, 83].map((height, index) => <i key={index} style={{ height: `${height}%` }} />)}</div><div className="legend"><span><i className="mint-dot" /> Активні сесії</span><span><i className="gray-dot" /> Оновлення кожні 15 с</span></div></article>
           </section>
 
           <section className="lower-grid">

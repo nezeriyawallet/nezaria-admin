@@ -6,6 +6,7 @@ const endpoints = {
   monthlyStars: { path: "/admin/api/stars/monthly", keys: ["totalNzrPurchased", "totalNzrBought"] },
   users: { path: "/admin/api/users/count", keys: ["userCount"] },
   premiumUsers: { path: "/admin/api/users/premium/count", keys: ["premiumUserCount"] },
+  onlineUsers: { path: "/admin/api/users/online", keys: ["onlineUsers"] },
   maxNzrBalance: { path: "/admin/api/users/nzr/max", keys: ["maxNzrBalance"] },
   wallets: { path: "/admin/api/wallets/count", keys: ["walletCount"] },
   wheelLoss: { path: "/admin/api/wheel/loss", keys: ["totalWheelLoss"] },
