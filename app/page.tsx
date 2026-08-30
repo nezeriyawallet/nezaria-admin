@@ -282,7 +282,7 @@ export default function Home() {
     if (!token || !ownerSession) return;
     setWinsRefreshing(true);
     try {
-      const response = await fetch("/api/owner/wins", { headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } });
+      const response = await fetch(`/api/owner/wins?_=${Date.now()}`, { cache: "no-store", headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error();
       setWheelWins(Array.isArray(body.items) ? body.items : []);
@@ -304,7 +304,7 @@ export default function Home() {
     void loadWheelWins();
   }, [accessRole]);
 
-  const refreshUsers = async () => {
+  const refreshUsers = async (showNotice = false) => {
     if (accessRole !== "owner" || usersRefreshing) return;
     const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
     const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session") || window.localStorage.getItem("nezeriya_owner_session");
@@ -321,19 +321,44 @@ export default function Home() {
       setWalletMetrics(metricsBody.metrics || {});
       setWalletUsers(Array.isArray(usersBody.items) ? usersBody.items : []);
       setMetricsError("");
-      setNotice("Дані користувачів оновлено");
+      if (showNotice) setNotice("Дані користувачів оновлено");
     } catch {
-      setNotice("Не вдалося оновити дані користувачів");
+      if (showNotice) setNotice("Не вдалося оновити дані користувачів");
     } finally {
       setUsersRefreshing(false);
-      window.setTimeout(() => setNotice(null), 2600);
+      if (showNotice) window.setTimeout(() => setNotice(null), 2600);
     }
   };
 
+  useEffect(() => {
+    if (accessRole !== "owner") return;
+    const refreshMetricsOnly = async () => {
+      if (document.visibilityState !== "visible") return;
+      const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
+      const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session") || window.localStorage.getItem("nezeriya_owner_session");
+      if (!token || !ownerSession) return;
+      try {
+        const response = await fetch(`/api/owner/metrics?_=${Date.now()}`, { cache: "no-store", headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } });
+        const body = await response.json().catch(() => ({}));
+        if (response.ok) { setWalletMetrics(body.metrics || {}); setMetricsError(""); }
+      } catch { /* Keep the last confirmed metrics visible while the API reconnects. */ }
+    };
+    const sync = () => {
+      if (active === "Користувачі") void refreshUsers();
+      else if (active === "Виграші") void loadWheelWins();
+      else void refreshMetricsOnly();
+    };
+    sync();
+    const timer = window.setInterval(sync, 15_000);
+    const visibility = () => { if (document.visibilityState === "visible") sync(); };
+    document.addEventListener("visibilitychange", visibility);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", visibility); };
+  }, [accessRole, active]);
+
   const refresh = () => {
     setUpdated("Дані синхронізовано щойно");
-    setNotice("Метрики оновлено з Nezeriya API");
-    window.setTimeout(() => setNotice(null), 2600);
+    void refreshUsers(true);
+    void loadWheelWins();
   };
 
   const dashboardMetrics = walletMetrics ? [
@@ -606,7 +631,7 @@ export default function Home() {
       <section className="content">
 
         <div className="dashboard">
-          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} refreshing={usersRefreshing} onRefresh={() => void refreshUsers()} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} summary={wheelWinSummary} refreshing={winsRefreshing} onRefresh={() => void loadWheelWins(true)} /> : active === "Магазин" ? <ShopPanel walletMetrics={walletMetrics} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
+          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} refreshing={usersRefreshing} onRefresh={() => void refreshUsers(true)} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} summary={wheelWinSummary} refreshing={winsRefreshing} onRefresh={() => void loadWheelWins(true)} /> : active === "Магазин" ? <ShopPanel walletMetrics={walletMetrics} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} /> : <>
           <section className="heading-row">
             <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p></div>
             <div className="header-controls"><NotificationBell role="owner" owner /><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>

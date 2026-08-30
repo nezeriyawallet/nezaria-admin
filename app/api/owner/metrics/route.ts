@@ -1,22 +1,22 @@
 import { verifyGoogleUser, verifyOwnerSession } from "../auth";
 
 const endpoints = {
-  totalCommission: "/admin/api/commission/total",
-  monthlyCommission: "/admin/api/commission/monthly",
-  monthlyStars: "/admin/api/stars/monthly",
-  users: "/admin/api/users/count",
-  premiumUsers: "/admin/api/users/premium/count",
-  maxNzrBalance: "/admin/api/users/nzr/max",
-  wallets: "/admin/api/wallets/count",
-  wheelLoss: "/admin/api/wheel/loss",
-  failedTransactions: "/admin/api/transactions/failed",
-  transactions: "/admin/api/transactions/count",
-  dedustSwaps: "/admin/api/swaps/dedust/count",
-  referralTotal: "/admin/api/referral/total",
-  nzrTransactions: "/admin/api/nzr/transactions/count",
-  nzrSwapSell: "/admin/api/nzr/swap-sell",
-  nzrSwapBuy: "/admin/api/nzr/swap-buy",
-  nzrStars: "/admin/api/nzr-stars",
+  totalCommission: { path: "/admin/api/commission/total", keys: ["netCommissionUsdt", "totalCommission"] },
+  monthlyCommission: { path: "/admin/api/commission/monthly", keys: ["netCommissionUsdt", "monthlyCommission"] },
+  monthlyStars: { path: "/admin/api/stars/monthly", keys: ["totalNzrPurchased", "totalNzrBought"] },
+  users: { path: "/admin/api/users/count", keys: ["userCount"] },
+  premiumUsers: { path: "/admin/api/users/premium/count", keys: ["premiumUserCount"] },
+  maxNzrBalance: { path: "/admin/api/users/nzr/max", keys: ["maxNzrBalance"] },
+  wallets: { path: "/admin/api/wallets/count", keys: ["walletCount"] },
+  wheelLoss: { path: "/admin/api/wheel/loss", keys: ["totalWheelLoss"] },
+  failedTransactions: { path: "/admin/api/transactions/failed?size=1", keys: ["totalElements"] },
+  transactions: { path: "/admin/api/transactions/count", keys: ["successfulTransactions"] },
+  dedustSwaps: { path: "/admin/api/swaps/dedust/count", keys: ["deDustSwapCount"] },
+  referralTotal: { path: "/admin/api/referral/total", keys: ["totalReferralUsdt"] },
+  nzrTransactions: { path: "/admin/api/nzr/transactions/count", keys: ["nzrTransactionCount"] },
+  nzrSwapSell: { path: "/admin/api/nzr/swap-sell", keys: ["totalNzrSwapSell"] },
+  nzrSwapBuy: { path: "/admin/api/nzr/swap-buy", keys: ["totalNzrSwapBuy"] },
+  nzrStars: { path: "/admin/api/nzr-stars", keys: ["totalNzrBought", "totalNzrPurchased"] },
 } as const;
 
 export async function GET(request: Request) {
@@ -32,18 +32,30 @@ export async function GET(request: Request) {
   const apiKey = process.env.WALLET_ADMIN_API_KEY;
   if (!baseUrl || !apiKey) return Response.json({ error: "Wallet API is not configured" }, { status: 503 });
 
-  const values = await Promise.all(Object.entries(endpoints).map(async ([name, path]) => {
+  const fresh = Date.now();
+  const values = await Promise.all(Object.entries(endpoints).map(async ([name, endpoint]) => {
     try {
-      const response = await fetch(`${baseUrl}${path}`, {
+      const separator = endpoint.path.includes("?") ? "&" : "?";
+      const response = await fetch(`${baseUrl}${endpoint.path}${separator}_=${fresh}`, {
         headers: { "X-Admin-Key": apiKey, Accept: "application/json" },
         cache: "no-store",
       });
-      return [name, response.ok ? scalar(await response.json()) : null] as const;
+      return [name, response.ok ? metricValue(await response.json(), endpoint.keys) : null] as const;
     } catch {
       return [name, null] as const;
     }
   }));
-  return Response.json({ metrics: Object.fromEntries(values), updatedAt: new Date().toISOString() });
+  return Response.json({ metrics: Object.fromEntries(values), updatedAt: new Date().toISOString() }, {
+    headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", Pragma: "no-cache" },
+  });
+}
+
+function metricValue(value: unknown, keys: readonly string[]): number | string | null {
+  if (value && typeof value === "object") {
+    const object = value as Record<string, unknown>;
+    for (const key of keys) if (typeof object[key] === "number" || typeof object[key] === "string") return object[key] as number | string;
+  }
+  return scalar(value);
 }
 
 function scalar(value: unknown): number | string | null {
