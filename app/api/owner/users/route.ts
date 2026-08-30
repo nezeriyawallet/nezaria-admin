@@ -9,11 +9,6 @@ type RawWalletUser = {
   walletIds?: Array<number | string>;
 };
 
-function numeric(value: unknown) {
-  const result = Number(value);
-  return Number.isFinite(result) ? result : 0;
-}
-
 export async function GET(request: Request) {
   const user = await verifyGoogleUser(request);
   const ownerSession = request.headers.get("x-owner-session")?.trim();
@@ -46,19 +41,12 @@ export async function GET(request: Request) {
     }));
     const wallets = [firstPage, ...additionalPages.filter(Boolean)].flatMap((page) =>
       Array.isArray(page.items) ? page.items as RawWalletUser[] : []);
-    const users = new Map<string, Required<Pick<RawWalletUser, "id" | "username" | "name" | "premium" | "walletIds">> & { nzrPoints: number }>();
-    for (const wallet of wallets) {
-      if (wallet.id === undefined || wallet.id === null) continue;
-      const id = String(wallet.id);
-      const current = users.get(id) || { id: wallet.id, username: "", name: "", premium: false, nzrPoints: 0, walletIds: [] };
-      current.username ||= wallet.username || "";
-      current.name ||= wallet.name || "";
-      current.premium ||= Boolean(wallet.premium);
-      current.nzrPoints += numeric(wallet.nzrPoints);
-      for (const walletId of wallet.walletIds || []) if (!current.walletIds.some((item) => String(item) === String(walletId))) current.walletIds.push(walletId);
-      users.set(id, current);
-    }
-    const items = [...users.values()].sort((first, second) => second.nzrPoints - first.nzrPoints);
+    // The wallet API already returns one entry per wallet. Do not merge entries
+    // by Telegram ID: one person can own several wallets, and merging them makes
+    // the balance shown for an individual wallet incorrect.
+    const items = wallets
+      .filter((wallet) => wallet.id !== undefined && wallet.id !== null)
+      .sort((first, second) => Number(second.nzrPoints) - Number(first.nzrPoints));
     return Response.json({ items, totalElements: items.length, totalPages: 1, updatedAt: new Date().toISOString() }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", Pragma: "no-cache" },
     });
