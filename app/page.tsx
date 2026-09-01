@@ -374,12 +374,16 @@ export default function Home() {
     void loadWheelWins();
   };
 
+  const fallbackWheelNet = wheelWinSummary.monthlyWheelSpentNzr - wheelWinSummary.monthlyWheelWonNzr;
+  const fallbackPlinkoNet = wheelWinSummary.monthlyPlinkoSpentNzr - wheelWinSummary.monthlyPlinkoWonNzr;
+  const fallbackFeature = fallbackWheelNet >= fallbackPlinkoNet ? "Рулетка" : "Plinko";
+  const fallbackFeatureValue = Math.max(fallbackWheelNet, fallbackPlinkoNet);
   const dashboardMetrics = walletMetrics ? [
     { label: "Загальна комісія", value: displayMetric(walletMetrics.totalCommission, "$"), change: "live", icon: "◈", tone: "mint" },
     { label: "Комісія за місяць", value: displayMetric(walletMetrics.monthlyCommission, "$"), change: "live", icon: "↗", tone: "blue" },
     { label: "Дохід Telegram Stars", value: `${displayMetric(walletMetrics.monthlyStars)} NZR`, change: "live", icon: "★", tone: "violet" },
     { label: "Зареєстровані користувачі", value: displayMetric(walletMetrics.users), change: "live", icon: "◉", tone: "orange" },
-    { label: "Найприбутковіша функція", value: `${walletMetrics.mostProfitableFeature || "—"}${walletMetrics.mostProfitableValueNzr === null || walletMetrics.mostProfitableValueNzr === undefined ? "" : ` · ${displayMetric(walletMetrics.mostProfitableValueNzr)} NZR`}`, change: "live", icon: "₮", tone: "mint" },
+    { label: "Найприбутковіша функція", value: `${walletMetrics.mostProfitableFeature || fallbackFeature}${walletMetrics.mostProfitableValueNzr === null || walletMetrics.mostProfitableValueNzr === undefined ? ` · ${displayMetric(fallbackFeatureValue)} NZR` : ` · ${displayMetric(walletMetrics.mostProfitableValueNzr)} NZR`}`, change: "live", icon: "₮", tone: "mint" },
   ] : metrics;
   const totalIncome = walletMetrics ? displayMetric(metricNumber(walletMetrics.totalCommission) + metricNumber(walletMetrics.monthlyStars) * 0.015, "$") : "—";
   const walletOnline = walletMetrics ? displayMetric(walletMetrics.onlineUsers) : "—";
@@ -787,7 +791,7 @@ function UsersPanel({ walletMetrics, users, refreshing, onRefresh }: { walletMet
   const standard = walletMetrics ? displayMetric(Math.max(0, metricNumber(walletMetrics.users) - metricNumber(walletMetrics.premiumUsers))) : "—";
   const highestNrzBalance = walletMetrics?.maxNzrBalance;
   const usersByNrzBalance = [...users].sort((first, second) => Number(second.nzrPoints) - Number(first.nzrPoints));
-  const analyticsWindow = walletMetrics ? displayMetric(walletMetrics.analyticsWindowDays) : "30";
+  const analyticsWindow = walletMetrics ? displayMetric(walletMetrics.analyticsWindowDays ?? 30) : "30";
   return <section className="users-page">
     <section className="heading-row"><div><p className="eyebrow">КОРИСТУВАЧІ</p><h1>Аудиторія <span>Nezeriya Wallet</span></h1><p className="subtle">Актуальні дані з адміністративного API гаманця.</p></div><div className="heading-actions"><button className="outline-button" type="button" onClick={onRefresh} disabled={refreshing}>{refreshing ? "Оновлення..." : "↻ Оновити"}</button><span className="live"><i /> LIVE</span></div></section>
     <section className="users-summary"><article className="panel users-primary"><p>Зареєстровано користувачів</p><strong>{registered}</strong><span>Усього за весь час</span></article><article className="panel"><p>Premium-користувачі</p><strong>{premium}</strong><span>Актуальний статус Telegram Premium</span></article><article className="panel"><p>Звичайні користувачі</p><strong>{standard}</strong><span>Без активного Telegram Premium</span></article><article className="panel"><p>Найбільший баланс NZR</p><strong>{highestNrzBalance === null || highestNrzBalance === undefined ? "—" : `${displayMetric(highestNrzBalance)} NZR`}</strong><span>Максимальний баланс серед усіх гаманців</span></article><article className="panel"><p>Середній вік акаунтів</p><strong>{formatAccountAge(walletMetrics?.averageWalletAgeDays)}</strong><span>Активні за останні {analyticsWindow} днів</span></article><article className="panel"><p>Сесій на користувача</p><strong>{walletMetrics ? displayMetric(walletMetrics.sessionsPerUser) : "—"}</strong><span>Середня кількість відкриттів Mini App</span></article><article className="panel"><p>Тривалість сесії</p><strong>{formatSessionDuration(walletMetrics?.averageSessionDurationSeconds)}</strong><span>Середній час у Mini App</span></article></section>
