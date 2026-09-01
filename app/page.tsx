@@ -23,7 +23,8 @@ type EmployeeProfile = {
   avatar_url: string | null; ton_usdt_wallet: string | null; last_active_at: string | null; reviews: EmployeeReview[]; payouts: WorkerPayout[]; closed_chats: number; first_response_minutes: number | null; daily_activity: number[];
   can_use_chats: boolean; can_view_reviews: boolean; can_view_ratings: boolean; can_view_salary: boolean; can_view_statistics: boolean;
 };
-type WalletMetrics = Record<string, string | number | null>;
+type DailyOnlinePeak = { date: string; peakOnline: number };
+type WalletMetrics = Record<string, string | number | null> & { dailyOnlinePeaks?: DailyOnlinePeak[] };
 type WalletUser = { id: number; username: string; name: string; premium: boolean; nzrPoints: number; walletIds: number[] };
 type WheelWin = { id: number; username: string; name: string; walletId: number; wheel: number; dropped: string; reward: string; createdAt: string };
 type WheelWinSummary = { monthlyWonNzr: number; monthlyLostNzr: number; monthlyCollectedNzr: number; monthlyNetEarningsNzr: number; monthlyWheelSpentNzr: number; monthlyPlinkoSpentNzr: number; monthlyWheelWonNzr: number; monthlyPlinkoWonNzr: number };
@@ -67,6 +68,11 @@ function formatSessionDuration(seconds: string | number | null | undefined) {
   const value = Math.max(0, Math.round(metricNumber(seconds)));
   if (!value) return "Ще збираємо дані";
   return value >= 60 ? `${Math.floor(value / 60)} хв ${value % 60} с` : `${value} с`;
+}
+
+function formatOnlinePeakDate(value: string) {
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("uk-UA", { day: "2-digit", month: "long", year: "numeric" }).format(date);
 }
 
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
@@ -387,6 +393,8 @@ export default function Home() {
   ] : metrics;
   const totalIncome = walletMetrics ? displayMetric(metricNumber(walletMetrics.totalCommission) + metricNumber(walletMetrics.monthlyStars) * 0.015, "$") : "—";
   const walletOnline = walletMetrics ? displayMetric(walletMetrics.onlineUsers) : "—";
+  const dailyOnlinePeaks = walletMetrics?.dailyOnlinePeaks || [];
+  const maximumDailyOnline = Math.max(1, ...dailyOnlinePeaks.map((item) => metricNumber(item.peakOnline)));
 
   const signInWithGoogle = () => {
     if (!supabaseUrl) {
@@ -665,7 +673,7 @@ export default function Home() {
 
           <section className="main-grid">
             <article className="panel earnings-panel"><div className="panel-head"><div><p className="panel-label">ЗАРОБІТОК</p><h2>Загальна сума доходу</h2></div><button className="dots">•••</button></div><div className="chart-summary"><strong>{totalIncome}</strong></div><p className="income-note">Комісії + дохід Telegram Stars, перерахований за курсом $0.015.</p><div className="chart-wrap"><div className="chart-lines"><span /><span /><span /><span /></div><svg viewBox="0 0 510 205" aria-label="Графік доходу за період" role="img"><defs><linearGradient id="fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#42e8bd" stopOpacity=".28"/><stop offset="100%" stopColor="#42e8bd" stopOpacity="0"/></linearGradient></defs><path d={`${chartPath} L510 205 L0 205 Z`} fill="url(#fill)"/><path d={chartPath} fill="none" stroke="#42e8bd" strokeLinecap="round" strokeWidth="3"/><circle cx="372" cy="65" r="5" fill="#101719" stroke="#42e8bd" strokeWidth="3"/></svg><div className="x-axis"><span>01 лип</span><span>08 лип</span><span>15 лип</span><span>22 лип</span><span>Сьогодні</span></div></div></article>
-            <article className="panel activity-panel"><div className="panel-head"><div><p className="panel-label">ЖИВА АКТИВНІСТЬ</p><h2>Зараз у гаманці</h2></div><span className="live"><i /> LIVE</span></div><div className="live-count">{walletOnline}<span> онлайн</span></div><p className="subtle">Активні Mini App сесії за останні 45 секунд.</p><div className="activity-bars">{[45, 72, 52, 89, 60, 96, 77, 48, 69, 87, 65, 92, 75, 50, 71, 86, 59, 76, 94, 80, 65, 90, 72, 83].map((height, index) => <i key={index} style={{ height: `${height}%` }} />)}</div><div className="legend"><span><i className="mint-dot" /> Активні сесії</span><span><i className="gray-dot" /> Оновлення кожні 15 с</span></div></article>
+            <article className="panel activity-panel"><div className="panel-head"><div><p className="panel-label">ЖИВА АКТИВНІСТЬ</p><h2>Зараз у гаманці</h2></div><span className="live"><i /> LIVE</span></div><div className="live-count">{walletOnline}<span> онлайн</span></div><p className="subtle">Максимум одночасно онлайн за кожен день.</p><div className="activity-bars" aria-label="Денні піки онлайн">{dailyOnlinePeaks.length ? dailyOnlinePeaks.map((item) => { const peak = metricNumber(item.peakOnline); const label = `${formatOnlinePeakDate(item.date)} — максимум ${peak} онлайн`; return <i key={item.date} title={label} aria-label={label} style={{ height: `${Math.max(4, Math.round(peak / maximumDailyOnline * 100))}%` }} />; }) : <span className="online-chart-empty">Дані з’являться після першої активної сесії.</span>}</div><div className="legend"><span><i className="mint-dot" /> Денний максимум</span><span><i className="gray-dot" /> Наведіть на стовпчик</span></div></article>
           </section>
 
           <section className="lower-grid">

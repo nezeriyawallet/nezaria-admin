@@ -513,8 +513,15 @@ button {
   opacity: 0.9;
 }
 .activity-bars i:nth-child(3n) {
-  background: #385153;
-  opacity: 0.8;
+  background: linear-gradient(180deg, #54e6c2, #219d85);
+  opacity: 0.9;
+  cursor: help;
+}
+.online-chart-empty {
+  align-self: center;
+  color: #899597;
+  font-size: 11px;
+  padding-bottom: 28px;
 }
 .legend {
   display: flex;
