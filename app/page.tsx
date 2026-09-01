@@ -56,6 +56,19 @@ function metricNumber(value: string | number | null | undefined) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function formatAccountAge(days: string | number | null | undefined) {
+  const value = metricNumber(days);
+  if (!value) return "Ще збираємо дані";
+  if (value < 30) return `${Math.round(value)} дн.`;
+  return `${(value / 30.44).toFixed(1)} міс.`;
+}
+
+function formatSessionDuration(seconds: string | number | null | undefined) {
+  const value = Math.max(0, Math.round(metricNumber(seconds)));
+  if (!value) return "Ще збираємо дані";
+  return value >= 60 ? `${Math.floor(value / 60)} хв ${value % 60} с` : `${value} с`;
+}
+
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
 const SESSION_STORAGE_KEYS = ["nezaria_access_token", "nezaria_refresh_token", "nezeriya_access_role", "nezeriya_owner_session", "nezeriya_workspace_mode", "nezeriya_session_user_id", "nezeriya_session_expires_at"];
 const CHAT_RESPONSE_SLA_MS = 15 * 60 * 1000;
@@ -366,6 +379,7 @@ export default function Home() {
     { label: "Комісія за місяць", value: displayMetric(walletMetrics.monthlyCommission, "$"), change: "live", icon: "↗", tone: "blue" },
     { label: "Дохід Telegram Stars", value: `${displayMetric(walletMetrics.monthlyStars)} NZR`, change: "live", icon: "★", tone: "violet" },
     { label: "Зареєстровані користувачі", value: displayMetric(walletMetrics.users), change: "live", icon: "◉", tone: "orange" },
+    { label: "Найприбутковіша функція", value: `${walletMetrics.mostProfitableFeature || "—"}${walletMetrics.mostProfitableValueNzr === null || walletMetrics.mostProfitableValueNzr === undefined ? "" : ` · ${displayMetric(walletMetrics.mostProfitableValueNzr)} NZR`}`, change: "live", icon: "₮", tone: "mint" },
   ] : metrics;
   const totalIncome = walletMetrics ? displayMetric(metricNumber(walletMetrics.totalCommission) + metricNumber(walletMetrics.monthlyStars) * 0.015, "$") : "—";
   const walletOnline = walletMetrics ? displayMetric(walletMetrics.onlineUsers) : "—";
@@ -773,9 +787,10 @@ function UsersPanel({ walletMetrics, users, refreshing, onRefresh }: { walletMet
   const standard = walletMetrics ? displayMetric(Math.max(0, metricNumber(walletMetrics.users) - metricNumber(walletMetrics.premiumUsers))) : "—";
   const highestNrzBalance = walletMetrics?.maxNzrBalance;
   const usersByNrzBalance = [...users].sort((first, second) => Number(second.nzrPoints) - Number(first.nzrPoints));
+  const analyticsWindow = walletMetrics ? displayMetric(walletMetrics.analyticsWindowDays) : "30";
   return <section className="users-page">
     <section className="heading-row"><div><p className="eyebrow">КОРИСТУВАЧІ</p><h1>Аудиторія <span>Nezeriya Wallet</span></h1><p className="subtle">Актуальні дані з адміністративного API гаманця.</p></div><div className="heading-actions"><button className="outline-button" type="button" onClick={onRefresh} disabled={refreshing}>{refreshing ? "Оновлення..." : "↻ Оновити"}</button><span className="live"><i /> LIVE</span></div></section>
-    <section className="users-summary"><article className="panel users-primary"><p>Зареєстровано користувачів</p><strong>{registered}</strong><span>Усього за весь час</span></article><article className="panel"><p>Premium-користувачі</p><strong>{premium}</strong><span>Актуальний статус Telegram Premium</span></article><article className="panel"><p>Звичайні користувачі</p><strong>{standard}</strong><span>Без активного Telegram Premium</span></article><article className="panel"><p>Найбільший баланс NZR</p><strong>{highestNrzBalance === null || highestNrzBalance === undefined ? "—" : `${displayMetric(highestNrzBalance)} NZR`}</strong><span>Максимальний баланс серед усіх гаманців</span></article></section>
+    <section className="users-summary"><article className="panel users-primary"><p>Зареєстровано користувачів</p><strong>{registered}</strong><span>Усього за весь час</span></article><article className="panel"><p>Premium-користувачі</p><strong>{premium}</strong><span>Актуальний статус Telegram Premium</span></article><article className="panel"><p>Звичайні користувачі</p><strong>{standard}</strong><span>Без активного Telegram Premium</span></article><article className="panel"><p>Найбільший баланс NZR</p><strong>{highestNrzBalance === null || highestNrzBalance === undefined ? "—" : `${displayMetric(highestNrzBalance)} NZR`}</strong><span>Максимальний баланс серед усіх гаманців</span></article><article className="panel"><p>Середній вік акаунтів</p><strong>{formatAccountAge(walletMetrics?.averageWalletAgeDays)}</strong><span>Активні за останні {analyticsWindow} днів</span></article><article className="panel"><p>Сесій на користувача</p><strong>{walletMetrics ? displayMetric(walletMetrics.sessionsPerUser) : "—"}</strong><span>Середня кількість відкриттів Mini App</span></article><article className="panel"><p>Тривалість сесії</p><strong>{formatSessionDuration(walletMetrics?.averageSessionDurationSeconds)}</strong><span>Середній час у Mini App</span></article></section>
     <article className="panel users-table-panel"><div className="panel-head"><div><p className="panel-label">РЕЄСТР ГАМАНЦІВ</p><h2>Гаманці користувачів та NZR поінти</h2></div><span>{users.length} гаманців показано</span></div>{users.length === 0 ? <p className="users-empty">Список гаманців завантажується з Nezeriya Wallet API.</p> : <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Telegram ID</th><th>Користувач</th><th>Wallet ID</th><th>NZR поінти ↓</th><th>Premium</th></tr></thead><tbody>{usersByNrzBalance.map((user, index) => <tr key={`${user.id}-${user.walletIds.join("-") || index}`}><td>{user.id}</td><td><strong>{user.username ? `@${user.username}` : user.name || "Без username"}</strong>{user.name && user.username && <small>{user.name}</small>}</td><td>{user.walletIds.length ? user.walletIds.join(", ") : "—"}</td><td className="nzr-points">{displayMetric(user.nzrPoints)} NZR</td><td><span className={user.premium ? "premium-badge" : "standard-badge"}>{user.premium ? "Premium" : "Звичайний"}</span></td></tr>)}</tbody></table></div>}</article>
   </section>;
 }
