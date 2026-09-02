@@ -25,10 +25,10 @@ declare global {
 }
 
 const navigation = [
-  { id: "home", label: "Main", icon: "◆" },
-  { id: "games", label: "Games", icon: "●" },
-  { id: "apps", label: "Apps", icon: "▲" },
-  { id: "settings", label: "Settings", icon: "⚙" },
+  { id: "home", label: "Main", icon: "home" },
+  { id: "games", label: "Games", icon: "games" },
+  { id: "apps", label: "Apps", icon: "apps" },
+  { id: "settings", label: "Settings", icon: "settings" },
 ] as const;
 
 type Screen = (typeof navigation)[number]["id"];
@@ -36,8 +36,7 @@ type Screen = (typeof navigation)[number]["id"];
 export default function MiniAppPage() {
   const [telegramUser, setTelegramUser] = useState<TelegramUser | null>(null);
   const [screen, setScreen] = useState<Screen>("home");
-  const [notifications, setNotifications] = useState(true);
-  const [sounds, setSounds] = useState(true);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     const applyTelegramProfile = () => {
@@ -80,8 +79,20 @@ export default function MiniAppPage() {
       <div className="mini-glow mini-glow-bottom" />
 
       {screen === "home" ? (
+        <section className="home-search-page" aria-label="Головна сторінка">
+          <label className="search-box">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.7" cy="10.7" r="5.8" /><path d="m15.2 15.2 4.2 4.2" /></svg>
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search" aria-label="Search" />
+            <svg className="search-mic" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v3M9 20h6" /></svg>
+          </label>
+          <article className="app-result">
+            <span className="app-mark">N</span>
+            <span className="app-copy"><b>Nex Apps</b><small>The best high-tech bot on Telegram</small></span>
+            <button type="button" onClick={() => setScreen("settings")}>Open</button>
+          </article>
+        </section>
+      ) : screen === "settings" ? (
         <section className="mini-home" aria-label="Головна сторінка">
-          <div className="mini-spacer" />
           <article className="profile-card">
             <div className="avatar-wrap" aria-label="Аватар користувача">
               {profile.photoUrl ? (
@@ -106,23 +117,6 @@ export default function MiniAppPage() {
             </button>
           </article>
         </section>
-      ) : screen === "settings" ? (
-        <section className="settings-page" aria-label="Налаштування">
-          <button className="back-button" type="button" onClick={() => setScreen("home")}>‹</button>
-          <p className="section-kicker">NEX APPS</p>
-          <h1>Settings</h1>
-          <p className="settings-subtitle">Керуйте параметрами застосунку</p>
-          <div className="settings-group">
-            <div className="settings-row profile-row">
-              {profile.photoUrl ? <img src={profile.photoUrl} alt="" className="tiny-avatar" /> : <span className="tiny-avatar">{initials || "N"}</span>}
-              <span><b>{profile.displayName}</b><small>{profile.username}</small></span>
-            </div>
-            <button className="settings-row" type="button"><span>◉</span><span>Language</span><em>English ›</em></button>
-            <label className="settings-row"><span>♧</span><span>Notifications</span><input aria-label="Notifications" type="checkbox" checked={notifications} onChange={(event) => setNotifications(event.target.checked)} /></label>
-            <label className="settings-row"><span>♪</span><span>Sounds</span><input aria-label="Sounds" type="checkbox" checked={sounds} onChange={(event) => setSounds(event.target.checked)} /></label>
-          </div>
-          <p className="version">Nex Apps · v1.0</p>
-        </section>
       ) : (
         <section className="empty-page" aria-live="polite">
           <span className="empty-icon">{screen === "games" ? "●" : "▲"}</span>
@@ -134,11 +128,18 @@ export default function MiniAppPage() {
       <nav className="bottom-nav" aria-label="Навігація застосунку">
         {navigation.map((item) => (
           <button key={item.id} type="button" className={screen === item.id ? "nav-item active" : "nav-item"} onClick={() => setScreen(item.id)}>
-            <span>{item.icon}</span>
+            <NavIcon name={item.icon} />
             <small>{item.label}</small>
           </button>
         ))}
       </nav>
     </main>
   );
+}
+
+function NavIcon({ name }: { name: (typeof navigation)[number]["icon"] }) {
+  if (name === "home") return <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.2 8 8-8 8-8-8 8-8Z" /><path d="M12 3.2v16" opacity=".28" /></svg>;
+  if (name === "games") return <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3" /><circle cx="16" cy="8" r="3" /><circle cx="8" cy="16" r="3" /><circle cx="16" cy="16" r="3" /></svg>;
+  if (name === "apps") return <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 4 7.3 13H4.7L12 4Z" /></svg>;
+  return <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Zm0-5.2 1.1 2.3 2.5.5 1.8-1.7 2.4 2.4-1.7 1.8.5 2.5 2.3 1.1v3.4l-2.3 1.1-.5 2.5 1.7 1.8-2.4 2.4-1.8-1.7-2.5.5L12 21l-1.1-2.3-2.5-.5-1.8 1.7-2.4-2.4 1.7-1.8-.5-2.5L3.1 12v-3.4l2.3-1.1.5-2.5-1.7-1.8 2.4-2.4 1.8 1.7 2.5-.5L12 3Z" /></svg>;
 }
