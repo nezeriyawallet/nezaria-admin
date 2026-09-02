@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NEZERIYA COMPANY — Admin",
-  description: "Операційна панель NEZERIYA COMPANY.",
+  title: "Nex Apps",
+  description: "Nex Apps Telegram Mini App.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
