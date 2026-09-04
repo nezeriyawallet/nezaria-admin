@@ -33,7 +33,7 @@ const navigation = [
   { id: "settings", label: "Settings", icon: "settings" },
 ] as const;
 
-type Screen = (typeof navigation)[number]["id"];
+type Screen = (typeof navigation)[number]["id"] | "details";
 
 export default function MiniAppPage() {
   const [telegramUser, setTelegramUser] = useState<TelegramUser | null>(null);
@@ -145,8 +145,49 @@ export default function MiniAppPage() {
           <article className="app-result">
             <span className="app-mark">N</span>
             <span className="app-copy"><b>Nezeriya Wallet</b><small>The best high-tech bot on Telegram</small></span>
-            <button type="button" onClick={() => setScreen("settings")}>Open</button>
+            <button type="button" onClick={() => setScreen("details")}>Open</button>
           </article>
+        </section>
+      ) : screen === "details" ? (
+        <section className="app-details-page" aria-label="Деталі Nezeriya Wallet">
+          <header className="details-header">
+            <button className="details-back" type="button" onClick={() => setScreen("home")} aria-label="Назад">‹</button>
+            <span>Nezeriya Wallet</span>
+          </header>
+
+          <article className="details-hero">
+            <span className="details-mark">N</span>
+            <div>
+              <h1>Nezeriya Wallet</h1>
+              <p>@Nezeriya_Wallet_Bot</p>
+              <small>The best high-tech bot on Telegram</small>
+            </div>
+          </article>
+
+          <section className="details-stats" aria-label="Рейтинг і відгуки">
+            <div><strong>0</strong><span>Rating</span></div>
+            <div><strong>0</strong><span>Reviews</span></div>
+            <div><strong>0</strong><span>Downloads</span></div>
+          </section>
+
+          <section className="details-section" aria-label="Скріншоти">
+            <h2>Screenshots</h2>
+            <div className="screenshot-row" aria-label="Скріншоти Mini App">
+              <div className="screenshot-card screen-one"><span>Nezeriya<br />Wallet</span></div>
+              <div className="screenshot-card screen-two"><span>Points<br /><b>0</b></span></div>
+              <div className="screenshot-card screen-three"><span>Mini App<br />preview</span></div>
+            </div>
+          </section>
+
+          <section className="details-section details-about">
+            <h2>About</h2>
+            <p>Nezeriya Wallet — Telegram Mini App.</p>
+          </section>
+
+          <section className="details-section details-reviews">
+            <div className="section-title"><h2>Reviews</h2><span>0</span></div>
+            <p>Відгуків поки немає.</p>
+          </section>
         </section>
       ) : screen === "settings" ? (
         <section className="mini-home" aria-label="Головна сторінка">
@@ -182,14 +223,14 @@ export default function MiniAppPage() {
         </section>
       )}
 
-      <nav className="bottom-nav" aria-label="Навігація застосунку">
+      {screen !== "details" && <nav className="bottom-nav" aria-label="Навігація застосунку">
         {navigation.map((item) => (
           <button key={item.id} type="button" className={screen === item.id ? "nav-item active" : "nav-item"} onClick={() => setScreen(item.id)}>
             <NavIcon name={item.icon} />
             <small>{item.label}</small>
           </button>
         ))}
-      </nav>
+      </nav>}
 
       {topUpOpen && (
         <section className="topup-screen" aria-label="Поповнення Points">
