@@ -80,7 +80,7 @@ export default function MiniAppPage() {
   const profile = useMemo(() => {
     const name = [telegramUser?.first_name, telegramUser?.last_name].filter(Boolean).join(" ");
     const username = telegramUser?.username ? `@${telegramUser.username}` : "@NexAppsUser";
-    const displayName = name || telegramUser?.username || "Nex Apps User";
+    const displayName = name || telegramUser?.username || "Nezeriya Wallet User";
     return { displayName, username, photoUrl: telegramUser?.photo_url };
   }, [telegramUser]);
 
@@ -144,7 +144,7 @@ export default function MiniAppPage() {
           </label>
           <article className="app-result">
             <span className="app-mark">N</span>
-            <span className="app-copy"><b>Nex Apps</b><small>The best high-tech bot on Telegram</small></span>
+            <span className="app-copy"><b>Nezeriya Wallet</b><small>The best high-tech bot on Telegram</small></span>
             <button type="button" onClick={() => setScreen("settings")}>Open</button>
           </article>
         </section>

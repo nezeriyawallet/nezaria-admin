@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     await ensurePaymentWebhook(token, request.url);
     const payload = `nex-points:${identity.id}:${amount}:${crypto.randomUUID()}`;
     const invoiceLink = await callTelegram(token, "createInvoiceLink", {
-      title: "Nex Apps Points",
+      title: "Nezeriya Wallet Points",
       description: `${amount} Points`,
       payload,
       currency: "XTR",

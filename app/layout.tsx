@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nex Apps",
-  description: "Nex Apps Telegram Mini App.",
+  title: "Nezeriya Wallet",
+  description: "Nezeriya Wallet Telegram Mini App.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
