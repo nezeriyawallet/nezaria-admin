@@ -15,7 +15,9 @@ type TelegramWebApp = {
   expand?: () => void;
   setHeaderColor?: (color: string) => void;
   setBackgroundColor?: (color: string) => void;
+  initData?: string;
   initDataUnsafe?: { user?: TelegramUser };
+  openInvoice?: (url: string, callback?: (status: string) => void) => void;
 };
 
 declare global {
@@ -37,6 +39,11 @@ export default function MiniAppPage() {
   const [telegramUser, setTelegramUser] = useState<TelegramUser | null>(null);
   const [screen, setScreen] = useState<Screen>("home");
   const [search, setSearch] = useState("");
+  const [topUpOpen, setTopUpOpen] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [paymentMessage, setPaymentMessage] = useState("");
+  const [points, setPoints] = useState(0);
+  const [paymentLoading, setPaymentLoading] = useState(false);
 
   useEffect(() => {
     const applyTelegramProfile = () => {
@@ -47,6 +54,7 @@ export default function MiniAppPage() {
       webApp.setHeaderColor?.("#102d42");
       webApp.setBackgroundColor?.("#102d42");
       setTelegramUser(webApp.initDataUnsafe?.user ?? null);
+      if (webApp.initData) void loadPoints(webApp.initData);
     };
 
     applyTelegramProfile();
@@ -57,6 +65,17 @@ export default function MiniAppPage() {
     document.head.appendChild(script);
     return () => script.remove();
   }, []);
+
+  async function loadPoints(initData: string) {
+    try {
+      const response = await fetch("/api/telegram/points", { headers: { "x-telegram-init-data": initData } });
+      if (!response.ok) return;
+      const result = await response.json() as { points?: number };
+      if (Number.isSafeInteger(result.points) && (result.points || 0) >= 0) setPoints(result.points || 0);
+    } catch {
+      // The default zero is shown until Telegram and the payment service are ready.
+    }
+  }
 
   const profile = useMemo(() => {
     const name = [telegramUser?.first_name, telegramUser?.last_name].filter(Boolean).join(" ");
@@ -72,6 +91,46 @@ export default function MiniAppPage() {
     .map((part) => part[0])
     .join("")
     .toUpperCase();
+
+  function enterDigit(value: string) {
+    setPaymentMessage("");
+    setAmount((current) => (current.length >= 6 ? current : `${current}${value}`));
+  }
+
+  async function startPayment() {
+    if (!amount || Number(amount) < 1) {
+      setPaymentMessage("Введіть кількість Points");
+      return;
+    }
+    const webApp = window.Telegram?.WebApp;
+    if (!webApp?.initData || !webApp.openInvoice) {
+      setPaymentMessage("Відкрийте оплату через Telegram");
+      return;
+    }
+    setPaymentLoading(true);
+    setPaymentMessage("Готуємо рахунок у Telegram…");
+    try {
+      const response = await fetch("/api/telegram/invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-telegram-init-data": webApp.initData },
+        body: JSON.stringify({ amount: Number(amount) }),
+      });
+      const result = await response.json() as { invoiceLink?: string; error?: string };
+      if (!response.ok || !result.invoiceLink) throw new Error(result.error || "Не вдалося створити рахунок");
+      webApp.openInvoice(result.invoiceLink, (status) => {
+        if (status === "paid") {
+          setPaymentMessage("Оплату підтверджено. Points зараховано.");
+          void loadPoints(webApp.initData || "");
+          return;
+        }
+        if (status === "cancelled") setPaymentMessage("Оплату скасовано");
+      });
+    } catch (error) {
+      setPaymentMessage(error instanceof Error ? error.message : "Не вдалося відкрити оплату");
+    } finally {
+      setPaymentLoading(false);
+    }
+  }
 
   return (
     <main className="mini-app">
@@ -110,9 +169,9 @@ export default function MiniAppPage() {
             <span className="points-token">✧</span>
             <span className="points-copy">
               <span>Balance Points</span>
-              <strong>0</strong>
+              <strong>{points}</strong>
             </span>
-            <button className="add-button" type="button" onClick={() => window.Telegram?.WebApp?.ready?.()}>
+            <button className="add-button" type="button" onClick={() => { setAmount(""); setPaymentMessage(""); setTopUpOpen(true); }}>
               Add
             </button>
           </article>
@@ -133,6 +192,25 @@ export default function MiniAppPage() {
           </button>
         ))}
       </nav>
+
+      {topUpOpen && (
+        <section className="topup-screen" aria-label="Поповнення Points">
+          <div className="topup-display">
+            <output>{amount || "0"}</output>
+            <button type="button" onClick={startPayment} disabled={paymentLoading}>{paymentLoading ? "…" : "Add"}</button>
+            {paymentMessage && <p role="status">{paymentMessage}</p>}
+          </div>
+          <div className="numpad" aria-label="Цифрова клавіатура">
+            {["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0"].map((key, index) => key ? (
+              <button key={key} type="button" onClick={() => enterDigit(key)}><b>{key}</b><small>{index < 9 ? "DEF" : ""}</small></button>
+            ) : <span key="space" />)}
+            <button type="button" className="backspace" aria-label="Видалити цифру" onClick={() => { setPaymentMessage(""); setAmount((current) => current.slice(0, -1)); }}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 3 12l6 7h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H9Z" /><path d="m12 9 5 6m0-6-5 6" /></svg>
+            </button>
+          </div>
+          <div className="home-bar" aria-hidden="true" />
+        </section>
+      )}
     </main>
   );
 }
