@@ -114,7 +114,10 @@ export default function MiniAppPage() {
       if (!response.ok || !result.invoiceLink) throw new Error(result.error || "Не вдалося створити рахунок");
       webApp.openInvoice(result.invoiceLink, (status) => {
         if (status === "paid") {
-          setPaymentMessage("Оплату підтверджено. Points зараховано.");
+          setPoints((current) => current + Number(amount));
+          setTopUpOpen(false);
+          setAmount("");
+          setPaymentMessage("");
           void loadPoints(webApp.initData || "");
           return;
         }
