@@ -92,11 +92,6 @@ export default function MiniAppPage() {
     .join("")
     .toUpperCase();
 
-  function enterDigit(value: string) {
-    setPaymentMessage("");
-    setAmount((current) => (current.length >= 6 ? current : `${current}${value}`));
-  }
-
   async function startPayment() {
     if (!amount || Number(amount) < 1) {
       setPaymentMessage("Введіть кількість Points");
@@ -196,19 +191,25 @@ export default function MiniAppPage() {
       {topUpOpen && (
         <section className="topup-screen" aria-label="Поповнення Points">
           <div className="topup-display">
-            <output>{amount || "0"}</output>
+            <label className="amount-field">
+              <span className="sr-only">Кількість Points</span>
+              <input
+                autoFocus
+                inputMode="numeric"
+                pattern="[0-9]*"
+                type="tel"
+                value={amount}
+                onChange={(event) => {
+                  setPaymentMessage("");
+                  setAmount(event.target.value.replace(/\D/g, "").slice(0, 6));
+                }}
+                placeholder="0"
+                aria-label="Кількість Points"
+              />
+            </label>
             <button type="button" onClick={startPayment} disabled={paymentLoading}>{paymentLoading ? "…" : "Add"}</button>
             {paymentMessage && <p role="status">{paymentMessage}</p>}
           </div>
-          <div className="numpad" aria-label="Цифрова клавіатура">
-            {["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0"].map((key, index) => key ? (
-              <button key={key} type="button" onClick={() => enterDigit(key)}><b>{key}</b><small>{index < 9 ? "DEF" : ""}</small></button>
-            ) : <span key="space" />)}
-            <button type="button" className="backspace" aria-label="Видалити цифру" onClick={() => { setPaymentMessage(""); setAmount((current) => current.slice(0, -1)); }}>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 3 12l6 7h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H9Z" /><path d="m12 9 5 6m0-6-5 6" /></svg>
-            </button>
-          </div>
-          <div className="home-bar" aria-hidden="true" />
         </section>
       )}
     </main>
