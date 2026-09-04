@@ -523,6 +523,19 @@ button {
   font-size: 11px;
   padding-bottom: 28px;
 }
+.online-peak-tooltip {
+  min-height: 50px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  margin-top: 9px;
+  color: #91a4a6;
+  font-size: 11px;
+}
+.online-peak-tooltip b { color: #e4f3f0; font-size: 12px; }
+.online-peak-tooltip span { color: var(--mint); font-weight: 700; }
+.online-peak-tooltip small { color: #7e9092; }
 .legend {
   display: flex;
   gap: 16px;
