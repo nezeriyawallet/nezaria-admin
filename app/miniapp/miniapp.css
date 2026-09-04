@@ -17,8 +17,8 @@ body:has(.mini-app) { margin: 0; background: #000; }
 }
 
 .mini-glow { display: none; }
-.mini-home { width: min(100%, 440px); min-height: calc(100dvh - 94px); margin: auto; padding: max(69px, calc(env(safe-area-inset-top) + 45px)) 34px 24px; }
-.home-search-page { width: min(100%, 440px); min-height: calc(100dvh - 94px); margin: auto; padding: max(78px, calc(env(safe-area-inset-top) + 54px)) 34px 24px; }
+.mini-home { width: min(100%, 440px); min-height: calc(100dvh - 94px); margin: auto; padding: max(28px, calc(env(safe-area-inset-top) + 4px)) 34px 24px; }
+.home-search-page { width: min(100%, 440px); min-height: calc(100dvh - 94px); margin: auto; padding: max(28px, calc(env(safe-area-inset-top) + 4px)) 34px 24px; }
 .search-box { height: 40px; padding: 0 12px; display: flex; align-items: center; gap: 8px; border-radius: 22px; background: rgba(66, 101, 130, .72); color: #bdcfdb; }
 .search-box > svg:first-child { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }
 .search-box input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: #f4f9fc; font: 16px "SF Pro Rounded", ui-rounded, sans-serif; }.search-box input::placeholder { color: #c2d0db; opacity: 1; }
