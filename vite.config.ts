@@ -14,7 +14,11 @@ const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 // Render starts the server with Node.js, while the normal production target is
 // Cloudflare Workers. Keep the Worker implementation for Sites, but make the
 // Docker image self-contained by replacing the Workers-only virtual module.
-const isRenderRuntime = process.env.NEZERIYA_RENDER === "true";
+const isRenderRuntime =
+  process.env.NEZERIYA_RENDER === "true" ||
+  process.env.RENDER === "true" ||
+  Boolean(process.env.RENDER_SERVICE_ID) ||
+  Boolean(process.env.RENDER_EXTERNAL_URL);
 
 const localBindingConfig = {
   main: "./worker/index.ts",
