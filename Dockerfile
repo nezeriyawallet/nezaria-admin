@@ -16,6 +16,10 @@ ARG NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 
+# Render runs this image in Node.js. The Vite config uses this flag to replace
+# the Cloudflare Workers-only runtime module with a safe Node environment shim.
+ENV NEZERIYA_RENDER=true
+
 RUN npm run build
 
 ENV NODE_ENV=production
