@@ -150,44 +150,37 @@ export default function MiniAppPage() {
         </section>
       ) : screen === "details" ? (
         <section className="app-details-page" aria-label="Деталі Nezeriya Wallet">
-          <header className="details-header">
-            <button className="details-back" type="button" onClick={() => setScreen("home")} aria-label="Назад">‹</button>
-            <span>Nezeriya Wallet</span>
-          </header>
-
           <article className="details-hero">
             <span className="details-mark">N</span>
             <div>
               <h1>Nezeriya Wallet</h1>
               <p>@Nezeriya_Wallet_Bot</p>
-              <small>The best high-tech bot on Telegram</small>
+              <button type="button" className="details-open">Open</button>
             </div>
           </article>
 
           <section className="details-stats" aria-label="Рейтинг і відгуки">
-            <div><strong>0</strong><span>Rating</span></div>
-            <div><strong>0</strong><span>Reviews</span></div>
-            <div><strong>0</strong><span>Downloads</span></div>
+            <div><span>Response<br />132.421</span><strong>4.9</strong><i>★★★★★</i></div>
+            <div><span>Globally</span><strong>#4</strong></div>
+            <div><span>Category</span><strong>#15</strong></div>
           </section>
 
-          <section className="details-section" aria-label="Скріншоти">
-            <h2>Screenshots</h2>
-            <div className="screenshot-row" aria-label="Скріншоти Mini App">
-              <div className="screenshot-card screen-one"><span>Nezeriya<br />Wallet</span></div>
-              <div className="screenshot-card screen-two"><span>Points<br /><b>0</b></span></div>
-              <div className="screenshot-card screen-three"><span>Mini App<br />preview</span></div>
-            </div>
-          </section>
+          <div className="screenshot-row" aria-label="Скріншоти Nezeriya Wallet">
+            <WalletScreenshot />
+            <WalletScreenshot bank />
+          </div>
 
-          <section className="details-section details-about">
-            <h2>About</h2>
-            <p>Nezeriya Wallet — Telegram Mini App.</p>
-          </section>
-
-          <section className="details-section details-reviews">
-            <div className="section-title"><h2>Reviews</h2><span>0</span></div>
-            <p>Відгуків поки немає.</p>
-          </section>
+          <nav className="details-nav" aria-label="Навігація застосунку">
+            {navigation.map((item) => (
+              <button key={item.id} type="button" className={item.id === "settings" ? "nav-item active" : "nav-item"} onClick={() => setScreen(item.id)}>
+                <NavIcon name={item.icon} />
+                <small>{item.label}</small>
+              </button>
+            ))}
+            <button type="button" className="details-search" onClick={() => setScreen("home")} aria-label="Пошук">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.7" cy="10.7" r="5.8" /><path d="m15.2 15.2 4.2 4.2" /></svg>
+            </button>
+          </nav>
         </section>
       ) : screen === "settings" ? (
         <section className="mini-home" aria-label="Головна сторінка">
@@ -258,6 +251,16 @@ export default function MiniAppPage() {
       )}
     </main>
   );
+}
+
+function WalletScreenshot({ bank = false }: { bank?: boolean }) {
+  return <article className={bank ? "wallet-shot bank-shot" : "wallet-shot"}>
+    <header><span>× Закрити</span><b>⌄</b><i>⋮</i></header>
+    <div className="wallet-shot-card"><strong>{bank ? "BANK" : "WALLET"}</strong><em>{bank ? "29" : "221.52"}</em><small>{bank ? "BANK BALANCE" : "NZR 12.52"}</small></div>
+    <div className="wallet-shot-actions"><b>↥</b><b>✚</b><b>↔</b><b>▣</b></div>
+    <div className="wallet-shot-list"><div>CRYPTO <span>NFT</span><span>MEME</span></div><p>USDT <b>0.00 USDT</b></p><p>GRAM <b>0.34 GRAM</b></p><p>NZR (POINTS) <b>47 NZR</b></p></div>
+    <footer>⌂　◈　⌁　♟</footer>
+  </article>;
 }
 
 function NavIcon({ name }: { name: (typeof navigation)[number]["icon"] }) {
