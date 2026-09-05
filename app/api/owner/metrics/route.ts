@@ -34,7 +34,7 @@ export async function GET(request: Request) {
   if (!baseUrl || !apiKey) return Response.json({ error: "Wallet API is not configured" }, { status: 503 });
 
   const fresh = Date.now();
-  const [values, analytics] = await Promise.all([Promise.all(Object.entries(endpoints).map(async ([name, endpoint]) => {
+  const [values, analytics, revenue] = await Promise.all([Promise.all(Object.entries(endpoints).map(async ([name, endpoint]) => {
     try {
       const separator = endpoint.path.includes("?") ? "&" : "?";
       const response = await fetch(`${baseUrl}${endpoint.path}${separator}_=${fresh}`, {
@@ -55,8 +55,15 @@ export async function GET(request: Request) {
     } catch {
       return {};
     }
+  })(), (async () => {
+    try {
+      const response = await fetch(`${baseUrl}/admin/api/users/revenue?_=${fresh}`, {
+        headers: { "X-Admin-Key": apiKey, Accept: "application/json" }, cache: "no-store",
+      });
+      return response.ok ? await response.json() as Record<string, unknown> : {};
+    } catch { return {}; }
   })()]);
-  return Response.json({ metrics: { ...Object.fromEntries(values), ...analytics }, updatedAt: new Date().toISOString() }, {
+  return Response.json({ metrics: { ...Object.fromEntries(values), ...analytics, ...revenue }, updatedAt: new Date().toISOString() }, {
     headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", Pragma: "no-cache" },
   });
 }

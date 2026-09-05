@@ -25,7 +25,7 @@ type EmployeeProfile = {
 };
 type DailyOnlinePeak = { date: string; peakOnline: number };
 type WalletMetrics = Record<string, string | number | null> & { dailyOnlinePeaks?: DailyOnlinePeak[] };
-type WalletUser = { id: number; username: string; name: string; premium: boolean; nzrPoints: number; walletIds: number[] };
+type WalletUser = { id: number; username: string; name: string; premium: boolean; nzrPoints: number; walletIds: number[]; referralCount?: number };
 type WheelWin = { id: number; username: string; name: string; walletId: number; wheel: number; dropped: string; reward: string; createdAt: string };
 type WheelWinSummary = { monthlyWonNzr: number; monthlyLostNzr: number; monthlyCollectedNzr: number; monthlyNetEarningsNzr: number; monthlyWheelSpentNzr: number; monthlyPlinkoSpentNzr: number; monthlyWheelWonNzr: number; monthlyPlinkoWonNzr: number };
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
@@ -794,6 +794,30 @@ function FinancePanel({ walletMetrics }: { walletMetrics: WalletMetrics | null }
   </section>;
 }
 
+function AudienceRevenueCards({ metrics }: { metrics: WalletMetrics | null }) {
+  const value = (key: string, unit: string) => {
+    const raw = metrics?.[key];
+    if (raw === null || raw === undefined || raw === "" || !Number.isFinite(Number(raw))) return "Немає даних";
+    return `${new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 4 }).format(Number(raw))} ${unit}`;
+  };
+  return <>
+    <section className="users-summary revenue-summary">
+      {(["ltv", "arpu"] as const).map((kind) => <article className="panel" key={kind}>
+        <p>{kind === "ltv" ? "LTV · накопичений" : "ARPU · за місяць"}</p>
+        <strong>{value(`${kind}CommissionUsdt`, "USDT")}</strong>
+        <span>{kind === "ltv" ? "Комісії на зареєстрованого користувача" : "Комісії на активного користувача · орієнтовно"}</span>
+        <dl className="revenue-components">
+          <div><dt>Платежі Stars</dt><dd>{value(`${kind}Stars`, "★")}</dd></div>
+          <div><dt>Рулетка · ставки − NZR-призи</dt><dd>{value(`${kind}WheelNzr`, "NZR")}</dd></div>
+          <div><dt>Plinko · ставки − призи</dt><dd>{value(`${kind}PlinkoNzr`, "NZR")}</dd></div>
+        </dl>
+        <span>{kind === "ltv" ? `За весь доступний час · ${displayMetric(metrics?.revenueRegisteredUsers)} користувачів` : `${metrics?.revenueMonth || "Поточний місяць"} · ${displayMetric(metrics?.revenueActiveUsers)} активних користувачів`}</span>
+      </article>)}
+    </section>
+    <p className="subtle revenue-note">Кожна складова — на одну людину, незалежно від кількості гаманців. LTV показує накопичений дохід, а не прогноз. Активність ARPU: відкриття гаманця, операції або ігри за місяць. Комісія ARPU оцінена за успішними операціями та поточним тарифом. Stars і NZR не додаються до USDT; це окремі одиниці. Це дохід до витрат, а не чистий прибуток. Ігри — за збереженим журналом{metrics?.revenueGamesSince ? ` з ${formatOnlinePeakDate(String(metrics.revenueGamesSince))}` : ""}; призи в USDT та негрошові призи в NZR не оцінюються.</p>
+  </>;
+}
+
 function UsersPanel({ walletMetrics, users, refreshing, onRefresh }: { walletMetrics: WalletMetrics | null; users: WalletUser[]; refreshing: boolean; onRefresh: () => void }) {
   const registered = walletMetrics ? displayMetric(walletMetrics.users) : "—";
   const premium = walletMetrics ? displayMetric(walletMetrics.premiumUsers) : "—";
@@ -804,7 +828,8 @@ function UsersPanel({ walletMetrics, users, refreshing, onRefresh }: { walletMet
   return <section className="users-page">
     <section className="heading-row"><div><p className="eyebrow">КОРИСТУВАЧІ</p><h1>Аудиторія <span>Nezeriya Wallet</span></h1><p className="subtle">Актуальні дані з адміністративного API гаманця.</p></div><div className="heading-actions"><button className="outline-button" type="button" onClick={onRefresh} disabled={refreshing}>{refreshing ? "Оновлення..." : "↻ Оновити"}</button><span className="live"><i /> LIVE</span></div></section>
     <section className="users-summary"><article className="panel users-primary"><p>Зареєстровано користувачів</p><strong>{registered}</strong><span>Усього за весь час</span></article><article className="panel"><p>Premium-користувачі</p><strong>{premium}</strong><span>Актуальний статус Telegram Premium</span></article><article className="panel"><p>Звичайні користувачі</p><strong>{standard}</strong><span>Без активного Telegram Premium</span></article><article className="panel"><p>Найбільший баланс NZR</p><strong>{highestNrzBalance === null || highestNrzBalance === undefined ? "—" : `${displayMetric(highestNrzBalance)} NZR`}</strong><span>Максимальний баланс серед усіх гаманців</span></article><article className="panel"><p>Середній вік акаунтів</p><strong>{formatAccountAge(walletMetrics?.averageWalletAgeDays)}</strong><span>Активні за останні {analyticsWindow} днів</span></article><article className="panel"><p>Сесій на користувача</p><strong>{walletMetrics ? displayMetric(walletMetrics.sessionsPerUser) : "—"}</strong><span>Середня кількість відкриттів Mini App</span></article><article className="panel"><p>Тривалість сесії</p><strong>{formatSessionDuration(walletMetrics?.averageSessionDurationSeconds)}</strong><span>Середній час у Mini App</span></article></section>
-    <article className="panel users-table-panel"><div className="panel-head"><div><p className="panel-label">РЕЄСТР ГАМАНЦІВ</p><h2>Гаманці користувачів та NZR поінти</h2></div><span>{users.length} гаманців показано</span></div>{users.length === 0 ? <p className="users-empty">Список гаманців завантажується з Nezeriya Wallet API.</p> : <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Telegram ID</th><th>Користувач</th><th>Wallet ID</th><th>NZR поінти ↓</th><th>Premium</th></tr></thead><tbody>{usersByNrzBalance.map((user, index) => <tr key={`${user.id}-${user.walletIds.join("-") || index}`}><td>{user.id}</td><td><strong>{user.username ? `@${user.username}` : user.name || "Без username"}</strong>{user.name && user.username && <small>{user.name}</small>}</td><td>{user.walletIds.length ? user.walletIds.join(", ") : "—"}</td><td className="nzr-points">{displayMetric(user.nzrPoints)} NZR</td><td><span className={user.premium ? "premium-badge" : "standard-badge"}>{user.premium ? "Premium" : "Звичайний"}</span></td></tr>)}</tbody></table></div>}</article>
+    <AudienceRevenueCards metrics={walletMetrics} />
+    <article className="panel users-table-panel"><div className="panel-head"><div><p className="panel-label">РЕЄСТР ГАМАНЦІВ</p><h2>Гаманці користувачів та NZR поінти</h2></div><span>{users.length} гаманців показано</span></div><p className="subtle">Запрошені — унікальні люди по всіх гаманцях користувача. Для його кількох гаманців показник однаковий.</p>{users.length === 0 ? <p className="users-empty">Список гаманців завантажується з Nezeriya Wallet API.</p> : <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Telegram ID</th><th>Користувач</th><th>Wallet ID</th><th>NZR поінти ↓</th><th>Запрошені люди</th><th>Premium</th></tr></thead><tbody>{usersByNrzBalance.map((user, index) => <tr key={`${user.id}-${user.walletIds.join("-") || index}`}><td>{user.id}</td><td><strong>{user.username ? `@${user.username}` : user.name || "Без username"}</strong>{user.name && user.username && <small>{user.name}</small>}</td><td>{user.walletIds.length ? user.walletIds.join(", ") : "—"}</td><td className="nzr-points">{displayMetric(user.nzrPoints)} NZR</td><td>{displayMetric(user.referralCount)}</td><td><span className={user.premium ? "premium-badge" : "standard-badge"}>{user.premium ? "Premium" : "Звичайний"}</span></td></tr>)}</tbody></table></div>}</article>
   </section>;
 }
 

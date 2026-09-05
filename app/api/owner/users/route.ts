@@ -5,6 +5,7 @@ type RawWalletUser = {
   username?: string;
   name?: string;
   premium?: boolean;
+  referralCount?: number;
   nzrPoints?: number | string;
   walletIds?: Array<number | string>;
 };

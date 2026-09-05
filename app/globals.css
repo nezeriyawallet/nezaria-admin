@@ -536,6 +536,12 @@ button {
 .online-peak-tooltip b { color: #e4f3f0; font-size: 12px; }
 .online-peak-tooltip span { color: var(--mint); font-weight: 700; }
 .online-peak-tooltip small { color: #7e9092; }
+.revenue-summary { margin-top: 16px; }
+.revenue-components { margin: 18px 0; font-size: 12px; }
+.revenue-components div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #334344; }
+.revenue-components dt { color: #91a4a6; }
+.revenue-components dd { margin: 0; font-weight: 700; text-align: right; }
+.revenue-note { line-height: 1.7; margin: 12px 0 20px; }
 .legend {
   display: flex;
   gap: 16px;
