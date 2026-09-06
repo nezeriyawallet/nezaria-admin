@@ -2,8 +2,8 @@ import { verifyGoogleUser, verifyOwnerSession } from "../auth";
 
 const endpoints = {
   totalCommission: { path: "/admin/api/commission/total", keys: ["netCommissionUsdt", "totalCommission"] },
-  monthlyCommission: { path: "/admin/api/commission/monthly", keys: ["netCommissionUsdt", "monthlyCommission"] },
-  monthlyStars: { path: "/admin/api/stars/monthly", keys: ["totalNzrPurchased", "totalNzrBought"] },
+  monthlyCommission: { path: "/admin/api/commission/monthly", keys: ["netCommissionUsdt", "monthlyCommission"], monthScoped: true },
+  monthlyStars: { path: "/admin/api/stars/monthly", keys: ["totalNzrPurchased", "totalNzrBought"], monthScoped: true },
   users: { path: "/admin/api/users/count", keys: ["userCount"] },
   premiumUsers: { path: "/admin/api/users/premium/count", keys: ["premiumUserCount"] },
   onlineUsers: { path: "/admin/api/users/online", keys: ["onlineUsers"] },
@@ -34,10 +34,17 @@ export async function GET(request: Request) {
   if (!baseUrl || !apiKey) return Response.json({ error: "Wallet API is not configured" }, { status: 503 });
 
   const fresh = Date.now();
+  const requestUrl = new URL(request.url);
+  const selectedYear = Number(requestUrl.searchParams.get("year"));
+  const selectedMonth = Number(requestUrl.searchParams.get("month"));
+  const hasSelectedMonth = Number.isInteger(selectedYear) && selectedYear >= 2020 && selectedYear <= 2100
+    && Number.isInteger(selectedMonth) && selectedMonth >= 1 && selectedMonth <= 12;
+  const monthQuery = hasSelectedMonth ? `year=${selectedYear}&month=${selectedMonth}` : "";
   const [values, analytics, revenue, exchangeRevenue] = await Promise.all([Promise.all(Object.entries(endpoints).map(async ([name, endpoint]) => {
     try {
       const separator = endpoint.path.includes("?") ? "&" : "?";
-      const response = await fetch(`${baseUrl}${endpoint.path}${separator}_=${fresh}`, {
+      const parameters = [endpoint.monthScoped ? monthQuery : "", `_=${fresh}`].filter(Boolean).join("&");
+      const response = await fetch(`${baseUrl}${endpoint.path}${separator}${parameters}`, {
         headers: { "X-Admin-Key": apiKey, Accept: "application/json" },
         cache: "no-store",
       });
@@ -64,13 +71,14 @@ export async function GET(request: Request) {
     } catch { return {}; }
   })(), (async () => {
     try {
-      const response = await fetch(`${baseUrl}/admin/api/finance/nzr-exchange?_=${fresh}`, {
+      const parameters = [monthQuery, `_=${fresh}`].filter(Boolean).join("&");
+      const response = await fetch(`${baseUrl}/admin/api/finance/nzr-exchange?${parameters}`, {
         headers: { "X-Admin-Key": apiKey, Accept: "application/json" }, cache: "no-store",
       });
       return response.ok ? await response.json() as Record<string, unknown> : {};
     } catch { return {}; }
   })()]);
-  return Response.json({ metrics: { ...Object.fromEntries(values), ...analytics, ...revenue, ...exchangeRevenue }, updatedAt: new Date().toISOString() }, {
+  return Response.json({ metrics: { ...Object.fromEntries(values), ...analytics, ...revenue, ...exchangeRevenue, selectedYear: hasSelectedMonth ? selectedYear : null, selectedMonth: hasSelectedMonth ? selectedMonth : null }, updatedAt: new Date().toISOString() }, {
     headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", Pragma: "no-cache" },
   });
 }

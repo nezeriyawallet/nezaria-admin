@@ -1802,6 +1802,30 @@ button {
   width: 100%;
   max-width: none;
 }
+.finance-heading-actions {
+  align-items: flex-end;
+}
+.month-picker {
+  display: grid;
+  gap: 5px;
+  color: #849394;
+  font-size: 10px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.month-picker input {
+  min-height: 35px;
+  min-width: 165px;
+  border: 1px solid #2a4240;
+  border-radius: 8px;
+  background: #101b1b;
+  color: #e7f2ee;
+  padding: 0 10px;
+  font: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+  color-scheme: dark;
+}
 .finance-highlight {
   display: grid;
   grid-template-columns: 1.35fr 1fr 1fr;
@@ -1906,6 +1930,13 @@ button {
   }
 }
 @media (max-width: 560px) {
+  .finance-heading-actions {
+    align-items: flex-start;
+  }
+  .month-picker,
+  .month-picker input {
+    width: 100%;
+  }
   .finance-highlight,
   .finance-grid,
   .nzr-finance-list {
