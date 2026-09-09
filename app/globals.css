@@ -579,8 +579,7 @@ button {
 .revenue-components dt { color: #91a4a6; }
 .revenue-components dd { margin: 0; font-weight: 700; text-align: right; }
 .revenue-note { line-height: 1.7; margin: 12px 0 20px; }
-.country-summary { margin: 0 0 15px; }
-.country-summary .panel { min-height: 0; }
+.country-summary { margin: 0; min-height: 0; }
 .country-list { display: grid; gap: 7px; margin-top: 16px; }
 .country-list span { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 0; border-bottom: 1px solid #2d4141; color: #c8d9d7; font-size: 12px; }
 .country-list strong { color: var(--mint); font-size: 14px; margin: 0; }
