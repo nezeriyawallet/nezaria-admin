@@ -31,7 +31,7 @@ type WheelWinSummary = { monthlyWonNzr: number; monthlyLostNzr: number; monthlyC
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
 type SupportTicket = { id: string; client_name: string; client_username: string | null; status: "new" | "in_progress" | "awaiting_rating" | "closed"; assigned_to: string | null; rating: number | null; review: string | null; created_at: string; updated_at: string; messages: SupportMessage[] };
 
-const navigation: NavItem[] = ["Огляд", "Користувачі", "Виграші", "Магазин", "Фінанси", "Підтримка", "Команда", "Працівники", "Медійка"];
+const navigation: NavItem[] = ["Огляд", "Користувачі", "Виграші", "Магазин", "Фінанси", "Команда", "Працівники", "Медійка"];
 
 const metrics = [
   { label: "Загальна комісія", value: "$84,291.40", change: "+12.8%", icon: "◈", tone: "mint" },
