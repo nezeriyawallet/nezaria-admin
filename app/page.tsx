@@ -856,7 +856,7 @@ function CountryStats({ users }: { users: WalletUser[] }) {
     map.set(item.country.code, { ...item.country, count: (existing?.count || 0) + 1 });
     return map;
   }, new Map<string, { code: string; flag: string; name: string; count: number }>()).values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "uk"));
-  return <article className="panel country-summary"><div className="panel-head"><div><p className="panel-label">ГЕОГРАФІЯ РЕЄСТРАЦІЙ</p><h2>Країни номерів</h2></div><span>{confirmed.length} підтверджено</span></div>{countries.length ? <><div className="country-list">{countries.map((country) => <span key={country.code}><b>{country.flag} {country.name}</b><strong>{country.count}</strong></span>)}</div><div className="country-user-list">{confirmed.map(({ user, country }) => <span key={user.id}><b>{country.flag} {country.name}</b><small>{user.username ? `@${user.username}` : user.name || user.id}</small></span>)}</div></> : <p className="users-empty">Дані з’являться після одноразового підтвердження контакту в гаманці.</p>}</article>;
+  return <section className="users-summary country-summary"><article className="panel"><p>Географія реєстрацій</p><strong>{confirmed.length}</strong><span>Підтверджено номерів</span>{countries.length ? <div className="country-list">{countries.map((country) => <span key={country.code}><b>{country.flag} {country.name}</b><strong>{country.count}</strong></span>)}</div> : <p className="users-empty">Країни з’являться після підтвердження контакту.</p>}</article></section>;
 }
 
 function UsersPanel({ walletMetrics, users, refreshing, onRefresh }: { walletMetrics: WalletMetrics | null; users: WalletUser[]; refreshing: boolean; onRefresh: () => void }) {
