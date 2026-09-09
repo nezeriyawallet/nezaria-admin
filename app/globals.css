@@ -517,6 +517,43 @@ button {
   opacity: 0.9;
   cursor: help;
 }
+.activity-panel-wide .live-count {
+  margin-top: 17px;
+}
+.activity-panel-wide .activity-bars {
+  height: 190px;
+  gap: 8px;
+  padding-bottom: 9px;
+}
+.activity-panel-wide .activity-bars i {
+  border-radius: 3px 3px 0 0;
+}
+.activity-panel-wide .online-peak-tooltip {
+  min-height: 57px;
+}
+.earnings-panel-compact {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+.earnings-panel-compact .chart-summary {
+  margin-top: 27px;
+}
+.earnings-panel-compact .chart-summary strong {
+  color: #69ebca;
+  font-size: 30px;
+}
+.earnings-panel-compact .income-note {
+  line-height: 1.65;
+  margin: 16px 0;
+}
+.earnings-period {
+  margin-top: auto;
+  border-top: 1px solid #2b3839;
+  padding-top: 12px;
+  color: #7e8d8c;
+  font-size: 11px;
+}
 .online-chart-empty {
   align-self: center;
   color: #899597;
