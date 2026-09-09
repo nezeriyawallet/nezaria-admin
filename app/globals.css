@@ -579,6 +579,15 @@ button {
 .revenue-components dt { color: #91a4a6; }
 .revenue-components dd { margin: 0; font-weight: 700; text-align: right; }
 .revenue-note { line-height: 1.7; margin: 12px 0 20px; }
+.country-summary { margin: 16px 0; }
+.country-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.country-list span { display: inline-flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 190px; padding: 11px 13px; border: 1px solid #2d4141; border-radius: 10px; background: #101b1c; color: #c8d9d7; font-size: 13px; }
+.country-list strong { color: var(--mint); font-size: 16px; }
+.country-cell { white-space: nowrap; color: #dceae7; }
+.country-missing { color: #718587; font-size: 12px; }
+.country-user-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-top: 14px; }
+.country-user-list span { display: flex; align-items: center; justify-content: space-between; gap: 9px; padding: 8px 10px; border-radius: 8px; background: #101b1c; color: #dceae7; font-size: 12px; }
+.country-user-list small { color: #8ba2a0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .legend {
   display: flex;
   gap: 16px;

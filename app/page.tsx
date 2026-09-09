@@ -25,7 +25,7 @@ type EmployeeProfile = {
 };
 type DailyOnlinePeak = { date: string; peakOnline: number };
 type WalletMetrics = Record<string, string | number | null> & { dailyOnlinePeaks?: DailyOnlinePeak[] };
-type WalletUser = { id: number; username: string; name: string; premium: boolean; nzrPoints: number; walletIds: number[]; referralCount?: number };
+type WalletUser = { id: number; username: string; name: string; premium: boolean; nzrPoints: number; walletIds: number[]; referralCount?: number; phoneCountry?: string };
 type WheelWin = { id: number; username: string; name: string; walletId: number; wheel: number; dropped: string; reward: string; createdAt: string };
 type WheelWinSummary = { monthlyWonNzr: number; monthlyLostNzr: number; monthlyCollectedNzr: number; monthlyNetEarningsNzr: number; monthlyWheelSpentNzr: number; monthlyPlinkoSpentNzr: number; monthlyWheelWonNzr: number; monthlyPlinkoWonNzr: number };
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
@@ -73,6 +73,14 @@ function formatSessionDuration(seconds: string | number | null | undefined) {
 function formatOnlinePeakDate(value: string) {
   const date = new Date(`${value}T12:00:00`);
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("uk-UA", { day: "2-digit", month: "long", year: "numeric" }).format(date);
+}
+
+function countryLabel(code: string | undefined) {
+  const normalized = String(code || "").toUpperCase();
+  if (!/^[A-Z]{2}$/.test(normalized)) return null;
+  const flag = String.fromCodePoint(...[...normalized].map((letter) => 0x1f1e6 + letter.charCodeAt(0) - 65));
+  const name = new Intl.DisplayNames(["uk"], { type: "region" }).of(normalized) || normalized;
+  return { code: normalized, flag, name };
 }
 
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
@@ -837,6 +845,20 @@ function AudienceRevenueCards({ metrics }: { metrics: WalletMetrics | null }) {
   </>;
 }
 
+function CountryStats({ users }: { users: WalletUser[] }) {
+  const people = [...new Map(users.map((user) => [user.id, user])).values()];
+  const confirmed = people.flatMap((user) => {
+    const country = countryLabel(user.phoneCountry);
+    return country ? [{ user, country }] : [];
+  });
+  const countries = [...confirmed.reduce((map, item) => {
+    const existing = map.get(item.country.code);
+    map.set(item.country.code, { ...item.country, count: (existing?.count || 0) + 1 });
+    return map;
+  }, new Map<string, { code: string; flag: string; name: string; count: number }>()).values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "uk"));
+  return <article className="panel country-summary"><div className="panel-head"><div><p className="panel-label">ГЕОГРАФІЯ РЕЄСТРАЦІЙ</p><h2>Країни номерів</h2></div><span>{confirmed.length} підтверджено</span></div>{countries.length ? <><div className="country-list">{countries.map((country) => <span key={country.code}><b>{country.flag} {country.name}</b><strong>{country.count}</strong></span>)}</div><div className="country-user-list">{confirmed.map(({ user, country }) => <span key={user.id}><b>{country.flag} {country.name}</b><small>{user.username ? `@${user.username}` : user.name || user.id}</small></span>)}</div></> : <p className="users-empty">Дані з’являться після одноразового підтвердження контакту в гаманці.</p>}</article>;
+}
+
 function UsersPanel({ walletMetrics, users, refreshing, onRefresh }: { walletMetrics: WalletMetrics | null; users: WalletUser[]; refreshing: boolean; onRefresh: () => void }) {
   const registered = walletMetrics ? displayMetric(walletMetrics.users) : "—";
   const premium = walletMetrics ? displayMetric(walletMetrics.premiumUsers) : "—";
@@ -848,6 +870,7 @@ function UsersPanel({ walletMetrics, users, refreshing, onRefresh }: { walletMet
     <section className="heading-row"><div><p className="eyebrow">КОРИСТУВАЧІ</p><h1>Аудиторія <span>Nezeriya Wallet</span></h1><p className="subtle">Актуальні дані з адміністративного API гаманця.</p></div><div className="heading-actions"><button className="outline-button" type="button" onClick={onRefresh} disabled={refreshing}>{refreshing ? "Оновлення..." : "↻ Оновити"}</button><span className="live"><i /> LIVE</span></div></section>
     <section className="users-summary"><article className="panel users-primary"><p>Зареєстровано користувачів</p><strong>{registered}</strong><span>Усього за весь час</span></article><article className="panel"><p>Premium-користувачі</p><strong>{premium}</strong><span>Актуальний статус Telegram Premium</span></article><article className="panel"><p>Звичайні користувачі</p><strong>{standard}</strong><span>Без активного Telegram Premium</span></article><article className="panel"><p>Найбільший баланс NZR</p><strong>{highestNrzBalance === null || highestNrzBalance === undefined ? "—" : `${displayMetric(highestNrzBalance)} NZR`}</strong><span>Максимальний баланс серед усіх гаманців</span></article><article className="panel"><p>Середній вік акаунтів</p><strong>{formatAccountAge(walletMetrics?.averageWalletAgeDays)}</strong><span>Активні за останні {analyticsWindow} днів</span></article><article className="panel"><p>Сесій на користувача</p><strong>{walletMetrics ? displayMetric(walletMetrics.sessionsPerUser) : "—"}</strong><span>Середня кількість відкриттів Mini App</span></article><article className="panel"><p>Тривалість сесії</p><strong>{formatSessionDuration(walletMetrics?.averageSessionDurationSeconds)}</strong><span>Середній час у Mini App</span></article></section>
     <AudienceRevenueCards metrics={walletMetrics} />
+    <CountryStats users={users} />
     <article className="panel users-table-panel"><div className="panel-head"><div><p className="panel-label">РЕЄСТР ГАМАНЦІВ</p><h2>Гаманці користувачів та NZR поінти</h2></div><span>{users.length} гаманців показано</span></div><p className="subtle">Запрошені — унікальні люди по всіх гаманцях користувача. Для його кількох гаманців показник однаковий.</p>{users.length === 0 ? <p className="users-empty">Список гаманців завантажується з Nezeriya Wallet API.</p> : <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Telegram ID</th><th>Користувач</th><th>Wallet ID</th><th>NZR поінти ↓</th><th>Запрошені люди</th><th>Premium</th></tr></thead><tbody>{usersByNrzBalance.map((user, index) => <tr key={`${user.id}-${user.walletIds.join("-") || index}`}><td>{user.id}</td><td><strong>{user.username ? `@${user.username}` : user.name || "Без username"}</strong>{user.name && user.username && <small>{user.name}</small>}</td><td>{user.walletIds.length ? user.walletIds.join(", ") : "—"}</td><td className="nzr-points">{displayMetric(user.nzrPoints)} NZR</td><td>{displayMetric(user.referralCount)}</td><td><span className={user.premium ? "premium-badge" : "standard-badge"}>{user.premium ? "Premium" : "Звичайний"}</span></td></tr>)}</tbody></table></div>}</article>
   </section>;
 }

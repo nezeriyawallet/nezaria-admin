@@ -8,6 +8,7 @@ type RawWalletUser = {
   referralCount?: number;
   nzrPoints?: number | string;
   walletIds?: Array<number | string>;
+  phoneCountry?: string;
 };
 
 export async function GET(request: Request) {
