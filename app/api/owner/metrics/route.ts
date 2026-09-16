@@ -37,9 +37,13 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const selectedYear = Number(requestUrl.searchParams.get("year"));
   const selectedMonth = Number(requestUrl.searchParams.get("month"));
+  const requestedTurnoverYear = Number(requestUrl.searchParams.get("turnoverYear"));
   const hasSelectedMonth = Number.isInteger(selectedYear) && selectedYear >= 2020 && selectedYear <= 2100
     && Number.isInteger(selectedMonth) && selectedMonth >= 1 && selectedMonth <= 12;
   const monthQuery = hasSelectedMonth ? `year=${selectedYear}&month=${selectedMonth}` : "";
+  const turnoverYear = Number.isInteger(requestedTurnoverYear) && requestedTurnoverYear >= 2020 && requestedTurnoverYear <= 2100
+    ? requestedTurnoverYear
+    : (hasSelectedMonth ? selectedYear : new Date().getFullYear());
   const [values, analytics, revenue, exchangeRevenue] = await Promise.all([Promise.all(Object.entries(endpoints).map(async ([name, endpoint]) => {
     try {
       const separator = endpoint.path.includes("?") ? "&" : "?";
@@ -71,14 +75,14 @@ export async function GET(request: Request) {
     } catch { return {}; }
   })(), (async () => {
     try {
-      const parameters = [monthQuery, `_=${fresh}`].filter(Boolean).join("&");
+      const parameters = [monthQuery, `turnoverYear=${turnoverYear}`, `_=${fresh}`].filter(Boolean).join("&");
       const response = await fetch(`${baseUrl}/admin/api/finance/nzr-exchange?${parameters}`, {
         headers: { "X-Admin-Key": apiKey, Accept: "application/json" }, cache: "no-store",
       });
       return response.ok ? await response.json() as Record<string, unknown> : {};
     } catch { return {}; }
   })()]);
-  return Response.json({ metrics: { ...Object.fromEntries(values), ...analytics, ...revenue, ...exchangeRevenue, selectedYear: hasSelectedMonth ? selectedYear : null, selectedMonth: hasSelectedMonth ? selectedMonth : null }, updatedAt: new Date().toISOString() }, {
+  return Response.json({ metrics: { ...Object.fromEntries(values), ...analytics, ...revenue, ...exchangeRevenue, selectedYear: hasSelectedMonth ? selectedYear : null, selectedMonth: hasSelectedMonth ? selectedMonth : null, selectedTurnoverYear: turnoverYear }, updatedAt: new Date().toISOString() }, {
     headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", Pragma: "no-cache" },
   });
 }

@@ -111,6 +111,7 @@ export default function Home() {
   const [accessRole, setAccessRole] = useState<AccessRole>(null);
   const [walletMetrics, setWalletMetrics] = useState<WalletMetrics | null>(null);
   const [financeMonth, setFinanceMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [financeTurnoverYear, setFinanceTurnoverYear] = useState(() => new Date().getFullYear());
   const [hoveredOnlinePeak, setHoveredOnlinePeak] = useState<DailyOnlinePeak | null>(null);
   const [walletUsers, setWalletUsers] = useState<WalletUser[]>([]);
   const [wheelWins, setWheelWins] = useState<WheelWin[]>([]);
@@ -283,13 +284,14 @@ export default function Home() {
     const [year, monthNumber] = month.split("-");
     return /^\d{4}$/.test(year) && /^(0[1-9]|1[0-2])$/.test(monthNumber) ? `year=${year}&month=${Number(monthNumber)}` : "";
   };
+  const financeMetricsQuery = (month = financeMonth, turnoverYear = financeTurnoverYear) => [financeMonthQuery(month), `turnoverYear=${turnoverYear}`].filter(Boolean).join("&");
 
-  const loadWalletMetrics = async (month = financeMonth) => {
+  const loadWalletMetrics = async (month = financeMonth, turnoverYear = financeTurnoverYear) => {
     if (accessRole !== "owner") return;
     const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
     const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session") || window.localStorage.getItem("nezeriya_owner_session");
     if (!token || !ownerSession) return;
-    const query = [financeMonthQuery(month), `_=${Date.now()}`].filter(Boolean).join("&");
+    const query = [financeMetricsQuery(month, turnoverYear), `_=${Date.now()}`].filter(Boolean).join("&");
     try {
       const response = await fetch(`/api/owner/metrics?${query}`, { cache: "no-store", headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } });
       const body = await response.json().catch(() => ({}));
@@ -304,7 +306,7 @@ export default function Home() {
   useEffect(() => {
     if (accessRole !== "owner") return;
     void loadWalletMetrics();
-  }, [accessRole, financeMonth]);
+  }, [accessRole, financeMonth, financeTurnoverYear]);
 
   useEffect(() => {
     if (accessRole !== "owner") return;
@@ -354,7 +356,7 @@ export default function Home() {
     try {
       const headers = { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession };
       const [metricsResponse, usersResponse] = await Promise.all([
-        fetch(`/api/owner/metrics?${[financeMonthQuery(), `_=${Date.now()}`].filter(Boolean).join("&")}`, { cache: "no-store", headers }),
+        fetch(`/api/owner/metrics?${[financeMetricsQuery(), `_=${Date.now()}`].filter(Boolean).join("&")}`, { cache: "no-store", headers }),
         fetch("/api/owner/users", { cache: "no-store", headers }),
       ]);
       const [metricsBody, usersBody] = await Promise.all([metricsResponse.json().catch(() => ({})), usersResponse.json().catch(() => ({}))]);
@@ -379,7 +381,7 @@ export default function Home() {
       const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session") || window.localStorage.getItem("nezeriya_owner_session");
       if (!token || !ownerSession) return;
       try {
-        const response = await fetch(`/api/owner/metrics?${[financeMonthQuery(), `_=${Date.now()}`].filter(Boolean).join("&")}`, { cache: "no-store", headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } });
+        const response = await fetch(`/api/owner/metrics?${[financeMetricsQuery(), `_=${Date.now()}`].filter(Boolean).join("&")}`, { cache: "no-store", headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } });
         const body = await response.json().catch(() => ({}));
         if (response.ok) { setWalletMetrics(body.metrics || {}); setMetricsError(""); }
       } catch { /* Keep the last confirmed metrics visible while the API reconnects. */ }
@@ -394,7 +396,7 @@ export default function Home() {
     const visibility = () => { if (document.visibilityState === "visible") sync(); };
     document.addEventListener("visibilitychange", visibility);
     return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", visibility); };
-  }, [accessRole, active, financeMonth]);
+  }, [accessRole, active, financeMonth, financeTurnoverYear]);
 
   const refresh = () => {
     setUpdated("Дані синхронізовано щойно");
@@ -680,7 +682,7 @@ export default function Home() {
       <section className="content">
 
         <div className="dashboard">
-          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} refreshing={usersRefreshing} onRefresh={() => void refreshUsers(true)} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} summary={wheelWinSummary} refreshing={winsRefreshing} onRefresh={() => void loadWheelWins(true)} /> : active === "Магазин" ? <ShopPanel walletMetrics={walletMetrics} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} selectedMonth={financeMonth} onSelectedMonthChange={setFinanceMonth} /> : <>
+          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} refreshing={usersRefreshing} onRefresh={() => void refreshUsers(true)} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} summary={wheelWinSummary} refreshing={winsRefreshing} onRefresh={() => void loadWheelWins(true)} /> : active === "Магазин" ? <ShopPanel walletMetrics={walletMetrics} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} selectedMonth={financeMonth} selectedTurnoverYear={financeTurnoverYear} onSelectedMonthChange={setFinanceMonth} onSelectedTurnoverYearChange={setFinanceTurnoverYear} /> : <>
           <section className="heading-row">
             <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p></div>
             <div className="header-controls"><NotificationBell role="owner" owner /><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>
@@ -802,7 +804,7 @@ function ShopPanel({ walletMetrics: _walletMetrics }: { walletMetrics: WalletMet
   </section>;
 }
 
-function FinancePanel({ walletMetrics, selectedMonth, onSelectedMonthChange }: { walletMetrics: WalletMetrics | null; selectedMonth: string; onSelectedMonthChange: (month: string) => void }) {
+function FinancePanel({ walletMetrics, selectedMonth, selectedTurnoverYear, onSelectedMonthChange, onSelectedTurnoverYearChange }: { walletMetrics: WalletMetrics | null; selectedMonth: string; selectedTurnoverYear: number; onSelectedMonthChange: (month: string) => void; onSelectedTurnoverYearChange: (year: number) => void }) {
   const value = (key: string, prefix = "") => walletMetrics ? displayMetric(walletMetrics[key], prefix) : "—";
   const rate = (key: string) => walletMetrics ? `$${metricNumber(walletMetrics[key]).toFixed(4)}` : "—";
   const exchangeNetUsd = walletMetrics ? metricNumber(walletMetrics.nzrExchangeNetUsd) : 0;
@@ -812,12 +814,13 @@ function FinancePanel({ walletMetrics, selectedMonth, onSelectedMonthChange }: {
   const monthlyTotalIncome = walletMetrics ? monthlyCommissionUsd + monthlyExchangeNetUsd : null;
   const companyTurnoverUsd = walletMetrics ? metricNumber(walletMetrics.companyTurnoverUsd) : 0;
   const monthlyCompanyTurnoverUsd = walletMetrics ? metricNumber(walletMetrics.monthlyCompanyTurnoverUsd) : 0;
+  const yearlyCompanyTurnoverUsd = walletMetrics ? metricNumber(walletMetrics.yearlyCompanyTurnoverUsd) : 0;
   const monthlyStars = walletMetrics ? metricNumber(walletMetrics.monthlyTelegramStarsReceived) : 0;
   const monthlyStarsRevenue = walletMetrics ? metricNumber(walletMetrics.monthlyTelegramStarsFragmentRevenueUsd) : 0;
   const selectedMonthName = selectedMonth ? new Intl.DateTimeFormat("uk-UA", { month: "long", year: "numeric" }).format(new Date(`${selectedMonth}-01T12:00:00`)) : "обраний місяць";
   return <section className="finance-page">
-    <section className="heading-row"><div><p className="eyebrow">ФІНАНСИ</p><h1>Фінансова <span>аналітика</span></h1><p className="subtle">Дані синхронізуються з Nezeriya Wallet API.</p></div><div className="heading-actions finance-heading-actions"><label className="month-picker" htmlFor="finance-month"><span>Перевірити місяць</span><input id="finance-month" type="month" value={selectedMonth} max={new Date().toISOString().slice(0, 7)} onChange={(event) => onSelectedMonthChange(event.target.value)} /></label><span className="live"><i /> LIVE</span></div></section>
-    <section className="finance-highlight"><article className="panel"><p>Загальна сума доходу</p><strong>{totalIncome === null ? "—" : displayMetric(totalIncome, "$")}</strong><span>За весь час · комісії + Fragment-виплата Stars + обмін NZR</span></article><article className="panel finance-turnover"><p>Загальний оборот компанії</p><strong>{walletMetrics ? displayMetric(companyTurnoverUsd, "$") : "—"}</strong><span>За весь час · Stars, продаж NZR і виплати за викуп</span></article><article className="panel"><p>Оборот за місяць</p><strong>{walletMetrics ? displayMetric(monthlyCompanyTurnoverUsd, "$") : "—"}</strong><span>{selectedMonthName} · усі грошові потоки обміну</span></article><article className="panel"><p>Чистий прибуток за місяць</p><strong>{walletMetrics ? displayMetric(monthlyExchangeNetUsd, "$") : "—"}</strong><span>{selectedMonthName} · Stars і продаж NZR мінус викуп NZR</span></article><article className="panel"><p>Загальний дохід за місяць</p><strong>{monthlyTotalIncome === null ? "—" : displayMetric(monthlyTotalIncome, "$")}</strong><span>{selectedMonthName} · чистий прибуток + комісії</span></article></section>
+    <section className="heading-row"><div><p className="eyebrow">ФІНАНСИ</p><h1>Фінансова <span>аналітика</span></h1><p className="subtle">Дані синхронізуються з Nezeriya Wallet API.</p></div><div className="heading-actions finance-heading-actions"><label className="month-picker" htmlFor="finance-month"><span>Перевірити місяць</span><input id="finance-month" type="month" value={selectedMonth} max={new Date().toISOString().slice(0, 7)} onChange={(event) => onSelectedMonthChange(event.target.value)} /></label><label className="month-picker" htmlFor="finance-turnover-year"><span>Перевірити рік</span><select id="finance-turnover-year" value={selectedTurnoverYear} onChange={(event) => onSelectedTurnoverYearChange(Number(event.target.value))}>{Array.from({ length: Math.max(1, new Date().getFullYear() - 2020 + 1) }, (_, index) => new Date().getFullYear() - index).map((year) => <option key={year} value={year}>{year} р.</option>)}</select></label><span className="live"><i /> LIVE</span></div></section>
+    <section className="finance-highlight"><article className="panel"><p>Загальна сума доходу</p><strong>{totalIncome === null ? "—" : displayMetric(totalIncome, "$")}</strong><span>За весь час · комісії + Fragment-виплата Stars + обмін NZR</span></article><article className="panel finance-turnover"><p>Загальний оборот компанії</p><strong>{walletMetrics ? displayMetric(companyTurnoverUsd, "$") : "—"}</strong><span>За весь час · Stars, продаж NZR і виплати за викуп</span></article><article className="panel"><p>Річний оборот</p><strong>{walletMetrics ? displayMetric(yearlyCompanyTurnoverUsd, "$") : "—"}</strong><span>{selectedTurnoverYear} р. · усі грошові потоки обміну</span></article><article className="panel"><p>Оборот за місяць</p><strong>{walletMetrics ? displayMetric(monthlyCompanyTurnoverUsd, "$") : "—"}</strong><span>{selectedMonthName} · усі грошові потоки обміну</span></article><article className="panel"><p>Чистий прибуток за місяць</p><strong>{walletMetrics ? displayMetric(monthlyExchangeNetUsd, "$") : "—"}</strong><span>{selectedMonthName} · Stars і продаж NZR мінус викуп NZR</span></article><article className="panel"><p>Загальний дохід за місяць</p><strong>{monthlyTotalIncome === null ? "—" : displayMetric(monthlyTotalIncome, "$")}</strong><span>{selectedMonthName} · чистий прибуток + комісії</span></article></section>
     <section className="finance-grid"><article className="panel finance-card"><p className="panel-label">TELEGRAM STARS · FRAGMENT</p><h2>Дохід зі Stars</h2><strong>{walletMetrics ? `${displayMetric(monthlyStars)} Stars` : "—"}</strong><div><span>Очікувана виплата за обраний місяць</span><b>{walletMetrics ? displayMetric(monthlyStarsRevenue, "$") : "—"}</b></div><small>{selectedMonthName}. Курс виплати: 1 Star = {rate("telegramStarsFragmentRateUsd")}. Дохід доступний після періоду утримання Telegram.</small></article><article className="panel finance-card"><p className="panel-label">ОБМІН NZR</p><h2>Чистий результат обміну</h2><strong>{walletMetrics ? displayMetric(monthlyExchangeNetUsd, "$") : "—"}</strong><div><span>Stars → Fragment за місяць</span><b>{walletMetrics ? displayMetric(monthlyStarsRevenue, "$") : "—"}</b></div><div><span>Викуплено у користувачів</span><b>{walletMetrics ? displayMetric(walletMetrics.monthlyNzrBoughtFromUsers, " NZR") : "—"}</b></div><small>Враховано продаж NZR і успішні викупи за обраний місяць. Викуп: {rate("nzrBuybackRateUsd")} / NZR.</small></article><article className="panel finance-card"><p className="panel-label">СПРЕД NZR</p><h2>Маржа Stars → викуп NZR</h2><strong>{value("nzrBuybackSpreadUsd", "$")}</strong><div><span>Викуплено у користувачів</span><b>{value("nzrBoughtFromUsers", " NZR")}</b></div><small>Загальна маржа за весь час: різниця між виплатою Fragment за Star і курсом викупу NZR.</small></article><article className="panel finance-card"><p className="panel-label">РЕФЕРАЛИ</p><h2>Реферальний дохід</h2><strong>{value("referralTotal", "$")}</strong><div><span>Операцій DeDust</span><b>{value("dedustSwaps")}</b></div><small>Показники партнерської активності за весь час.</small></article><article className="panel finance-card"><p className="panel-label">РУЛЕТКА</p><h2>Втрати рулетки</h2><strong>{value("wheelLoss", " NZR")}</strong><div><span>Невдалих транзакцій</span><b>{value("failedTransactions")}</b></div><small>Контроль ризикових операцій за весь час.</small></article></section>
     <article className="panel nzr-finance-panel"><div className="panel-head"><div><p className="panel-label">NZR</p><h2>Операції токена</h2></div></div><div className="nzr-finance-list"><span>Транзакцій NZR<strong>{value("nzrTransactions")}</strong></span><span>Продажі NZR<strong>{value("nzrSwapSell")}</strong></span><span>Купівлі NZR<strong>{value("nzrSwapBuy")}</strong></span><span>Покупки NZR за Stars<strong>{value("nzrStars")}</strong></span></div></article>
   </section>;
