@@ -1874,7 +1874,7 @@ button {
 }
 .finance-highlight {
   display: grid;
-  grid-template-columns: 1.35fr 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 15px;
   margin-bottom: 15px;
 }
@@ -1902,6 +1902,12 @@ button {
 }
 .finance-highlight .panel:first-child strong {
   color: #69ebca;
+}
+.finance-highlight .finance-turnover {
+  background: linear-gradient(145deg, #163b42, #11191a);
+}
+.finance-highlight .finance-turnover strong {
+  color: #73dff3;
 }
 .finance-grid {
   display: grid;
