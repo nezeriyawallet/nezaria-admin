@@ -37,7 +37,7 @@ function Qr({ token }: { token: string }) {
     const destination = `https://t.me/Nezeriya_Wallet_Bot?start=pay_connect_${encodeURIComponent(token)}`;
     setSource(`https://api.qrserver.com/v1/create-qr-code/?format=svg&size=360x360&margin=8&data=${encodeURIComponent(destination)}`);
   }, [token]);
-  return <div className="qr" aria-label="QR-код для підключення">{source && <img style={{ position: "absolute", inset: 13, width: "calc(100% - 26px)", height: "calc(100% - 26px)" }} src={source} alt="Відкрийте Nezeriya Wallet для підключення" />}<Mark small /></div>;
+  return <div className="qr" aria-label="QR-код для підключення">{source && <img style={{ position: "absolute", inset: 13, width: "calc(100% - 26px)", height: "calc(100% - 26px)" }} src={source} alt="Відкрийте Nezeriya Wallet для підключення" />}<img className="qr-verification-badge" src="/verification-badge.jpe" alt="" /></div>;
 }
 
 export default function AcquiringPage() {
