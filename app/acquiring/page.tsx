@@ -48,6 +48,17 @@ export default function AcquiringPage() {
 
   const makeToken = () => `pay_${crypto.randomUUID().slice(0, 8)}-${crypto.randomUUID().slice(0, 4)}`;
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const confirmedToken = params.get("pay-connect-confirmed");
+    if (confirmedToken) {
+      const connectedMerchant = params.get("merchant") || "Кав'ярня Nezeriya";
+      localStorage.setItem("nezeriya_pay_connection", JSON.stringify({ token: confirmedToken, name: connectedMerchant, connectedAt: Date.now() }));
+      localStorage.setItem("nezeriya_pay_merchant", connectedMerchant);
+      setMerchant(connectedMerchant);
+      setView("dashboard");
+      window.history.replaceState({}, "", "/acquiring");
+      return;
+    }
     const saved = localStorage.getItem("nezeriya_pay_merchant");
     if (saved) { setMerchant(saved); setView("dashboard"); }
     setToken(makeToken());
