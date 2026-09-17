@@ -1,6 +1,3 @@
-import { Api, TelegramClient } from "telegram";
-import { StringSession } from "telegram/sessions/index.js";
-import bigInt from "big-integer";
 import { verifyGoogleUser, verifyOwnerSession } from "../../owner/auth";
 
 type Ticket = { id: string; telegram_peer_id: string; telegram_access_hash: string; client_name: string; client_username: string | null; status: string; assigned_to: string | null; rating: number | null; review: string | null; created_at: string; updated_at: string };
@@ -10,8 +7,8 @@ const DEFAULT_ACTIVE_CHAT_LIMIT = 5;
 
 export const runtime = "nodejs";
 
-let cachedTelegramClient: TelegramClient | null = null;
-let connectingTelegramClient: Promise<TelegramClient | null> | null = null;
+let cachedTelegramClient: any = null;
+let connectingTelegramClient: Promise<any | null> | null = null;
 
 export async function GET(request: Request) {
   const access = await authorize(request);
@@ -133,6 +130,12 @@ async function telegramClient() {
   const session = process.env.TELEGRAM_SESSION_STRING;
   if (!Number.isInteger(apiId) || !apiHash || !session) return null;
   connectingTelegramClient = (async () => {
+    // GramJS is Node-only. Loading it only when support sync is requested keeps
+    // the Worker-compatible merchant and wallet pages available at startup.
+    const telegramModule = "telegram";
+    const sessionModule = "telegram/sessions/index.js";
+    const { TelegramClient } = await import(telegramModule) as any;
+    const { StringSession } = await import(sessionModule) as any;
     const client = new TelegramClient(new StringSession(session), apiId, apiHash, { connectionRetries: 2 });
     await client.connect();
     cachedTelegramClient = client;
@@ -144,7 +147,9 @@ async function telegramClient() {
 async function sendTelegram(ticket: Ticket, text: string) {
   const client = await telegramClient();
   if (!client) throw new Error("Telegram account is not configured");
-  const result = await client.sendMessage(new Api.InputPeerUser({ userId: bigInt(ticket.telegram_peer_id), accessHash: bigInt(ticket.telegram_access_hash) }), { message: text });
+  const telegramModule = "telegram";
+  const { Api } = await import(telegramModule) as any;
+  const result = await client.sendMessage(new Api.InputPeerUser({ userId: BigInt(ticket.telegram_peer_id), accessHash: BigInt(ticket.telegram_access_hash) }), { message: text });
   return result.id;
 }
 
@@ -176,7 +181,7 @@ async function syncTelegram(config: Config) {
   try {
     const dialogs = await client.getDialogs({ limit: 25 });
     for (const dialog of dialogs) {
-      const entity = dialog.entity as Api.User;
+      const entity = dialog.entity as any;
       const peerId = entity?.id?.toString();
       if (!entity || entity.className !== "User" || entity.bot || !entity.accessHash || !peerId || peerId === "777000" || entity.username?.toLowerCase() === "telegram") continue;
       const clientName = [entity.firstName, entity.lastName].filter(Boolean).join(" ") || entity.username || "Клієнт";
