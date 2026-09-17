@@ -41,6 +41,7 @@ export default function AcquiringPage() {
   const [token, setToken] = useState("");
   const [copied, setCopied] = useState(false);
   const [account, setAccount] = useState("Nezeriya Wallet");
+  const [businesses, setBusinesses] = useState<string[]>([]);
 
   const makeToken = () => `pay_${crypto.randomUUID().slice(0, 8)}-${crypto.randomUUID().slice(0, 4)}`;
   const finishConnection = (connectedAccount: string, confirmedToken: string) => {
@@ -60,6 +61,7 @@ export default function AcquiringPage() {
     }
     const saved = localStorage.getItem("nezeriya_pay_account");
     if (saved) { setAccount(saved); setView("dashboard"); }
+    try { setBusinesses(JSON.parse(localStorage.getItem("nezeriya_pay_businesses") || "[]")); } catch { setBusinesses([]); }
     setToken(makeToken());
     const onConnected = (event: StorageEvent) => {
       if (event.key === "nezeriya_pay_connection") {
@@ -89,15 +91,17 @@ export default function AcquiringPage() {
   }, [token, view]);
 
   const copyId = async () => { await navigator.clipboard?.writeText(token); setCopied(true); window.setTimeout(() => setCopied(false), 1800); };
+  const addBusiness = () => { const name = window.prompt("Назва бізнесу"); if (!name?.trim()) return; const next = [...businesses, name.trim()]; setBusinesses(next); localStorage.setItem("nezeriya_pay_businesses", JSON.stringify(next)); };
   const logout = () => { localStorage.removeItem("nezeriya_pay_account"); localStorage.removeItem("nezeriya_pay_connection"); setToken(makeToken()); setView("register"); };
 
   if (view === "dashboard") return <main className="pay-app dashboard">
     <aside className="pay-sidebar"><div className="pay-logo">NEZERIYA <b>PAY</b></div><div className="merchant merchant-empty"><span className="merchant-icon">＋</span><span><b>Бізнес ще не додано</b><small>Додайте його в налаштуваннях</small></span></div>
       <nav>{[["⌂", "Головна"], ["＋", "Створити платіж"], ["↗", "Платіжні посилання"], ["◷", "Історія платежів"], ["▥", "Статистика"], ["⚙", "Налаштування"]].map(([symbol, label], index) => <button className={index === 0 ? "active" : ""} key={label}><i>{symbol}</i>{label}</button>)}</nav><button className="sign-out" onClick={logout}>Вийти з акаунта</button></aside>
     <section className="pay-content"><header><span>Еквайринг Nezeriya Pay</span><button className="bell" aria-label="Сповіщення">♧</button><div className="user"><Mark small label={account} /><span><b>{account}</b><small>Підключено через Wallet</small></span></div></header>
+      <section className="businesses-panel"><div><h2>Мої бізнеси</h2><p>{businesses.length ? "Оберіть бізнес для керування еквайрингом." : "Додайте перший бізнес, щоб почати налаштування еквайрингу."}</p></div><button onClick={addBusiness}>＋ Додати бізнес</button>{businesses.length > 0 && <div className="business-list">{businesses.map((business) => <article key={business}><span>▣</span><b>{business}</b><small>Щойно додано</small></article>)}</div>}</section>
       <section className="balance-card"><p>Доступний баланс <i>i</i></p><h1>0,00 ₴</h1><p className="balance-note">Баланс оновлюється автоматично після зарахування платежу.</p><div className="currencies"><button className="chosen">Усі</button><button>UAH</button><button>USDT</button><button>TON</button></div><button className="withdraw" disabled>Вивести кошти</button></section>
       <section className="payments-card"><div className="section-title"><div><h2>Останні платежі</h2><p>Тут з’явиться історія після першої оплати.</p></div><button disabled>Усі платежі ›</button></div><div className="empty-payments"><span>▦</span><b>Платежів ще немає</b><small>Створіть перше платіжне посилання, щоби почати приймати оплату.</small></div></section>
-      <section className="quick-actions"><article><span className="action-icon">＋</span><div><b>Додати бізнес</b><small>Вкажіть назву та реквізити, щоб налаштувати еквайринг</small></div><button>Додати</button></article><article><span className="action-icon">↗</span><div><b>Створити платіжне посилання</b><small>Стане доступно після додавання бізнесу</small></div><button disabled>Створити</button></article></section>
+      <section className="quick-actions"><article><span className="action-icon">＋</span><div><b>Додати бізнес</b><small>Вкажіть назву та реквізити, щоб налаштувати еквайринг</small></div><button onClick={addBusiness}>Додати</button></article><article><span className="action-icon">↗</span><div><b>Створити платіжне посилання</b><small>Стане доступно після додавання бізнесу</small></div><button disabled>Створити</button></article></section>
     </section>
   </main>;
 
