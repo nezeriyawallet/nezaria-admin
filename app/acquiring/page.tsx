@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import QRCode from "qrcode";
 import "./acquiring.css";
 
 type View = "register" | "dashboard";
@@ -20,7 +19,8 @@ function Mark({ small = false }: { small?: boolean }) {
 function Qr({ token }: { token: string }) {
   const [source, setSource] = useState("");
   useEffect(() => {
-    void QRCode.toDataURL(`${window.location.origin}/miniapp?pay-connect=${encodeURIComponent(token)}`, { errorCorrectionLevel: "H", margin: 1, width: 360, color: { dark: "#07101d", light: "#ffffff" } }).then(setSource);
+    const destination = `${window.location.origin}/miniapp?pay-connect=${encodeURIComponent(token)}`;
+    setSource(`https://api.qrserver.com/v1/create-qr-code/?format=svg&size=360x360&margin=8&data=${encodeURIComponent(destination)}`);
   }, [token]);
   return <div className="qr" aria-label="QR-код для підключення">{source && <img style={{ position: "absolute", inset: 13, width: "calc(100% - 26px)", height: "calc(100% - 26px)" }} src={source} alt="Відкрийте Nezeriya Wallet для підключення" />}<Mark small /></div>;
 }
