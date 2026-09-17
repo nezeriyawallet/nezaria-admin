@@ -21,6 +21,7 @@
 .register-card h3 { font-size: 18px; }
 .hint { font-size: 15px; }
 .qr { width: 216px; height: 216px; margin: 11px auto 10px; padding: 13px; }
+.wallet-link { display:block; margin:-2px auto 11px; color:#1767ce; text-align:center; font-size:12px; font-weight:700; text-decoration:none; }
 .notice { min-height: 61px; align-items:center; padding: 12px 15px; border-radius: 12px; font-size: 12px; }
 .notice b { font-size: 25px; }
 .qr-controls { margin-top: 10px; }
