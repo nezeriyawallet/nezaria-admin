@@ -44,6 +44,8 @@ export default function MiniAppPage() {
   const [paymentMessage, setPaymentMessage] = useState("");
   const [points, setPoints] = useState(0);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [payConnectToken, setPayConnectToken] = useState<string | null>(null);
+  const [connectionDone, setConnectionDone] = useState(false);
 
   useEffect(() => {
     const applyTelegramProfile = () => {
@@ -65,6 +67,18 @@ export default function MiniAppPage() {
     document.head.appendChild(script);
     return () => script.remove();
   }, []);
+
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get("pay-connect");
+    if (token) setPayConnectToken(token);
+  }, []);
+
+  function confirmPayConnection() {
+    const name = profile.displayName === "Nezeriya Wallet User" ? "Кав'ярня Nezeriya" : profile.displayName;
+    localStorage.setItem("nezeriya_pay_connection", JSON.stringify({ token: payConnectToken, name, connectedAt: Date.now() }));
+    setConnectionDone(true);
+    window.setTimeout(() => { window.location.href = "/acquiring"; }, 900);
+  }
 
   async function loadPoints(initData: string) {
     try {
@@ -247,6 +261,26 @@ export default function MiniAppPage() {
             <button type="button" onClick={startPayment} disabled={paymentLoading}>{paymentLoading ? "…" : "Add"}</button>
             {paymentMessage && <p role="status">{paymentMessage}</p>}
           </div>
+        </section>
+      )}
+
+      {payConnectToken && (
+        <section className="pay-connect-overlay" role="dialog" aria-modal="true" aria-labelledby="pay-connect-title">
+          <article className="pay-connect-card">
+            {connectionDone ? <>
+              <span className="connect-success">✓</span>
+              <h2>Еквайринг підключено</h2>
+              <p>Переходимо до кабінету Nezeriya Pay…</p>
+            </> : <>
+              <span className="connect-logo">N</span>
+              <p className="connect-label">NEZERIYA PAY</p>
+              <h2 id="pay-connect-title">Підключити еквайринг?</h2>
+              <p>Ви підтверджуєте підключення цього гаманця до Nezeriya Pay. Дані балансу та приватні ключі не передаються.</p>
+              <div className="connect-wallet"><span>◈</span><b>{profile.displayName}<small>{profile.username}</small></b></div>
+              <button className="connect-confirm" type="button" onClick={confirmPayConnection}>Підтвердити підключення</button>
+              <button className="connect-cancel" type="button" onClick={() => setPayConnectToken(null)}>Відхилити</button>
+            </>}
+          </article>
         </section>
       )}
     </main>
