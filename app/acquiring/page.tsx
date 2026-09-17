@@ -95,7 +95,7 @@ export default function AcquiringPage() {
   const logout = () => { localStorage.removeItem("nezeriya_pay_account"); localStorage.removeItem("nezeriya_pay_connection"); setToken(makeToken()); setView("register"); };
 
   if (view === "dashboard") return <main className="pay-app dashboard">
-    <aside className="pay-sidebar"><div className="pay-logo">NEZERIYA <b>PAY</b></div><div className="merchant merchant-empty"><span className="merchant-icon">＋</span><span><b>Бізнес ще не додано</b><small>Додайте його в налаштуваннях</small></span></div>
+    <aside className="pay-sidebar"><div className="pay-logo">NEZERIYA <b>PAY</b></div>
       <nav>{[["⌂", "Головна"], ["＋", "Створити платіж"], ["↗", "Платіжні посилання"], ["◷", "Історія платежів"], ["▥", "Статистика"], ["⚙", "Налаштування"]].map(([symbol, label], index) => <button className={index === 0 ? "active" : ""} key={label}><i>{symbol}</i>{label}</button>)}</nav><button className="sign-out" onClick={logout}>Вийти з акаунта</button></aside>
     <section className="pay-content"><header><span>Еквайринг Nezeriya Pay</span><button className="bell" aria-label="Сповіщення">♧</button><div className="user"><Mark small label={account} /><span><b>{account}</b><small>Підключено через Wallet</small></span></div></header>
       <section className="businesses-panel"><div><h2>Мої бізнеси</h2><p>{businesses.length ? "Оберіть бізнес для керування еквайрингом." : "Додайте перший бізнес, щоб почати налаштування еквайрингу."}</p></div><button onClick={addBusiness}>＋ Додати бізнес</button>{businesses.length > 0 && <div className="business-list">{businesses.map((business) => <article key={business}><span>▣</span><b>{business}</b><small>Щойно додано</small></article>)}</div>}</section>
