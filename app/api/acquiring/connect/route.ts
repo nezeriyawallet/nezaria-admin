@@ -10,6 +10,17 @@ declare global {
 
 const connections = globalThis.__nezeriyaPayConnections ??= new Map<string, Connection>();
 const walletOrigin = "https://bot-5k6u.onrender.com";
+const connectionTtlMs = 15 * 60 * 1000;
+
+function getActiveConnection(token: string) {
+  const connection = connections.get(token);
+  if (!connection) return undefined;
+  if (Date.now() - connection.connectedAt > connectionTtlMs) {
+    connections.delete(token);
+    return undefined;
+  }
+  return connection;
+}
 
 function cors() {
   return {
@@ -34,13 +45,15 @@ export async function POST(request: Request) {
   const merchant = (fields.get("merchant") || "Кав'ярня Nezeriya").trim().slice(0, 80) || "Кав'ярня Nezeriya";
   if (!validToken(token)) return Response.json({ error: "Invalid connection token" }, { status: 400, headers: cors() });
   connections.set(token, { merchant, connectedAt: Date.now() });
+  console.info("[acquiring-connect] Wallet confirmation received", { tokenSuffix: token.slice(-6) });
   return Response.json({ ok: true }, { headers: cors() });
 }
 
 export function GET(request: Request) {
   const token = new URL(request.url).searchParams.get("token") || "";
-  const connection = connections.get(token);
+  const connection = getActiveConnection(token);
   if (!connection) return Response.json({ connected: false }, { headers: cors() });
-  connections.delete(token);
+  // Do not consume the status on the first poll. Browsers may pause/resume or
+  // have more than one registration tab; each tab needs to see the confirmation.
   return Response.json({ connected: true, merchant: connection.merchant, connectedAt: connection.connectedAt }, { headers: cors() });
 }
