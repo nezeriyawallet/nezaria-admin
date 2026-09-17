@@ -17,6 +17,7 @@ function Mark({ small = false }: { small?: boolean }) {
 }
 
 function Qr({ token }: { token: string }) {
+  // The destination is created in the browser so the code always uses this site's live address.
   const [source, setSource] = useState("");
   useEffect(() => {
     const destination = `${window.location.origin}/miniapp?pay-connect=${encodeURIComponent(token)}`;
