@@ -3,18 +3,12 @@
 import { useEffect, useState } from "react";
 import "./acquiring.css";
 import "./reference.css";
+import "./dashboard.css";
 
 type View = "register" | "dashboard";
 
-const payments = [
-  ["Сьогодні, 14:23", "Оплата замовлення #1287", "420,00 ₴", "•••• 4242"],
-  ["Сьогодні, 12:11", "Платіжне посилання", "1 250,00 ₴", "Google Pay"],
-  ["Вчора, 21:18", "Оплата замовлення #1286", "2 480,00 ₴", "Apple Pay"],
-  ["Вчора, 17:03", "Платіжне посилання", "750,00 ₴", "•••• 7714"],
-];
-
-function Mark({ small = false }: { small?: boolean }) {
-  return <span className={small ? "pay-mark small" : "pay-mark"}>N</span>;
+function Mark({ small = false, label = "N" }: { small?: boolean; label?: string }) {
+  return <span className={small ? "pay-mark small" : "pay-mark"}>{label.slice(0, 1).toUpperCase()}</span>;
 }
 
 function Icon({ name }: { name: "bolt" | "lock" | "phone" | "info" | "refresh" | "copy" | "shield" }) {
@@ -45,33 +39,33 @@ export default function AcquiringPage() {
   const [view, setView] = useState<View>("register");
   const [token, setToken] = useState("");
   const [copied, setCopied] = useState(false);
-  const [merchant, setMerchant] = useState("Кав'ярня Nezeriya");
+  const [account, setAccount] = useState("Nezeriya Wallet");
 
   const makeToken = () => `pay_${crypto.randomUUID().slice(0, 8)}-${crypto.randomUUID().slice(0, 4)}`;
-  const finishConnection = (connectedMerchant: string, confirmedToken: string) => {
-    localStorage.setItem("nezeriya_pay_connection", JSON.stringify({ token: confirmedToken, name: connectedMerchant, connectedAt: Date.now() }));
-    localStorage.setItem("nezeriya_pay_merchant", connectedMerchant);
-    setMerchant(connectedMerchant);
+  const finishConnection = (connectedAccount: string, confirmedToken: string) => {
+    localStorage.setItem("nezeriya_pay_connection", JSON.stringify({ token: confirmedToken, name: connectedAccount, connectedAt: Date.now() }));
+    localStorage.setItem("nezeriya_pay_account", connectedAccount);
+    setAccount(connectedAccount);
     setView("dashboard");
   };
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const confirmedToken = params.get("pay-connect-confirmed");
     if (confirmedToken) {
-      const connectedMerchant = params.get("merchant") || "Кав'ярня Nezeriya";
-      finishConnection(connectedMerchant, confirmedToken);
+      const connectedAccount = params.get("account") || params.get("merchant") || "Nezeriya Wallet";
+      finishConnection(connectedAccount, confirmedToken);
       window.history.replaceState({}, "", "/acquiring");
       return;
     }
-    const saved = localStorage.getItem("nezeriya_pay_merchant");
-    if (saved) { setMerchant(saved); setView("dashboard"); }
+    const saved = localStorage.getItem("nezeriya_pay_account");
+    if (saved) { setAccount(saved); setView("dashboard"); }
     setToken(makeToken());
     const onConnected = (event: StorageEvent) => {
       if (event.key === "nezeriya_pay_connection") {
         const profile = JSON.parse(event.newValue || "{}");
-        const next = profile.name || "Мій бізнес";
-        localStorage.setItem("nezeriya_pay_merchant", next);
-        setMerchant(next); setView("dashboard");
+        const next = profile.name || "Nezeriya Wallet";
+        localStorage.setItem("nezeriya_pay_account", next);
+        setAccount(next); setView("dashboard");
       }
     };
     window.addEventListener("storage", onConnected);
@@ -85,7 +79,7 @@ export default function AcquiringPage() {
       try {
         const response = await fetch(`/api/acquiring/connect?token=${encodeURIComponent(token)}`, { cache: "no-store" });
         const result = await response.json() as { connected?: boolean; merchant?: string };
-        if (active && result.connected) finishConnection(result.merchant || "Кав'ярня Nezeriya", token);
+        if (active && result.connected) finishConnection(result.merchant || "Nezeriya Wallet", token);
       } catch { /* Keep polling while the Wallet is completing the request. */ }
     };
     void checkConnection();
@@ -94,15 +88,15 @@ export default function AcquiringPage() {
   }, [token, view]);
 
   const copyId = async () => { await navigator.clipboard?.writeText(token); setCopied(true); window.setTimeout(() => setCopied(false), 1800); };
-  const logout = () => { localStorage.removeItem("nezeriya_pay_merchant"); localStorage.removeItem("nezeriya_pay_connection"); setToken(makeToken()); setView("register"); };
+  const logout = () => { localStorage.removeItem("nezeriya_pay_account"); localStorage.removeItem("nezeriya_pay_connection"); setToken(makeToken()); setView("register"); };
 
   if (view === "dashboard") return <main className="pay-app dashboard">
-    <aside className="pay-sidebar"><div className="pay-logo">NEZERIYA <b>PAY</b></div><div className="merchant"><Mark small /><span><b>{merchant}</b><small>ID 537829</small></span></div>
+    <aside className="pay-sidebar"><div className="pay-logo">NEZERIYA <b>PAY</b></div><div className="merchant merchant-empty"><span className="merchant-icon">＋</span><span><b>Бізнес ще не додано</b><small>Додайте його в налаштуваннях</small></span></div>
       <nav>{[["⌂", "Головна"], ["＋", "Створити платіж"], ["↗", "Платіжні посилання"], ["◷", "Історія платежів"], ["▥", "Статистика"], ["⚙", "Налаштування"]].map(([symbol, label], index) => <button className={index === 0 ? "active" : ""} key={label}><i>{symbol}</i>{label}</button>)}</nav><button className="sign-out" onClick={logout}>Вийти з акаунта</button></aside>
-    <section className="pay-content"><header><span>Середа, 17 вересня</span><button className="bell">♧<em>2</em></button><div className="user"><Mark small /><b>{merchant}</b></div></header>
-      <section className="balance-card"><p>Баланс еквайрингу <i>i</i></p><h1>48 320,50 ₴</h1><div className="currencies"><button className="chosen">Усі</button><button>Гривня</button><button>Долар</button><button>Євро</button></div><button className="withdraw">Вивести кошти</button></section>
-      <section className="payments-card"><div className="section-title"><h2>Останні платежі</h2><button>Усі платежі ›</button></div><div className="payment-table"><div className="table-head"><span>Дата і час</span><span>Опис</span><span>Сума</span><span>Статус</span><span>Спосіб оплати</span></div>{payments.map(row => <div className="payment-row" key={row[1] + row[0]}><span>{row[0]}</span><span>{row[1]}</span><b>{row[2]}</b><span className="paid">✓ Оплачено</span><span>{row[3]}</span></div>)}</div></section>
-      <section className="quick-actions"><article><span className="action-icon">↗</span><div><b>Створити платіжне посилання</b><small>Надішліть посилання та отримайте оплату від клієнта</small></div><button>Створити</button></article><article><span className="action-icon">▦</span><div><b>Отримати оплату на пристрої</b><small>Покажіть QR-код для оплати</small></div><button>Показати QR</button></article></section>
+    <section className="pay-content"><header><span>Еквайринг Nezeriya Pay</span><button className="bell" aria-label="Сповіщення">♧</button><div className="user"><Mark small label={account} /><span><b>{account}</b><small>Підключено через Wallet</small></span></div></header>
+      <section className="balance-card"><p>Доступний баланс <i>i</i></p><h1>0,00 ₴</h1><p className="balance-note">Баланс оновлюється автоматично після зарахування платежу.</p><div className="currencies"><button className="chosen">Усі</button><button>UAH</button><button>USDT</button><button>TON</button></div><button className="withdraw" disabled>Вивести кошти</button></section>
+      <section className="payments-card"><div className="section-title"><div><h2>Останні платежі</h2><p>Тут з’явиться історія після першої оплати.</p></div><button disabled>Усі платежі ›</button></div><div className="empty-payments"><span>▦</span><b>Платежів ще немає</b><small>Створіть перше платіжне посилання, щоби почати приймати оплату.</small></div></section>
+      <section className="quick-actions"><article><span className="action-icon">＋</span><div><b>Додати бізнес</b><small>Вкажіть назву та реквізити, щоб налаштувати еквайринг</small></div><button>Додати</button></article><article><span className="action-icon">↗</span><div><b>Створити платіжне посилання</b><small>Стане доступно після додавання бізнесу</small></div><button disabled>Створити</button></article></section>
     </section>
   </main>;
 
