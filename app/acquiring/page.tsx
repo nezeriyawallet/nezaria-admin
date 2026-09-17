@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import "./acquiring.css";
 import "./reference.css";
 import "./dashboard.css";
+import "./fullscreen.css";
 
 type View = "register" | "dashboard";
 

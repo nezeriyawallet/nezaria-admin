@@ -1,0 +1,2 @@
+/* The acquiring workspace is an application shell, never a centred web card. */
+.pay-app.dashboard{display:flex;width:100vw;max-width:none!important;min-height:100vh;margin:0!important;padding:0!important;overflow-x:hidden}.pay-app.dashboard .pay-sidebar{flex:0 0 228px}.pay-app.dashboard .pay-content{min-width:0;min-height:100vh;max-width:none}@media(max-width:800px){.pay-app.dashboard{display:block;width:100%}.pay-app.dashboard .pay-sidebar{width:100%;height:auto}.pay-app.dashboard .pay-content{min-height:calc(100vh - 150px)}}
