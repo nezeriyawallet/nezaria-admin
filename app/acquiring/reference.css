@@ -1,0 +1,33 @@
+.register { grid-template-columns: 51% 49%; min-height: 720px; }
+.register-promo { padding: 37px 41px; background: radial-gradient(circle at 86% 4%, #304c77 0, #172840 22%, transparent 48%), linear-gradient(128deg, #07101a 0%, #0c1522 64%, #1f3556 100%); }
+.pay-logo { font-size: 18px; letter-spacing: 3.2px; }
+.promo-center { top: 15.5%; left: 47px; }
+.promo-center h1 { font-size: 45px; line-height: 1.08; letter-spacing: -1.8px; }
+.promo-center > p { margin-top: 16px; max-width: 370px; font-size: 18px; }
+.benefits { gap: 26px; margin-top: 34px; }
+.benefits i { width: 49px; height: 49px; border-radius: 12px; background: linear-gradient(135deg,#173762,#0f2544); font-size: 29px; }
+.benefits b { font-size: 15px; }
+.benefits small { margin-top: 3px; font-size: 12px; }
+.promo-card { position: absolute; width: 330px; height: 420px; right: -45px; bottom: -128px; border: 1px solid #5d7194; border-radius: 42px; transform: rotate(18deg); background: linear-gradient(145deg,#344a70,#101b2c 55%,#0b111b); box-shadow: inset 0 0 0 1px #9faed42a, -22px -8px 35px #6f98e320; }
+.promo-card span { position: absolute; display:block; width: 126px; height: 33px; left: 34px; top: 182px; border-radius: 8px; background: linear-gradient(135deg,#6b7992,#344158); transform: rotate(-18deg); opacity:.82; }
+.promo-card span:nth-child(2) { width: 280px; height: 1px; top: 72px; left: 42px; background:#8c9fc7; opacity:.65; }
+.promo-card span:nth-child(3) { top: 136px; left: 10px; }
+.register-promo:after { display:none; }
+.register-promo footer { bottom: 50px; left: 47px; }
+.register-card { width: 522px; min-height: 660px; margin: 0 0 0 1px; padding: 29px 36px 25px; border-radius: 16px; box-shadow: 0 22px 50px #0000002e; }
+.step { display:none; }
+.register-card h2 { font-size: 31px; line-height: 1.08; }
+.subtitle { margin: 3px 0 21px; font-size: 16px; }
+.register-card h3 { font-size: 18px; }
+.hint { font-size: 15px; }
+.qr { width: 216px; height: 216px; margin: 11px auto 10px; padding: 13px; }
+.notice { min-height: 61px; align-items:center; padding: 12px 15px; border-radius: 12px; font-size: 12px; }
+.notice b { font-size: 25px; }
+.qr-controls { margin-top: 10px; }
+.qr-controls button { min-width: 174px; padding: 12px 18px; font-size: 13px; }
+.qr-controls button:first-letter { font-size: 22px; }
+.request-row { display:flex; align-items:center; gap:8px; border-bottom:1px solid #edf0f5; }
+.request-id { flex:1; margin: 13px 0 14px; }
+.request-row button { border:0; background:transparent; color:#5c6f91; font-size:20px; }
+.secure { padding-top: 17px; font-size: 12px; }
+@media(max-width:800px){.register{grid-template-columns:1fr}.promo-center{left:26px}.register-card{width:min(522px,calc(100% - 24px));margin:-38px auto 28px}.promo-card{display:none}}

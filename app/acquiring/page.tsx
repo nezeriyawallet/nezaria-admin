@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import "./acquiring.css";
+import "./reference.css";
 
 type View = "register" | "dashboard";
 
@@ -49,7 +50,6 @@ export default function AcquiringPage() {
     return () => window.removeEventListener("storage", onConnected);
   }, []);
 
-  const walletUrl = `/miniapp?pay-connect=${encodeURIComponent(token)}`;
   const copyId = async () => { await navigator.clipboard?.writeText(token); setCopied(true); window.setTimeout(() => setCopied(false), 1800); };
   const logout = () => { localStorage.removeItem("nezeriya_pay_merchant"); localStorage.removeItem("nezeriya_pay_connection"); setToken(makeToken()); setView("register"); };
 
@@ -63,7 +63,7 @@ export default function AcquiringPage() {
     </section>
   </main>;
 
-  return <main className="pay-app register"><section className="register-promo"><div className="pay-logo">NEZERIYA <b>PAY</b></div><div className="promo-center"><h1>Приймайте платежі<br />без зайвих кроків</h1><p>Безпечне підключення еквайрингу через застосунок Nezeriya Wallet.</p><div className="benefits"><span><i>ϟ</i><b>Швидко<small>Усього кілька секунд у застосунку</small></b></span><span><i>⌑</i><b>Безпечно<small>Дані захищені вашим гаманцем</small></b></span><span><i>▣</i><b>Через Nezeriya Wallet<small>Підтвердження в офіційному застосунку</small></b></span></div></div><footer>NEZERIYA PAY —<br />більше можливостей щодня.</footer></section>
-    <section className="register-card"><span className="step">01 / 01</span><h2>Реєстрація акаунта</h2><p className="subtitle">Nezeriya Pay</p><h3>Персональний QR-код для реєстрації</h3><p className="hint">Відскануйте QR-код у застосунку Nezeriya Wallet, щоб підключити еквайринг.</p><Qr token={token} /><a className="open-wallet" href={walletUrl}>Відкрити у Wallet →</a><div className="notice"><b>ⓘ</b><span>QR-код одноразовий та прив’язаний до вашої сесії.<br />Після успішного підключення він стане неактивним.</span></div><div className="qr-controls"><button onClick={() => setToken(makeToken)}>↻ Оновити QR</button><button onClick={copyId}>{copied ? "✓ Скопійовано" : "Копіювати ID"}</button></div><p className="request-id">ID запиту: {token}</p><div className="secure">♢ <span>Підключення захищене сучасним шифруванням.<br />Дані гаманця не передаються Nezeriya Pay.</span></div></section>
+  return <main className="pay-app register"><section className="register-promo"><div className="pay-logo">NEZERIYA <b>PAY</b></div><div className="promo-center"><h1>Реєстрація<br />стала простіше</h1><p>Безпечна реєстрація через застосунок Nezeriya Wallet.</p><div className="benefits"><span><i>ϟ</i><b>Швидко<small>Усього кілька секунд<br />у застосунку</small></b></span><span><i>♧</i><b>Безпечно<small>Ваші дані під надійним<br />захистом</small></b></span><span><i>▯</i><b>Через Nezeriya Wallet<small>Реєстрація в офіційному<br />застосунку</small></b></span></div></div><div className="promo-card"><span /><span /><span /></div><footer>NEZERIYA PAY —<br />більше можливостей щодня.</footer></section>
+    <section className="register-card"><h2>Реєстрація акаунта</h2><p className="subtitle">Nezeriya Pay</p><h3>Персональний QR-код для реєстрації</h3><p className="hint">Відскануйте QR-код у застосунку Nezeriya Wallet,<br />щоб зареєструватися.</p><Qr token={token} /><div className="notice"><b>ⓘ</b><span>QR-код одноразовий та прив’язаний до вашої сесії.<br />Після успішної реєстрації він стане неактивним.</span></div><div className="qr-controls"><button onClick={() => setToken(makeToken)}>⟳ <span>Оновити QR</span></button></div><div className="request-row"><p className="request-id">ID запиту: {token}</p><button aria-label="Копіювати ID запиту" onClick={copyId}>{copied ? "✓" : "▢"}</button></div><div className="secure">♢ <span>Реєстрація захищена сучасними технологіями шифрування.<br />Ваші дані залишаються тільки у вашому гаманці.</span></div></section>
   </main>;
 }
