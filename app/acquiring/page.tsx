@@ -48,15 +48,18 @@ export default function AcquiringPage() {
   const [merchant, setMerchant] = useState("Кав'ярня Nezeriya");
 
   const makeToken = () => `pay_${crypto.randomUUID().slice(0, 8)}-${crypto.randomUUID().slice(0, 4)}`;
+  const finishConnection = (connectedMerchant: string, confirmedToken: string) => {
+    localStorage.setItem("nezeriya_pay_connection", JSON.stringify({ token: confirmedToken, name: connectedMerchant, connectedAt: Date.now() }));
+    localStorage.setItem("nezeriya_pay_merchant", connectedMerchant);
+    setMerchant(connectedMerchant);
+    setView("dashboard");
+  };
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const confirmedToken = params.get("pay-connect-confirmed");
     if (confirmedToken) {
       const connectedMerchant = params.get("merchant") || "Кав'ярня Nezeriya";
-      localStorage.setItem("nezeriya_pay_connection", JSON.stringify({ token: confirmedToken, name: connectedMerchant, connectedAt: Date.now() }));
-      localStorage.setItem("nezeriya_pay_merchant", connectedMerchant);
-      setMerchant(connectedMerchant);
-      setView("dashboard");
+      finishConnection(connectedMerchant, confirmedToken);
       window.history.replaceState({}, "", "/acquiring");
       return;
     }
@@ -74,6 +77,21 @@ export default function AcquiringPage() {
     window.addEventListener("storage", onConnected);
     return () => window.removeEventListener("storage", onConnected);
   }, []);
+
+  useEffect(() => {
+    if (!token || view !== "register") return;
+    let active = true;
+    const checkConnection = async () => {
+      try {
+        const response = await fetch(`/api/acquiring/connect?token=${encodeURIComponent(token)}`, { cache: "no-store" });
+        const result = await response.json() as { connected?: boolean; merchant?: string };
+        if (active && result.connected) finishConnection(result.merchant || "Кав'ярня Nezeriya", token);
+      } catch { /* Keep polling while the Wallet is completing the request. */ }
+    };
+    void checkConnection();
+    const timer = window.setInterval(() => void checkConnection(), 1500);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [token, view]);
 
   const copyId = async () => { await navigator.clipboard?.writeText(token); setCopied(true); window.setTimeout(() => setCopied(false), 1800); };
   const logout = () => { localStorage.removeItem("nezeriya_pay_merchant"); localStorage.removeItem("nezeriya_pay_connection"); setToken(makeToken()); setView("register"); };
