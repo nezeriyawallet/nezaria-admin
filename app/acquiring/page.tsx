@@ -8,6 +8,7 @@ import "./fullscreen.css";
 import "./businesses.css";
 import "./businesses-heading.css";
 import "./logout-dialog.css";
+import "./currency-mark.css";
 
 type View = "register" | "dashboard";
 
@@ -37,6 +38,11 @@ function Qr({ token }: { token: string }) {
     setSource(`https://api.qrserver.com/v1/create-qr-code/?format=svg&size=360x360&margin=12&ecc=H&data=${encodeURIComponent(destination)}`);
   }, [token]);
   return <div className="qr" aria-label="QR-код для підключення">{source && <img style={{ position: "absolute", inset: 13, width: "calc(100% - 26px)", height: "calc(100% - 26px)" }} src={source} alt="Відкрийте Nezeriya Wallet для підключення" />}</div>;
+}
+
+function CurrencyMark({ currency }: { currency: "USDT" | "GRAM" }) {
+  if (currency === "USDT") return <span className="currency-mark usdt-mark" aria-label="USDT" title="USDT"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" /><path d="M7 8h18M16 8v16M10 12.5c1.8 1.3 10.2 1.3 12 0M10 16c1.8 1.3 10.2 1.3 12 0" /></svg></span>;
+  return <span className="currency-mark gram-mark" aria-label="GRAM" title="GRAM"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" /><path d="m8 10 8 13 8-13-8 5z" /></svg></span>;
 }
 
 export default function AcquiringPage() {
@@ -103,7 +109,7 @@ export default function AcquiringPage() {
     <aside className="pay-sidebar"><div className="pay-logo">NEZERIYA <b>PAY</b></div>
       <nav>{[["⌂", "Головна"], ["＋", "Створити платіж"], ["↗", "Платіжні посилання"], ["◷", "Історія платежів"], ["▥", "Статистика"], ["⚙", "Налаштування"]].map(([symbol, label], index) => <button className={index === 0 ? "active" : ""} key={label}><i>{symbol}</i>{label}</button>)}</nav><button className="sign-out" onClick={() => setLogoutOpen(true)}>Вийти з акаунта</button></aside>
     <section className="pay-content"><header><div className="user"><Mark small label={account} /><span><b>{account}</b><small>Підключено через Wallet</small></span></div></header>
-      <section className="balance-card"><p>Доступний баланс <i>i</i></p><h1>{currency === "UAH" ? "0,00 ₴" : currency === "USDT" ? "0,00 USDT" : "0,00 GRAM"}</h1><p className="balance-note">Баланс оновлюється автоматично після зарахування платежу.</p><div className="currencies">{(["UAH", "USDT", "GRAM"] as const).map((item) => <button key={item} className={currency === item ? "chosen" : ""} onClick={() => setCurrency(item)}>{item}</button>)}</div><button className="withdraw" disabled>Вивести кошти</button></section>
+      <section className="balance-card"><p>Доступний баланс <i>i</i></p><h1>{currency === "UAH" ? <>0,00 ₴</> : <><span>0,00</span><CurrencyMark currency={currency} /></>}</h1><p className="balance-note">Баланс оновлюється автоматично після зарахування платежу.</p><div className="currencies">{(["UAH", "USDT", "GRAM"] as const).map((item) => <button key={item} className={currency === item ? "chosen" : ""} onClick={() => setCurrency(item)}>{item}</button>)}</div><button className="withdraw" disabled>Вивести кошти</button></section>
       <section className="businesses-panel">
         <div className="businesses-heading"><h2>Бізнеси</h2></div>
         <div className="business-list">{businesses.map((business) => <article key={business}><span>▣</span><b>{business}</b><small>Мій бізнес</small><em>Прибуток (загалом)<strong>0,00 USDT</strong></em></article>)}<button className="add-business-card" onClick={addBusiness}><span>＋</span><b>Додати бізнес</b><small>Створіть перший профіль еквайрингу</small></button></div>
