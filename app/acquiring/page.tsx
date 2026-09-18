@@ -9,8 +9,10 @@ import "./businesses.css";
 import "./businesses-heading.css";
 import "./logout-dialog.css";
 import "./currency-mark.css";
+import "./business-form.css";
 
 type View = "register" | "dashboard";
+type Business = { name: string; type: string; ownership: string; owner: string; email: string; phone: string; iban: string; taxId: string; description: string; logo?: string; assets: string[] };
 
 function Mark({ small = false, label = "N" }: { small?: boolean; label?: string }) {
   return <span className={small ? "pay-mark small" : "pay-mark"}>{label.slice(0, 1).toUpperCase()}</span>;
@@ -49,7 +51,9 @@ export default function AcquiringPage() {
   const [token, setToken] = useState("");
   const [copied, setCopied] = useState(false);
   const [account, setAccount] = useState("Nezeriya Wallet");
-  const [businesses, setBusinesses] = useState<string[]>([]);
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [showBusinessForm, setShowBusinessForm] = useState(false);
+  const [businessForm, setBusinessForm] = useState<Business>({ name: "", type: "Магазин", ownership: "ФОП", owner: "", email: "", phone: "", iban: "", taxId: "", description: "", assets: ["USDT"] });
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [currency, setCurrency] = useState<"UAH" | "USDT" | "GRAM">("UAH");
 
@@ -71,7 +75,7 @@ export default function AcquiringPage() {
     }
     const saved = localStorage.getItem("nezeriya_pay_account");
     if (saved) { setAccount(saved); setView("dashboard"); }
-    try { setBusinesses(JSON.parse(localStorage.getItem("nezeriya_pay_businesses") || "[]")); } catch { setBusinesses([]); }
+    try { setBusinesses(JSON.parse(localStorage.getItem("nezeriya_pay_businesses") || "[]").map((item: Business | string) => typeof item === "string" ? { name: item, type: "Магазин", ownership: "ФОП", owner: "", email: "", phone: "", iban: "", taxId: "", description: "", assets: ["USDT"] } : item)); } catch { setBusinesses([]); }
     setToken(makeToken());
     const onConnected = (event: StorageEvent) => {
       if (event.key === "nezeriya_pay_connection") {
@@ -101,8 +105,13 @@ export default function AcquiringPage() {
   }, [token, view]);
 
   const copyId = async () => { await navigator.clipboard?.writeText(token); setCopied(true); window.setTimeout(() => setCopied(false), 1800); };
-  const addBusiness = () => { const name = window.prompt("Назва бізнесу"); if (!name?.trim()) return; const next = [...businesses, name.trim()]; setBusinesses(next); localStorage.setItem("nezeriya_pay_businesses", JSON.stringify(next)); };
+  const changeBusiness = (key: keyof Business, value: string | string[]) => setBusinessForm((current) => ({ ...current, [key]: value }));
+  const toggleAsset = (asset: string) => setBusinessForm((current) => ({ ...current, assets: current.assets.includes(asset) ? (current.assets.length > 1 ? current.assets.filter((item) => item !== asset) : current.assets) : [...current.assets, asset] }));
+  const openBusinessForm = () => { setBusinessForm({ name: "", type: "Магазин", ownership: "ФОП", owner: "", email: "", phone: "", iban: "", taxId: "", description: "", assets: ["USDT"] }); setShowBusinessForm(true); };
+  const saveBusiness = (event: React.FormEvent) => { event.preventDefault(); if (!businessForm.name.trim() || !businessForm.owner.trim() || !businessForm.email.trim() || !businessForm.phone.trim() || !businessForm.iban.trim() || !businessForm.taxId.trim()) return; const next = [...businesses, { ...businessForm, name: businessForm.name.trim() }]; setBusinesses(next); localStorage.setItem("nezeriya_pay_businesses", JSON.stringify(next)); setShowBusinessForm(false); };
   const logout = () => { localStorage.removeItem("nezeriya_pay_account"); localStorage.removeItem("nezeriya_pay_connection"); setToken(makeToken()); setView("register"); };
+
+  if (view === "dashboard" && showBusinessForm) return <main className="business-form-page"><header className="business-form-top"><div className="pay-logo">NEZERIYA <b>PAY</b></div><div className="user"><Mark small label={account} /><b>{account}</b></div></header><form className="business-form" onSubmit={saveBusiness}><section className="business-fields"><h1>Додати бізнес</h1><p>Додайте новий бізнес, щоб приймати платежі через Nezeriya Pay.</p><label>Назва бізнесу <b>*</b><input required value={businessForm.name} onChange={(e) => changeBusiness("name", e.target.value)} placeholder="Наприклад, Nezeriya Store" /></label><fieldset><legend>Тип бізнесу <b>*</b></legend><div className="choice-row">{["Магазин", "Кафе", "Інше"].map((item) => <button type="button" className={businessForm.type === item ? "selected" : ""} onClick={() => changeBusiness("type", item)} key={item}>{item}</button>)}</div></fieldset><fieldset><legend>Форма власності <b>*</b></legend><div className="choice-row ownership">{[["ПО", "Приватна особа"], ["ФОП", "Фізична особа-підприємець"], ["ТОВ", "Товариство з обмеженою відповідальністю"]].map(([item, hint]) => <button title={hint} type="button" className={businessForm.ownership === item ? "selected" : ""} onClick={() => changeBusiness("ownership", item)} key={item}>{item}<i>ⓘ</i></button>)}</div></fieldset><label>ПІБ власника / Назва компанії <b>*</b><input required value={businessForm.owner} onChange={(e) => changeBusiness("owner", e.target.value)} /></label><div className="form-grid"><label>Email <b>*</b><input required type="email" value={businessForm.email} onChange={(e) => changeBusiness("email", e.target.value)} placeholder="example@domain.com" /></label><label>Телефон <b>*</b><input required type="tel" value={businessForm.phone} onChange={(e) => changeBusiness("phone", e.target.value)} placeholder="+380 (__) ___ __ __" /></label><label>IBAN <b>*</b><input required value={businessForm.iban} onChange={(e) => changeBusiness("iban", e.target.value)} placeholder="UA00 0000 0000 0000 0000 0000 000" /></label><label>Податковий номер / ЄДРПОУ <b>*</b><input required value={businessForm.taxId} onChange={(e) => changeBusiness("taxId", e.target.value)} placeholder="Наприклад, 1234567890" /></label></div><label>Опис бізнесу<textarea maxLength={300} value={businessForm.description} onChange={(e) => changeBusiness("description", e.target.value)} placeholder="Коротко опишіть, чим займається ваш бізнес" /></label></section><aside className="business-preview"><h3>Логотип бізнесу</h3><div className="logo-upload">{businessForm.logo ? <img src={businessForm.logo} alt="Логотип бізнесу" /> : <span>▧＋</span>}<input aria-label="Завантажити логотип" type="file" accept="image/*" onChange={(e) => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onload = () => changeBusiness("logo", String(reader.result)); reader.readAsDataURL(file); } }} /></div><p>Зображення автоматично обріжеться до кола.</p><fieldset><legend>Активи для оплати <b>*</b></legend><div className="asset-row">{["USDT", "GRAM"].map((asset) => <button type="button" className={businessForm.assets.includes(asset) ? "selected" : ""} onClick={() => toggleAsset(asset)} key={asset}>{asset}<i>{businessForm.assets.includes(asset) ? "✓" : "○"}</i></button>)}</div></fieldset><div className="preview-card"><h3>Попередній перегляд</h3><article>{businessForm.logo ? <img src={businessForm.logo} alt="" /> : <span>▣</span>}<div><b>{businessForm.name || "Назва бізнесу"}</b><small>{businessForm.owner || "ПІБ власника"}</small><em>Прибуток (загалом)<strong>0,00 {businessForm.assets[0]}</strong></em></div></article></div><div className="form-actions"><button type="button" onClick={() => setShowBusinessForm(false)}>Скасувати</button><button type="submit">Додати бізнес</button></div></aside></form></main>;
 
   if (view === "dashboard") return <main className="pay-app dashboard">
     <aside className="pay-sidebar"><div className="pay-logo">NEZERIYA <b>PAY</b></div>
@@ -111,7 +120,7 @@ export default function AcquiringPage() {
       <section className="balance-card"><p>Доступний баланс <i>i</i></p><h1>{currency === "UAH" ? <>0,00 ₴</> : <><span>0,00</span><CurrencyMark currency={currency} /></>}</h1><p className="balance-note">Баланс оновлюється автоматично після зарахування платежу.</p><div className="currencies">{(["UAH", "USDT", "GRAM"] as const).map((item) => <button key={item} className={currency === item ? "chosen" : ""} onClick={() => setCurrency(item)}>{item}</button>)}</div><button className="withdraw" disabled>Вивести кошти</button></section>
       <section className="businesses-panel">
         <div className="businesses-heading"><h2>Бізнеси</h2></div>
-        <div className="business-list">{businesses.map((business) => <article key={business}><span>▣</span><b>{business}</b><small>Мій бізнес</small><em>Прибуток (загалом)<strong>0,00 USDT</strong></em></article>)}<button className="add-business-card" onClick={addBusiness}><span>＋</span><b>Додати бізнес</b><small>Створіть перший профіль еквайрингу</small></button></div>
+        <div className="business-list">{businesses.map((business) => <article key={business.name}>{business.logo ? <img className="business-logo" src={business.logo} alt="" /> : <span>▣</span>}<b>{business.name}</b><small>{business.owner || business.type}</small><em>Прибуток (загалом)<strong>0,00 {business.assets?.[0] || "USDT"}</strong></em></article>)}<button className="add-business-card" onClick={openBusinessForm}><span>＋</span><b>Додати бізнес</b><small>Створіть перший профіль еквайрингу</small></button></div>
       </section>
     </section>
     {logoutOpen && <div className="logout-backdrop" role="presentation" onMouseDown={() => setLogoutOpen(false)}><section className="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="logout-title" onMouseDown={(event) => event.stopPropagation()}><h2 id="logout-title">Вийти з акаунта?</h2><p>Ви зможете підключитися знову через Nezeriya Wallet.</p><div><button className="logout-cancel" onClick={() => setLogoutOpen(false)}>Відхилити</button><button className="logout-confirm" onClick={logout}>Підтвердити</button></div></section></div>}
