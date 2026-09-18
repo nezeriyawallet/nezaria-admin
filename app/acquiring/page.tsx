@@ -46,6 +46,7 @@ export default function AcquiringPage() {
   const [account, setAccount] = useState("Nezeriya Wallet");
   const [businesses, setBusinesses] = useState<string[]>([]);
   const [logoutOpen, setLogoutOpen] = useState(false);
+  const [currency, setCurrency] = useState<"UAH" | "USDT" | "GRAM">("UAH");
 
   const makeToken = () => `pay_${crypto.randomUUID().slice(0, 8)}-${crypto.randomUUID().slice(0, 4)}`;
   const finishConnection = (connectedAccount: string, confirmedToken: string) => {
@@ -102,7 +103,7 @@ export default function AcquiringPage() {
     <aside className="pay-sidebar"><div className="pay-logo">NEZERIYA <b>PAY</b></div>
       <nav>{[["⌂", "Головна"], ["＋", "Створити платіж"], ["↗", "Платіжні посилання"], ["◷", "Історія платежів"], ["▥", "Статистика"], ["⚙", "Налаштування"]].map(([symbol, label], index) => <button className={index === 0 ? "active" : ""} key={label}><i>{symbol}</i>{label}</button>)}</nav><button className="sign-out" onClick={() => setLogoutOpen(true)}>Вийти з акаунта</button></aside>
     <section className="pay-content"><header><div className="user"><Mark small label={account} /><span><b>{account}</b><small>Підключено через Wallet</small></span></div></header>
-      <section className="balance-card"><p>Доступний баланс <i>i</i></p><h1>0,00 ₴</h1><p className="balance-note">Баланс оновлюється автоматично після зарахування платежу.</p><div className="currencies"><button className="chosen">Усі</button><button>UAH</button><button>USDT</button><button>TON</button></div><button className="withdraw" disabled>Вивести кошти</button></section>
+      <section className="balance-card"><p>Доступний баланс <i>i</i></p><h1>{currency === "UAH" ? "0,00 ₴" : currency === "USDT" ? "0,00 USDT" : "0,00 GRAM"}</h1><p className="balance-note">Баланс оновлюється автоматично після зарахування платежу.</p><div className="currencies">{(["UAH", "USDT", "GRAM"] as const).map((item) => <button key={item} className={currency === item ? "chosen" : ""} onClick={() => setCurrency(item)}>{item}</button>)}</div><button className="withdraw" disabled>Вивести кошти</button></section>
       <section className="businesses-panel">
         <div className="businesses-heading"><h2>Бізнеси</h2></div>
         <div className="business-list">{businesses.map((business) => <article key={business}><span>▣</span><b>{business}</b><small>Мій бізнес</small><em>Прибуток (загалом)<strong>0,00 USDT</strong></em></article>)}<button className="add-business-card" onClick={addBusiness}><span>＋</span><b>Додати бізнес</b><small>Створіть перший профіль еквайрингу</small></button></div>
