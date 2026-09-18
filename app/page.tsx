@@ -425,7 +425,7 @@ export default function Home() {
       setNotice("Підключення до авторизації ще налаштовується");
       return;
     }
-    const redirectTo = encodeURIComponent(window.location.origin);
+    const redirectTo = encodeURIComponent(`${window.location.origin}/admin`);
     window.location.assign(`${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}&prompt=select_account`);
   };
 
