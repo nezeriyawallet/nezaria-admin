@@ -105,7 +105,6 @@ export default function AcquiringPage() {
         <div className="businesses-heading"><h2>Бізнеси</h2><button onClick={addBusiness}>＋ Додати бізнес</button></div>
         <div className="business-list">{businesses.map((business) => <article key={business}><span>▣</span><b>{business}</b><small>Мій бізнес</small><em>Прибуток (загалом)<strong>0,00 USDT</strong></em></article>)}<button className="add-business-card" onClick={addBusiness}><span>＋</span><b>Додати бізнес</b><small>Створіть перший профіль еквайрингу</small></button></div>
       </section>
-      <section className="quick-actions"><article><span className="action-icon">＋</span><div><b>Додати бізнес</b><small>Вкажіть назву та реквізити, щоб налаштувати еквайринг</small></div><button onClick={addBusiness}>Додати</button></article><article><span className="action-icon">↗</span><div><b>Створити платіжне посилання</b><small>Стане доступно після додавання бізнесу</small></div><button disabled>Створити</button></article></section>
     </section>
   </main>;
 
