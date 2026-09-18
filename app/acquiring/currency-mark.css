@@ -6,3 +6,9 @@
 
 .currency-mark { display: inline-flex; width: 34px; height: 34px; vertical-align: middle; }
 .currency-mark { object-fit: contain; }
+
+/* The supplied GRAM image has transparent padding. Enlarge only its visible
+   mark and orient it as requested without altering the original source file. */
+.gram-mark {
+  transform: rotate(180deg) scale(1.65);
+}
