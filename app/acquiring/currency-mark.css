@@ -5,8 +5,4 @@
 }
 
 .currency-mark { display: inline-flex; width: 34px; height: 34px; vertical-align: middle; }
-.currency-mark svg { width: 100%; height: 100%; }
-.currency-mark path { fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
-.usdt-mark { color: #26a17b; }
-.gram-mark { color: #2996de; }
-.gram-mark path { fill: currentColor; stroke: none; }
+.currency-mark { object-fit: contain; }
