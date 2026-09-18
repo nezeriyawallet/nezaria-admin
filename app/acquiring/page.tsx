@@ -41,8 +41,8 @@ function Qr({ token }: { token: string }) {
 }
 
 function CurrencyMark({ currency }: { currency: "USDT" | "GRAM" }) {
-  if (currency === "USDT") return <span className="currency-mark usdt-mark" aria-label="USDT" title="USDT"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" /><path d="M7 8h18M16 8v16M10 12.5c1.8 1.3 10.2 1.3 12 0M10 16c1.8 1.3 10.2 1.3 12 0" /></svg></span>;
-  return <span className="currency-mark gram-mark" aria-label="GRAM" title="GRAM"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" /><path d="m8 10 8 13 8-13-8 5z" /></svg></span>;
+  if (currency === "USDT") return <span className="currency-mark usdt-mark" aria-label="USDT" title="USDT"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 4h24v5h-9v20h-6V9H4z" /><path d="M2 14c2.8-3 25.2-3 28 0-2.8 3-25.2 3-28 0Z" /><path d="M16 11v7" /></svg></span>;
+  return <span className="currency-mark gram-mark" aria-label="GRAM" title="GRAM"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3 3 27h26L16 3Zm0 8 7.2 13H17V11h-2v13H8.8L16 11Z" /></svg></span>;
 }
 
 export default function AcquiringPage() {
