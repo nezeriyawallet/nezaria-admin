@@ -101,7 +101,7 @@ export default function AcquiringPage() {
   if (view === "dashboard") return <main className="pay-app dashboard">
     <aside className="pay-sidebar"><div className="pay-logo">NEZERIYA <b>PAY</b></div>
       <nav>{[["⌂", "Головна"], ["＋", "Створити платіж"], ["↗", "Платіжні посилання"], ["◷", "Історія платежів"], ["▥", "Статистика"], ["⚙", "Налаштування"]].map(([symbol, label], index) => <button className={index === 0 ? "active" : ""} key={label}><i>{symbol}</i>{label}</button>)}</nav><button className="sign-out" onClick={() => setLogoutOpen(true)}>Вийти з акаунта</button></aside>
-    <section className="pay-content"><header><span>Еквайринг Nezeriya Pay</span><button className="bell" aria-label="Сповіщення">♧</button><div className="user"><Mark small label={account} /><span><b>{account}</b><small>Підключено через Wallet</small></span></div></header>
+    <section className="pay-content"><header><div className="user"><Mark small label={account} /><span><b>{account}</b><small>Підключено через Wallet</small></span></div></header>
       <section className="balance-card"><p>Доступний баланс <i>i</i></p><h1>0,00 ₴</h1><p className="balance-note">Баланс оновлюється автоматично після зарахування платежу.</p><div className="currencies"><button className="chosen">Усі</button><button>UAH</button><button>USDT</button><button>TON</button></div><button className="withdraw" disabled>Вивести кошти</button></section>
       <section className="businesses-panel">
         <div className="businesses-heading"><h2>Бізнеси</h2></div>
