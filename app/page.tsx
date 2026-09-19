@@ -100,6 +100,7 @@ function responseTimerState(ticket: SupportTicket | undefined, now: number) {
 }
 
 export default function Home() {
+  useEffect(() => { if (window.location.pathname === "/") window.location.replace("/acquiring"); }, []);
   const [active, setActive] = useState<NavItem>("Огляд");
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("ceo");
   const [period, setPeriod] = useState("30 днів");
