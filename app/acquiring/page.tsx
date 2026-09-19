@@ -27,10 +27,15 @@ const businessCategories = [
 ];
 
 function CategoryDialog({ selected, onSelect, onClose }: { selected: string; onSelect: (category: string) => void; onClose: () => void }) {
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLocaleLowerCase("uk-UA");
+  const filteredCategories = businessCategories.filter((category) => category.toLocaleLowerCase("uk-UA").includes(normalizedQuery));
+
   return <div className="category-backdrop" role="presentation" onMouseDown={onClose}>
     <section className="category-dialog" role="dialog" aria-modal="true" aria-labelledby="category-title" onMouseDown={(event) => event.stopPropagation()}>
       <header><h2 id="category-title">Категорії бізнесу</h2><button type="button" aria-label="Закрити" onClick={onClose}>×</button></header>
-      <div className="category-grid">{businessCategories.map((category) => <button type="button" key={category} className={selected === category ? "selected" : ""} onClick={() => onSelect(category)}>{category}</button>)}</div>
+      <label className="category-search"><span className="sr-only">Пошук категорії</span><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Пошук категорії" /></label>
+      {filteredCategories.length ? <div className="category-grid">{filteredCategories.map((category) => <button type="button" key={category} className={selected === category ? "selected" : ""} onClick={() => onSelect(category)}>{category}</button>)}</div> : <p className="category-empty">Нічого не знайдено</p>}
     </section>
   </div>;
 }
