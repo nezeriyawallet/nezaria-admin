@@ -1,0 +1,41 @@
+/* The desktop reference has a deliberately dense data-dashboard rhythm. */
+@media (min-width: 1101px) {
+  .workspace-top { height: 68px; }
+  .workspace-top .pay-logo { font-size: 19px; }
+  .workspace-shell { width: min(1680px, calc(100% - 64px)); padding-bottom: 30px; }
+  .back-businesses { font-size: 13px; }
+  .workspace-title { gap: 13px; margin: 10px 0 16px; }
+  .workspace-business-mark { width: 54px; height: 54px; font-size: 25px; }
+  .workspace-title h1 { font-size: 25px; }
+  .workspace-title p { font-size: 13px; }
+  .status-active { padding: 5px 9px; font-size: 11px; }
+  .workspace-title-actions > button { min-height: 44px; border-radius: 11px; padding: 0 17px; }
+  .workspace-title-actions > .more-button { width: 44px; }
+  .workspace-tabs { gap: 28px; }
+  .workspace-tabs button { padding-bottom: 11px; font-size: 14px; }
+  .analytics-view { padding-top: 21px; }
+  .analytics-filters button { padding: 8px 14px; font-size: 13px; }
+  .metric-grid { gap: 16px; margin: 16px 0; }
+  .metric-card, .chart-card, .terminal-card, .mini-card { border-radius: 15px; }
+  .metric-card { padding: 16px 19px; }
+  .metric-card p { font-size: 13px; }
+  .metric-card p span { padding: 4px 8px; font-size: 11px; }
+  .metric-card strong { margin-top: 11px; font-size: 23px; }
+  .analytics-main { gap: 16px; }
+  .chart-card { min-height: 218px; padding: 16px 23px; }
+  .chart-card h2, .terminal-card h2, .mini-card h2 { font-size: 17px; }
+  .chart-card > span { right: 23px; top: 20px; font-size: 12px; }
+  .chart-card svg { height: 132px; margin-top: 14px; }
+  .terminal-card { padding: 16px 23px; }
+  .terminal-card > div { margin-top: 14px; }
+  .terminal-card p { font-size: 12px; }
+  .terminal-card i, .asset-bar { height: 7px; }
+  .analytics-bottom { gap: 16px; margin-top: 16px; }
+  .mini-card { padding: 16px 23px; }
+  .mini-card > p { gap: 8px; margin-top: 10px; }
+  .mini-card > p i { width: 24px; height: 24px; font-size: 11px; }
+  .mini-card > p span, .mini-card > p b, .assets-card > p, .status-list p { font-size: 12px; }
+  .status-bar, .asset-bar { margin-top: 15px; }
+  .status-bar { height: 13px; }
+  .status-list { gap: 8px; margin-top: 11px; }
+}

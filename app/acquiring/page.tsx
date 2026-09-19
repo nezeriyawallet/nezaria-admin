@@ -11,6 +11,7 @@ import "./logout-dialog.css";
 import "./currency-mark.css";
 import "./business-form.css";
 import "./business-workspace.css";
+import "./business-workspace-dense.css";
 
 type View = "register" | "dashboard";
 type Business = { name: string; type: string; ownership: string; owner: string; email: string; phone: string; iban: string; taxId: string; description: string; logo?: string; assets: string[] };
