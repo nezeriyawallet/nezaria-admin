@@ -1,9 +1,11 @@
 type Business = { name: string; type: string; ownership: string; owner: string; email: string; phone: string; iban: string; taxId: string; description: string; logo?: string; assets: string[] };
 type Product = { name: string; category: string; sku: string; price: string; currency: "USDT" | "GRAM"; quantity: string; description: string; terminals: string[]; photo?: string };
-type Store = { businesses: Business[]; productsByBusiness: Record<string, Product[]> };
+type ReceiptLine = { name: string; quantity: number; price: string; currency: "USDT" | "GRAM"; photo?: string };
+type Payment = { id: string; createdAt: string; source: "Термінал" | "Платіжне посилання" | "Сайт"; sourceName: string; status: "Оплачено" | "Очікує підтвердження" | "Недоплата"; currency: "USDT" | "GRAM"; amount: string; products: ReceiptLine[]; transaction?: string; wallet?: string };
+type Store = { businesses: Business[]; productsByBusiness: Record<string, Product[]>; paymentsByBusiness: Record<string, Payment[]> };
 type Config = { url: string; key: string };
 
-const emptyStore: Store = { businesses: [], productsByBusiness: {} };
+const emptyStore: Store = { businesses: [], productsByBusiness: {}, paymentsByBusiness: {} };
 const normalizeAccount = (value: string) => value.trim().toLocaleLowerCase("uk-UA").slice(0, 120);
 
 function config(): Config | null {
@@ -23,9 +25,12 @@ async function fetchStore(connection: Config, account: string): Promise<Store> {
   if (!response.ok) throw new Error("Unable to load acquiring store");
   const rows = await response.json() as Array<{ businesses?: unknown; products_by_business?: unknown }>;
   const row = rows[0];
+  const saved = row?.products_by_business && typeof row.products_by_business === "object" ? row.products_by_business as Record<string, unknown> : {};
+  const wrapped = saved.productsByBusiness && typeof saved.productsByBusiness === "object";
   return {
     businesses: Array.isArray(row?.businesses) ? row.businesses as Business[] : [],
-    productsByBusiness: row?.products_by_business && typeof row.products_by_business === "object" ? row.products_by_business as Record<string, Product[]> : {},
+    productsByBusiness: (wrapped ? saved.productsByBusiness : saved) as Record<string, Product[]>,
+    paymentsByBusiness: wrapped && saved.paymentsByBusiness && typeof saved.paymentsByBusiness === "object" ? saved.paymentsByBusiness as Record<string, Payment[]> : {},
   };
 }
 
@@ -42,17 +47,18 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const data = await request.json() as { account?: string; businesses?: Business[]; productsByBusiness?: Record<string, Product[]> };
+  const data = await request.json() as { account?: string; businesses?: Business[]; productsByBusiness?: Record<string, Product[]>; paymentsByBusiness?: Record<string, Payment[]> };
   const account = normalizeAccount(data.account || "");
   if (!account) return Response.json({ error: "Account is required" }, { status: 400 });
   const connection = config();
   if (!connection) return Response.json({ error: "Persistent storage is not configured" }, { status: 503 });
   const businesses = Array.isArray(data.businesses) ? data.businesses.slice(0, 50) : [];
   const productsByBusiness = data.productsByBusiness && typeof data.productsByBusiness === "object" ? data.productsByBusiness : {};
+  const paymentsByBusiness = data.paymentsByBusiness && typeof data.paymentsByBusiness === "object" ? data.paymentsByBusiness : {};
   const response = await fetch(`${connection.url}/rest/v1/acquiring_stores?on_conflict=account`, {
     method: "POST",
     headers: headers(connection, { "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" }),
-    body: JSON.stringify({ account, businesses, products_by_business: productsByBusiness, updated_at: new Date().toISOString() }),
+    body: JSON.stringify({ account, businesses, products_by_business: { productsByBusiness, paymentsByBusiness }, updated_at: new Date().toISOString() }),
   });
   if (!response.ok) return Response.json({ error: "Unable to save acquiring store" }, { status: 503 });
   return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
