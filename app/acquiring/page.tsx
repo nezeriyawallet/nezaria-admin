@@ -180,7 +180,7 @@ export default function AcquiringPage() {
     return () => window.removeEventListener("storage", onConnected);
   }, []);
 
-  useEffect(() => { if (!account) return; let active = true; fetch(`/api/acquiring/store?account=${encodeURIComponent(account)}`, { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((state) => { if (!active || !state) return; if (Array.isArray(state.businesses) && state.businesses.length) setBusinesses(state.businesses); if (state.productsByBusiness && typeof state.productsByBusiness === "object") setProductsByBusiness(state.productsByBusiness); }).catch(() => {}); return () => { active = false; }; }, [account]);
+  useEffect(() => { if (!account) return; let active = true; fetch(`/api/acquiring/store?account=${encodeURIComponent(account)}`, { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((state) => { if (!active || !state) return; if (Array.isArray(state.businesses) && state.businesses.length) { setBusinesses(state.businesses); if (state.productsByBusiness && typeof state.productsByBusiness === "object") setProductsByBusiness(state.productsByBusiness); return; } try { const localBusinesses = JSON.parse(localStorage.getItem("nezeriya_pay_businesses") || "[]"); if (Array.isArray(localBusinesses) && localBusinesses.length) void fetch("/api/acquiring/store", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, businesses: localBusinesses, productsByBusiness: {} }) }); } catch {} }).catch(() => {}); return () => { active = false; }; }, [account]);
 
   useEffect(() => {
     if (!token || view !== "register") return;
