@@ -1,4 +1,4 @@
-type Connection = { merchant: string; connectedAt: number };
+type Connection = { merchant: string; wallet: string; connectedAt: number };
 
 declare global {
   // Keep a short-lived bridge between the Wallet WebApp and the browser that
@@ -43,8 +43,11 @@ export async function POST(request: Request) {
   const fields = new URLSearchParams(await request.text());
   const token = (fields.get("token") || "").trim();
   const merchant = (fields.get("merchant") || "Кав'ярня Nezeriya").trim().slice(0, 80) || "Кав'ярня Nezeriya";
+  // The Wallet provides only its public address or public Wallet ID here.
+  // Never accept, store, or transmit any private key or recovery phrase.
+  const wallet = (fields.get("wallet") || fields.get("wallet_id") || fields.get("address") || merchant).trim().slice(0, 180);
   if (!validToken(token)) return Response.json({ error: "Invalid connection token" }, { status: 400, headers: cors() });
-  connections.set(token, { merchant, connectedAt: Date.now() });
+  connections.set(token, { merchant, wallet, connectedAt: Date.now() });
   console.info("[acquiring-connect] Wallet confirmation received", { tokenSuffix: token.slice(-6) });
   return Response.json({ ok: true }, { headers: cors() });
 }
@@ -55,5 +58,5 @@ export function GET(request: Request) {
   if (!connection) return Response.json({ connected: false }, { headers: cors() });
   // Do not consume the status on the first poll. Browsers may pause/resume or
   // have more than one registration tab; each tab needs to see the confirmation.
-  return Response.json({ connected: true, merchant: connection.merchant, connectedAt: connection.connectedAt }, { headers: cors() });
+  return Response.json({ connected: true, merchant: connection.merchant, wallet: connection.wallet, connectedAt: connection.connectedAt }, { headers: cors() });
 }

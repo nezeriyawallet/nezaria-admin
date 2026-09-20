@@ -1,6 +1,6 @@
 type ReceiptLine = { name: string; quantity: number; price: string; currency: "USDT" | "GRAM"; photo?: string };
 type Payment = { id: string; createdAt: string; source: "Термінал" | "Платіжне посилання" | "Сайт"; sourceName: string; status: "Оплачено" | "Очікує підтвердження" | "Недоплата"; currency: "USDT" | "GRAM"; amount: string; products: ReceiptLine[]; transaction?: string; wallet?: string };
-type StoredData = { productsByBusiness: Record<string, unknown>; paymentsByBusiness: Record<string, Payment[]> };
+type StoredData = { productsByBusiness: Record<string, unknown>; paymentsByBusiness: Record<string, Payment[]>; payoutsByBusiness: Record<string, unknown>; payoutWallet: string };
 
 const normalizeAccount = (value: string) => value.trim().toLocaleLowerCase("uk-UA").slice(0, 120);
 const connection = () => {
@@ -12,8 +12,8 @@ const headers = (key: string, extra: HeadersInit = {}) => ({ apikey: key, Author
 
 function parseStored(value: unknown): StoredData {
   const data = value && typeof value === "object" ? value as Record<string, unknown> : {};
-  if (data.productsByBusiness && typeof data.productsByBusiness === "object") return { productsByBusiness: data.productsByBusiness as Record<string, unknown>, paymentsByBusiness: data.paymentsByBusiness && typeof data.paymentsByBusiness === "object" ? data.paymentsByBusiness as Record<string, Payment[]> : {} };
-  return { productsByBusiness: data, paymentsByBusiness: {} };
+  if (data.productsByBusiness && typeof data.productsByBusiness === "object") return { productsByBusiness: data.productsByBusiness as Record<string, unknown>, paymentsByBusiness: data.paymentsByBusiness && typeof data.paymentsByBusiness === "object" ? data.paymentsByBusiness as Record<string, Payment[]> : {}, payoutsByBusiness: data.payoutsByBusiness && typeof data.payoutsByBusiness === "object" ? data.payoutsByBusiness as Record<string, unknown> : {}, payoutWallet: typeof data.payoutWallet === "string" ? data.payoutWallet : "" };
+  return { productsByBusiness: data, paymentsByBusiness: {}, payoutsByBusiness: {}, payoutWallet: "" };
 }
 
 function normalizePayment(value: Partial<Payment>): Payment | null {
