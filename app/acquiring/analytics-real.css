@@ -1,0 +1,30 @@
+.chart-card .chart-baseline {
+  stroke: #e4e8f1;
+  stroke-width: 1;
+}
+
+.chart-card .chart-bar {
+  fill: #5d52df;
+  transition: fill .2s;
+}
+
+.chart-card .chart-bar:hover { fill: #4238c8; }
+
+.chart-empty {
+  position: absolute;
+  top: 116px;
+  right: 0;
+  left: 0;
+  margin: 0;
+  color: #98a1b5;
+  font-size: 13px;
+  text-align: center;
+}
+
+.analytics-empty {
+  margin-top: 20px !important;
+  color: #98a1b5;
+  font-size: 13px;
+}
+
+.status-bar { background: #eff1f7; }
