@@ -3,10 +3,11 @@ type Product = { name: string; category: string; sku: string; price: string; cur
 type ReceiptLine = { name: string; quantity: number; price: string; currency: "USDT" | "GRAM"; photo?: string };
 type Payment = { id: string; createdAt: string; source: "Термінал" | "Платіжне посилання" | "Сайт"; sourceName: string; status: "Оплачено" | "Очікує підтвердження" | "Недоплата"; currency: "USDT" | "GRAM"; amount: string; products: ReceiptLine[]; transaction?: string; wallet?: string };
 type Payout = { id: string; createdAt: string; amount: string; currency: "USDT" | "GRAM"; status: "В обробці" | "Виконано"; wallet: string; transaction?: string };
-type Store = { businesses: Business[]; productsByBusiness: Record<string, Product[]>; paymentsByBusiness: Record<string, Payment[]>; payoutsByBusiness: Record<string, Payout[]>; payoutWallet: string };
+type PaymentLink = { id: string; createdAt: string; expiresAt: string; title: string; amount: string; currency: "USDT" | "GRAM"; assets: Array<"USDT" | "GRAM">; products: ReceiptLine[]; note: string; message: string; oneTime: boolean; status: "Активне" | "Оплачено" | "Прострочено" };
+type Store = { businesses: Business[]; productsByBusiness: Record<string, Product[]>; paymentsByBusiness: Record<string, Payment[]>; payoutsByBusiness: Record<string, Payout[]>; linksByBusiness: Record<string, PaymentLink[]>; payoutWallet: string };
 type Config = { url: string; key: string };
 
-const emptyStore: Store = { businesses: [], productsByBusiness: {}, paymentsByBusiness: {}, payoutsByBusiness: {}, payoutWallet: "" };
+const emptyStore: Store = { businesses: [], productsByBusiness: {}, paymentsByBusiness: {}, payoutsByBusiness: {}, linksByBusiness: {}, payoutWallet: "" };
 const normalizeAccount = (value: string) => value.trim().toLocaleLowerCase("uk-UA").slice(0, 120);
 
 function config(): Config | null {
@@ -33,6 +34,7 @@ async function fetchStore(connection: Config, account: string): Promise<Store> {
     productsByBusiness: (wrapped ? saved.productsByBusiness : saved) as Record<string, Product[]>,
     paymentsByBusiness: wrapped && saved.paymentsByBusiness && typeof saved.paymentsByBusiness === "object" ? saved.paymentsByBusiness as Record<string, Payment[]> : {},
     payoutsByBusiness: wrapped && saved.payoutsByBusiness && typeof saved.payoutsByBusiness === "object" ? saved.payoutsByBusiness as Record<string, Payout[]> : {},
+    linksByBusiness: wrapped && saved.linksByBusiness && typeof saved.linksByBusiness === "object" ? saved.linksByBusiness as Record<string, PaymentLink[]> : {},
     payoutWallet: wrapped && typeof saved.payoutWallet === "string" ? saved.payoutWallet : "",
   };
 }
@@ -50,7 +52,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const data = await request.json() as { account?: string; businesses?: Business[]; productsByBusiness?: Record<string, Product[]>; paymentsByBusiness?: Record<string, Payment[]>; payoutsByBusiness?: Record<string, Payout[]>; payoutWallet?: string };
+  const data = await request.json() as { account?: string; businesses?: Business[]; productsByBusiness?: Record<string, Product[]>; paymentsByBusiness?: Record<string, Payment[]>; payoutsByBusiness?: Record<string, Payout[]>; linksByBusiness?: Record<string, PaymentLink[]>; payoutWallet?: string };
   const account = normalizeAccount(data.account || "");
   if (!account) return Response.json({ error: "Account is required" }, { status: 400 });
   const connection = config();
@@ -59,11 +61,12 @@ export async function POST(request: Request) {
   const productsByBusiness = data.productsByBusiness && typeof data.productsByBusiness === "object" ? data.productsByBusiness : {};
   const paymentsByBusiness = data.paymentsByBusiness && typeof data.paymentsByBusiness === "object" ? data.paymentsByBusiness : {};
   const payoutsByBusiness = data.payoutsByBusiness && typeof data.payoutsByBusiness === "object" ? data.payoutsByBusiness : {};
+  const linksByBusiness = data.linksByBusiness && typeof data.linksByBusiness === "object" ? data.linksByBusiness : {};
   const payoutWallet = typeof data.payoutWallet === "string" ? data.payoutWallet.trim().slice(0, 180) : "";
   const response = await fetch(`${connection.url}/rest/v1/acquiring_stores?on_conflict=account`, {
     method: "POST",
     headers: headers(connection, { "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" }),
-    body: JSON.stringify({ account, businesses, products_by_business: { productsByBusiness, paymentsByBusiness, payoutsByBusiness, payoutWallet }, updated_at: new Date().toISOString() }),
+    body: JSON.stringify({ account, businesses, products_by_business: { productsByBusiness, paymentsByBusiness, payoutsByBusiness, linksByBusiness, payoutWallet }, updated_at: new Date().toISOString() }),
   });
   if (!response.ok) return Response.json({ error: "Unable to save acquiring store" }, { status: 503 });
   return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
