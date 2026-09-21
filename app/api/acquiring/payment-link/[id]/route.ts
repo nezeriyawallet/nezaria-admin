@@ -15,6 +15,25 @@ async function locate(id: string) {
   return null;
 }
 
-export async function GET(_: Request, context: { params: Promise<{ id: string }> }) { try { const found = await locate((await context.params).id); if (!found) return Response.json({ error: "Посилання не знайдено" }, { status: 404 }); const business = found.row.businesses.find((item) => item.name === found.businessName); const expired = found.link.status === "Активне" && new Date(found.link.expiresAt).getTime() < Date.now(); const wallet = typeof found.store.payoutWallet === "string" && found.store.payoutWallet.trim() ? found.store.payoutWallet.trim() : found.row.account; const bot = (process.env.NEZERIYA_WALLET_BOT || "Nezeriya_Wallet_Bot").replace(/^@/, ""); const id = found.link.id; return Response.json({ link: { ...found.link, status: expired ? "Прострочено" : found.link.status }, business: { name: found.businessName, logo: business?.logo }, recipient: wallet, walletUrl: `https://t.me/${bot}?startapp=pay_${encodeURIComponent(id)}` }, { headers: { "Cache-Control": "no-store" } }); } catch { return Response.json({ error: "Посилання тимчасово недоступне" }, { status: 503 }); } }
+async function serverRecipient() {
+  const walletApi = (process.env.NEZERIYA_WALLET_API_URL || "https://bot-5k6u.onrender.com").replace(/\/+$/, "");
+  const response = await fetch(`${walletApi}/api/wallet/acquiring-recipient`, { cache: "no-store" });
+  const data = response.ok ? await response.json() as { recipient?: unknown } : null;
+  return typeof data?.recipient === "string" ? data.recipient.trim() : "";
+}
+
+export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
+  try {
+    const found = await locate((await context.params).id);
+    if (!found) return Response.json({ error: "Посилання не знайдено" }, { status: 404 });
+    const business = found.row.businesses.find((item) => item.name === found.businessName);
+    const expired = found.link.status === "Активне" && new Date(found.link.expiresAt).getTime() < Date.now();
+    const recipient = await serverRecipient();
+    if (!recipient) return Response.json({ error: "Серверний гаманець Nezeriya тимчасово недоступний" }, { status: 503 });
+    const bot = (process.env.NEZERIYA_WALLET_BOT || "Nezeriya_Wallet_Bot").replace(/^@/, "");
+    const id = found.link.id;
+    return Response.json({ link: { ...found.link, status: expired ? "Прострочено" : found.link.status }, business: { name: found.businessName, logo: business?.logo }, recipient, recipientType: "server", walletUrl: `https://t.me/${bot}?startapp=pay_${encodeURIComponent(id)}` }, { headers: { "Cache-Control": "no-store" } });
+  } catch { return Response.json({ error: "Посилання тимчасово недоступне" }, { status: 503 }); }
+}
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) { try { const secret = process.env.NEZERIYA_PAYMENT_CALLBACK_SECRET; if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return Response.json({ error: "Підтвердження доступне лише для Nezeriya Wallet" }, { status: 403 }); const proof = await request.json().catch(() => ({})) as { transaction?: string; wallet?: string }; const found = await locate((await context.params).id); if (!found) return Response.json({ error: "Посилання не знайдено" }, { status: 404 }); if (found.link.status !== "Активне" || new Date(found.link.expiresAt).getTime() < Date.now()) return Response.json({ error: "Посилання вже недійсне" }, { status: 409 }); const links = found.store.linksByBusiness as Record<string, PaymentLink[]>; const nextLink = { ...found.link, status: "Оплачено" as const }; links[found.businessName] = [...links[found.businessName]]; links[found.businessName][found.index] = nextLink; const payments = (found.store.paymentsByBusiness as Record<string, unknown[]> | undefined) || {}; const existing = Array.isArray(payments[found.businessName]) ? payments[found.businessName] : []; payments[found.businessName] = [{ id: `P-${Date.now().toString().slice(-6)}`, createdAt: new Date().toISOString(), source: "Платіжне посилання", sourceName: "Платіжне посилання", status: "Оплачено", currency: found.link.currency, amount: found.link.amount, products: found.link.products, transaction: proof.transaction, wallet: proof.wallet }, ...existing]; found.store.linksByBusiness = links; found.store.paymentsByBusiness = payments; const response = await fetch(`${found.connection.url}/rest/v1/acquiring_stores?account=eq.${encodeURIComponent(found.row.account)}`, { method: "PATCH", headers: apiHeaders(found.connection.key, { "Content-Type": "application/json", Prefer: "return=minimal" }), body: JSON.stringify({ products_by_business: found.store, updated_at: new Date().toISOString() }) }); if (!response.ok) throw new Error("Save failed"); return Response.json({ ok: true, message: found.link.message }); } catch { return Response.json({ error: "Не вдалося підтвердити оплату" }, { status: 503 }); } }
