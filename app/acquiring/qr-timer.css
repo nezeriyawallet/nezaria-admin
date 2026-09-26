@@ -1,9 +1,14 @@
 .qr-expiry {
-  margin: -2px 0 12px;
-  color: #71809c;
+  margin: 0 0 12px;
+  color: #5d6e8c;
   text-align: center;
-  font-size: 12px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
+}
+
+.qr-expiry strong {
+  color: #183d76;
+  font-size: 14px;
 }
 
 .hero-login-card .qr-expiry { margin-bottom: 10px; }
