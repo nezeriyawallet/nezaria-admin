@@ -22,6 +22,7 @@ import "./analytics-real.css";
 import "./payment-links.css";
 import "./marketing.css";
 import "./marketing-hero.css";
+import "./marketing-layout.css";
 
 type View = "landing" | "register" | "dashboard";
 type Business = { name: string; type: string; ownership: string; owner: string; email: string; phone: string; iban: string; taxId: string; description: string; logo?: string; assets: string[]; suspended?: boolean };
