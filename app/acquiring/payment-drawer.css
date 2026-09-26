@@ -1,0 +1,80 @@
+.payments-layout { display: block; }
+
+.receipt-drawer-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(7, 12, 28, .34);
+  backdrop-filter: blur(2px);
+  animation: receipt-fade-in .22s ease-out;
+}
+
+.receipt-detail {
+  width: min(510px, 100vw);
+  min-height: 100dvh;
+  max-height: 100dvh;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 26px 0 0 26px;
+  padding: 32px;
+  background: #fff;
+  box-shadow: -24px 0 70px rgba(11, 20, 42, .24);
+  animation: receipt-slide-in .34s cubic-bezier(.2, .8, .2, 1);
+}
+
+.receipt-detail .receipt-kicker {
+  margin: 0 42px 7px 0;
+  color: #7884a0;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.receipt-detail h2 { font-size: 26px; }
+.receipt-detail > strong { font-size: 36px; margin: 23px 0 18px; }
+
+.receipt-verification {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0 0 24px;
+  border-radius: 13px;
+  padding: 12px;
+  background: #f6f8fc;
+}
+
+.receipt-verification > b {
+  display: grid;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  background: #dff5e7;
+  color: #168d50;
+}
+
+.receipt-verification.pending > b { background: #fff1d7; color: #a66c14; }
+.receipt-verification.underpaid > b { background: #ffe5e5; color: #cb4f4b; }
+.receipt-verification span { display: grid; gap: 3px; }
+.receipt-verification strong { font-size: 13px; color: #243048; }
+.receipt-verification small { color: #7f899f; font-size: 11px; }
+.receipt-products > p { margin: 12px 0 0; color: #7e889e; font-size: 12px; }
+.receipt-detail footer b { overflow-wrap: anywhere; }
+.receipt-detail footer small:nth-of-type(n + 2) { margin-top: 8px; }
+.receipt-detail > button { z-index: 1; }
+
+@keyframes receipt-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes receipt-slide-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+@media (max-width: 650px) {
+  .receipt-detail { border-radius: 0; padding: 25px 20px; }
+  .receipt-detail > strong { font-size: 32px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .receipt-drawer-layer, .receipt-detail { animation: none; }
+}

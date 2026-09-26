@@ -1,0 +1,37 @@
+.about-section {
+  background: linear-gradient(125deg, #0d1732 0%, #16264d 100%);
+  border-top: 1px solid #263f78;
+  border-bottom: 1px solid #263f78;
+}
+
+.about-section h2 { max-width: 760px; }
+.about-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin: 48px 0 64px; }
+.about-metrics article { display: grid; gap: 7px; }
+.about-metrics b { font-size: 36px; color: #fff; }
+.about-metrics span { color: #aeb9d2; font-size: 14px; }
+.about-title { margin: 0 0 25px; font-size: 31px; color: #fff; }
+.about-principles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+.about-principles article { min-height: 185px; border: 1px solid #2b4784; border-radius: 20px; background: #101c3a; padding: 27px; }
+.about-principles b { font-size: 20px; color: #fff; }
+.about-principles p { margin: 14px 0 0; color: #aeb9d2; line-height: 1.55; }
+.security-section { background: radial-gradient(circle at 76% 18%, #263d77 0, transparent 35%), #0a1123; }
+.security-grid { display: grid; grid-template-columns: .82fr 1.18fr; gap: 70px; align-items: center; }
+.security-grid .section-lead { margin-bottom: 28px; }
+.security-cards { display: grid; gap: 14px; }
+.security-cards article { position: relative; border: 1px solid #294582; border-radius: 17px; background: #121d3b; padding: 23px 28px 22px 80px; }
+.security-cards article > b { position: absolute; left: 24px; top: 23px; display: grid; width: 36px; height: 36px; place-items: center; border-radius: 50%; background: #3470f5; color: #fff; font-size: 13px; }
+.security-cards h3 { margin: 0; color: #fff; font-size: 19px; }
+.security-cards p { margin: 8px 0 0; color: #aeb9d2; line-height: 1.45; }
+
+@media (max-width: 1000px) {
+  .about-metrics { grid-template-columns: repeat(2, 1fr); }
+  .about-principles, .security-grid { grid-template-columns: 1fr; }
+  .security-grid { gap: 35px; }
+}
+
+@media (max-width: 600px) {
+  .about-metrics { margin: 34px 0 42px; }
+  .about-metrics b { font-size: 28px; }
+  .about-principles article { min-height: auto; }
+  .security-cards article { padding-left: 75px; }
+}
