@@ -23,9 +23,11 @@ import "./payment-links.css";
 import "./marketing.css";
 import "./marketing-hero.css";
 import "./marketing-layout.css";
+import "./qr-timer.css";
+import "./business-address.css";
 
 type View = "landing" | "register" | "dashboard";
-type Business = { name: string; type: string; ownership: string; owner: string; email: string; phone: string; iban: string; taxId: string; description: string; logo?: string; assets: string[]; suspended?: boolean };
+type Business = { name: string; type: string; ownership: string; owner: string; email: string; phone: string; iban: string; taxId: string; description: string; address?: string; logo?: string; assets: string[]; suspended?: boolean };
 type Product = { name: string; category: string; sku: string; price: string; currency: "USDT" | "GRAM"; quantity: string; description: string; terminals: string[]; photo?: string };
 type ReceiptLine = { name: string; quantity: number; price: string; currency: "USDT" | "GRAM"; photo?: string };
 type Payment = { id: string; createdAt: string; source: "Термінал" | "Платіжне посилання" | "Сайт"; sourceName: string; status: "Оплачено" | "Очікує підтвердження" | "Недоплата"; currency: "USDT" | "GRAM"; amount: string; products: ReceiptLine[]; transaction?: string; wallet?: string };
@@ -84,7 +86,21 @@ function Qr({ token }: { token: string }) {
     const destination = `nezeriya:pay-connect:${token}`;
     setSource(`https://api.qrserver.com/v1/create-qr-code/?format=svg&size=360x360&margin=12&ecc=H&data=${encodeURIComponent(destination)}`);
   }, [token]);
-  return <div className="qr" aria-label="QR-код для підключення">{source && <img style={{ position: "absolute", inset: 13, width: "calc(100% - 26px)", height: "calc(100% - 26px)" }} src={source} alt="Відкрийте Nezeriya Wallet для підключення" />}</div>;
+  const [secondsLeft, setSecondsLeft] = useState(60);
+  useEffect(() => {
+    setSecondsLeft(60);
+    const timer = window.setInterval(() => setSecondsLeft((current) => {
+      if (current <= 1) {
+        window.dispatchEvent(new Event("nezeriya-pay-refresh-qr"));
+        return 60;
+      }
+      return current - 1;
+    }), 1000);
+    return () => window.clearInterval(timer);
+  }, [token]);
+  const minutes = Math.floor(secondsLeft / 60);
+  const seconds = String(secondsLeft % 60).padStart(2, "0");
+  return <><div className="qr" aria-label="QR-код для підключення">{source && <img style={{ position: "absolute", inset: 13, width: "calc(100% - 26px)", height: "calc(100% - 26px)" }} src={source} alt="Відкрийте Nezeriya Wallet для підключення" />}</div><p className="qr-expiry" role="status">QR-код оновиться через {minutes}:{seconds}</p></>;
 }
 
 function MarketingSite({ token, onRefresh, onEnter }: { token: string; onRefresh: () => void; onEnter: () => void }) {
@@ -195,7 +211,17 @@ function BusinessWorkspace({ business, account, onBack, products, payments, payo
   </main>;
 }
 
-function BusinessSettings({ business, onSave, onDelete, notify }: { business: Business; onSave: (business: Business) => void; onDelete: () => void; notify: (text: string) => void }) {
+function BusinessSettings({
+  business,
+  onSave,
+  onDelete,
+  notify,
+}: {
+  business: Business;
+  onSave: (business: Business) => void;
+  onDelete: () => void;
+  notify: (text: string) => void;
+}) {
   const [draft, setDraft] = useState(business);
   const [paymentAssets, setPaymentAssets] = useState(business.assets);
   const [invoiceTime, setInvoiceTime] = useState("15 хв");
@@ -205,16 +231,338 @@ function BusinessSettings({ business, onSave, onDelete, notify }: { business: Bu
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
-  useEffect(() => { setDraft(business); setPaymentAssets(business.assets); }, [business]);
-  const update = <K extends keyof Business>(key: K, value: Business[K]) => setDraft((current) => ({ ...current, [key]: value }));
-  const chooseLogo = (file?: File) => { if (!file) return; const reader = new FileReader(); reader.onload = () => update("logo", String(reader.result)); reader.readAsDataURL(file); };
-  const toggleAsset = (asset: string) => setPaymentAssets((current) => current.includes(asset) ? (current.length > 1 ? current.filter((item) => item !== asset) : current) : [...current, asset]);
-  const save = (event: FormEvent) => { event.preventDefault(); if (!draft.name.trim() || !draft.owner.trim() || !draft.email.trim() || !draft.taxId.trim()) return notify("Заповніть обов’язкові поля"); onSave({ ...draft, name: draft.name.trim(), assets: paymentAssets }); notify("Налаштування бізнесу збережено"); };
-  return <form className="business-settings" onSubmit={save}>
-    <section className="settings-card settings-main"><h2>Основна інформація</h2><div className="settings-logo">{draft.logo ? <img src={draft.logo} alt="Логотип бізнесу" /> : <span>▣</span>}<label>Змінити<input type="file" accept="image/*" onChange={(event) => chooseLogo(event.target.files?.[0])} /></label></div><div className="settings-grid"><label>Назва бізнесу <b>*</b><input required value={draft.name} onChange={(event) => update("name", event.target.value)} /></label><label>Тип бізнесу <b>*</b><select value={draft.type} onChange={(event) => update("type", event.target.value)}>{businessCategories.map((item) => <option key={item}>{item}</option>)}</select></label><label>Форма власності <b>*</b><select value={draft.ownership} onChange={(event) => update("ownership", event.target.value)}><option>ПО</option><option>ФОП</option><option>ТОВ</option></select></label><label>ІПН / ЄДРПОУ <b>*</b><input required value={draft.taxId} onChange={(event) => update("taxId", event.target.value)} /></label></div><label>ПІБ власника <b>*</b><input required value={draft.owner} onChange={(event) => update("owner", event.target.value)} /></label><div className="settings-grid"><label>Email <b>*</b><input required type="email" value={draft.email} onChange={(event) => update("email", event.target.value)} /></label><label>Телефон <b>*</b><input required value={draft.phone} onChange={(event) => update("phone", event.target.value)} /></label></div><label>IBAN для виплат <b>*</b><input required value={draft.iban} onChange={(event) => update("iban", event.target.value)} /></label><label>Опис бізнесу<textarea maxLength={300} value={draft.description} onChange={(event) => update("description", event.target.value)} /><small>{draft.description.length}/300</small></label><footer><button type="button" onClick={() => { setDraft(business); setPaymentAssets(business.assets); notify("Зміни скасовано"); }}>Скасувати</button><button type="submit">Зберегти зміни</button></footer></section>
-    <div className="settings-column"><section className="settings-card"><h2>Приймання платежів</h2>{["USDT", "GRAM"].map((asset) => <div className="settings-row" key={asset}><div><b>{asset}</b><small>{asset === "USDT" ? "Tether · мережа TON" : "Мережа TON"}</small></div><button type="button" aria-label={`Увімкнути ${asset}`} className={`toggle ${paymentAssets.includes(asset) ? "on" : ""}`} onClick={() => toggleAsset(asset)}><i /></button></div>)}<div className="settings-row"><div><b>Час на оплату рахунку</b><small>Після цього рахунок стане недійсним</small></div><select value={invoiceTime} onChange={(event) => setInvoiceTime(event.target.value)}><option>15 хв</option><option>30 хв</option><option>1 година</option></select></div></section><section className="settings-card"><h2>Виплати</h2><div className="settings-row"><div><b>Автовиплата</b><small>Виводити кошти на IBAN автоматично</small></div><button type="button" aria-label="Автовиплата" className={`toggle ${autopayout ? "on" : ""}`} onClick={() => setAutopayout(!autopayout)}><i /></button></div><div className="settings-row"><b>Періодичність</b><div className="period-control">{["Щодня", "Щотижня", "Вручну"].map((item) => <button type="button" className={period === item ? "selected" : ""} key={item} onClick={() => setPeriod(item)}>{item}</button>)}</div></div><div className="settings-row"><div><b>Мінімальна сума</b><small>Нижче цієї суми виплата не створюється</small></div><select value={minimum} onChange={(event) => setMinimum(event.target.value)}><option>50 USDT</option><option>100 USDT</option><option>500 USDT</option></select></div></section></div>
-    <div className="settings-column"><section className="settings-card team-card"><h2>Команда</h2><div className="team-member"><span>{draft.owner.slice(0, 1).toUpperCase() || "В"}</span><div><b>{draft.owner || "Власник"}</b><small>{draft.email || "Email не вказано"}</small></div><em>Власник</em></div>{inviteOpen ? <div className="invite-form"><input autoFocus type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="email@example.com" /><button type="button" onClick={() => { if (!inviteEmail.includes("@")) return notify("Вкажіть коректний email"); setInviteEmail(""); setInviteOpen(false); notify("Запрошення надіслано"); }}>Надіслати</button></div> : <button type="button" className="invite-button" onClick={() => setInviteOpen(true)}>⊕ Запросити учасника</button>}</section><section className="settings-card danger-card"><h2>Призупинення й видалення</h2><p>Призупинення вимикає приймання платежів. Видалення бізнесу незворотне.</p><div><button type="button" onClick={() => { onSave({ ...business, suspended: !business.suspended }); notify(business.suspended ? "Бізнес відновлено" : "Бізнес призупинено"); }}>{business.suspended ? "Відновити бізнес" : "Призупинити бізнес"}</button><button type="button" className="delete-button" onClick={() => setDeleteOpen(true)}>Видалити бізнес</button></div>{deleteOpen && <div className="confirm-delete"><b>Видалити «{business.name}»?</b><p>Цю дію не можна скасувати.</p><button type="button" onClick={() => setDeleteOpen(false)}>Скасувати</button><button type="button" className="delete-button" onClick={onDelete}>Так, видалити</button></div>}</section></div>
-  </form>;
+  useEffect(() => {
+    setDraft(business);
+    setPaymentAssets(business.assets);
+  }, [business]);
+  const update = <K extends keyof Business>(key: K, value: Business[K]) =>
+    setDraft((current) => ({ ...current, [key]: value }));
+  const chooseLogo = (file?: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => update("logo", String(reader.result));
+    reader.readAsDataURL(file);
+  };
+  const toggleAsset = (asset: string) =>
+    setPaymentAssets((current) =>
+      current.includes(asset)
+        ? current.length > 1
+          ? current.filter((item) => item !== asset)
+          : current
+        : [...current, asset],
+    );
+  const save = (event: FormEvent) => {
+    event.preventDefault();
+    if (
+      !draft.name.trim() ||
+      !draft.owner.trim() ||
+      !draft.email.trim() ||
+      !draft.taxId.trim()
+    )
+      return notify("Заповніть обов’язкові поля");
+    onSave({ ...draft, name: draft.name.trim(), assets: paymentAssets });
+    notify("Налаштування бізнесу збережено");
+  };
+  return (
+    <form className="business-settings" onSubmit={save}>
+      <section className="settings-card settings-main">
+        <h2>Основна інформація</h2>
+        <div className="settings-logo">
+          {draft.logo ? (
+            <img src={draft.logo} alt="Логотип бізнесу" />
+          ) : (
+            <span>▣</span>
+          )}
+          <label>
+            Змінити
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => chooseLogo(event.target.files?.[0])}
+            />
+          </label>
+        </div>
+        <div className="settings-grid">
+          <label>
+            Назва бізнесу <b>*</b>
+            <input
+              required
+              value={draft.name}
+              onChange={(event) => update("name", event.target.value)}
+            />
+          </label>
+          <label>
+            Тип бізнесу <b>*</b>
+            <select
+              value={draft.type}
+              onChange={(event) => update("type", event.target.value)}
+            >
+              {businessCategories.map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Форма власності <b>*</b>
+            <select
+              value={draft.ownership}
+              onChange={(event) => update("ownership", event.target.value)}
+            >
+              <option>ПО</option>
+              <option>ФОП</option>
+              <option>ТОВ</option>
+            </select>
+          </label>
+          <label>
+            ІПН / ЄДРПОУ <b>*</b>
+            <input
+              required
+              value={draft.taxId}
+              onChange={(event) => update("taxId", event.target.value)}
+            />
+          </label>
+        </div>
+        <label>
+          ПІБ власника <b>*</b>
+          <input
+            required
+            value={draft.owner}
+            onChange={(event) => update("owner", event.target.value)}
+          />
+        </label>
+        <div className="settings-grid">
+          <label>
+            Email <b>*</b>
+            <input
+              required
+              type="email"
+              value={draft.email}
+              onChange={(event) => update("email", event.target.value)}
+            />
+          </label>
+          <label>
+            Телефон <b>*</b>
+            <input
+              required
+              value={draft.phone}
+              onChange={(event) => update("phone", event.target.value)}
+            />
+          </label>
+        </div>
+        <label>
+          Адреса офлайн-бізнесу
+          <input
+            value={draft.address || ""}
+            onChange={(event) => update("address", event.target.value)}
+            placeholder="Вулиця, номер будинку, місто"
+          />
+        </label>
+        <p className="business-address-note">Необов’язково. Після збереження адреси користувачі бачитимуть цей бізнес на карті Nezeriya Wallet.</p>
+        <label>
+          IBAN для виплат <b>*</b>
+          <input
+            required
+            value={draft.iban}
+            onChange={(event) => update("iban", event.target.value)}
+          />
+        </label>
+        <label>
+          Опис бізнесу
+          <textarea
+            maxLength={300}
+            value={draft.description}
+            onChange={(event) => update("description", event.target.value)}
+          />
+          <small>{draft.description.length}/300</small>
+        </label>
+        <footer>
+          <button
+            type="button"
+            onClick={() => {
+              setDraft(business);
+              setPaymentAssets(business.assets);
+              notify("Зміни скасовано");
+            }}
+          >
+            Скасувати
+          </button>
+          <button type="submit">Зберегти зміни</button>
+        </footer>
+      </section>
+      <div className="settings-column">
+        <section className="settings-card">
+          <h2>Приймання платежів</h2>
+          {["USDT", "GRAM"].map((asset) => (
+            <div className="settings-row" key={asset}>
+              <div>
+                <b>{asset}</b>
+                <small>
+                  {asset === "USDT" ? "Tether · мережа TON" : "Мережа TON"}
+                </small>
+              </div>
+              <button
+                type="button"
+                aria-label={`Увімкнути ${asset}`}
+                className={`toggle ${paymentAssets.includes(asset) ? "on" : ""}`}
+                onClick={() => toggleAsset(asset)}
+              >
+                <i />
+              </button>
+            </div>
+          ))}
+          <div className="settings-row">
+            <div>
+              <b>Час на оплату рахунку</b>
+              <small>Після цього рахунок стане недійсним</small>
+            </div>
+            <select
+              value={invoiceTime}
+              onChange={(event) => setInvoiceTime(event.target.value)}
+            >
+              <option>15 хв</option>
+              <option>30 хв</option>
+              <option>1 година</option>
+            </select>
+          </div>
+        </section>
+        <section className="settings-card">
+          <h2>Виплати</h2>
+          <div className="settings-row">
+            <div>
+              <b>Автовиплата</b>
+              <small>Виводити кошти на IBAN автоматично</small>
+            </div>
+            <button
+              type="button"
+              aria-label="Автовиплата"
+              className={`toggle ${autopayout ? "on" : ""}`}
+              onClick={() => setAutopayout(!autopayout)}
+            >
+              <i />
+            </button>
+          </div>
+          <div className="settings-row">
+            <b>Періодичність</b>
+            <div className="period-control">
+              {["Щодня", "Щотижня", "Вручну"].map((item) => (
+                <button
+                  type="button"
+                  className={period === item ? "selected" : ""}
+                  key={item}
+                  onClick={() => setPeriod(item)}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="settings-row">
+            <div>
+              <b>Мінімальна сума</b>
+              <small>Нижче цієї суми виплата не створюється</small>
+            </div>
+            <select
+              value={minimum}
+              onChange={(event) => setMinimum(event.target.value)}
+            >
+              <option>50 USDT</option>
+              <option>100 USDT</option>
+              <option>500 USDT</option>
+            </select>
+          </div>
+        </section>
+      </div>
+      <div className="settings-column">
+        <section className="settings-card team-card">
+          <h2>Команда</h2>
+          <div className="team-member">
+            <span>{draft.owner.slice(0, 1).toUpperCase() || "В"}</span>
+            <div>
+              <b>{draft.owner || "Власник"}</b>
+              <small>{draft.email || "Email не вказано"}</small>
+            </div>
+            <em>Власник</em>
+          </div>
+          {inviteOpen ? (
+            <div className="invite-form">
+              <input
+                autoFocus
+                type="email"
+                value={inviteEmail}
+                onChange={(event) => setInviteEmail(event.target.value)}
+                placeholder="email@example.com"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (!inviteEmail.includes("@"))
+                    return notify("Вкажіть коректний email");
+                  setInviteEmail("");
+                  setInviteOpen(false);
+                  notify("Запрошення надіслано");
+                }}
+              >
+                Надіслати
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="invite-button"
+              onClick={() => setInviteOpen(true)}
+            >
+              ⊕ Запросити учасника
+            </button>
+          )}
+        </section>
+        <section className="settings-card danger-card">
+          <h2>Призупинення й видалення</h2>
+          <p>
+            Призупинення вимикає приймання платежів. Видалення бізнесу
+            незворотне.
+          </p>
+          <div>
+            <button
+              type="button"
+              onClick={() => {
+                onSave({ ...business, suspended: !business.suspended });
+                notify(
+                  business.suspended
+                    ? "Бізнес відновлено"
+                    : "Бізнес призупинено",
+                );
+              }}
+            >
+              {business.suspended ? "Відновити бізнес" : "Призупинити бізнес"}
+            </button>
+            <button
+              type="button"
+              className="delete-button"
+              onClick={() => setDeleteOpen(true)}
+            >
+              Видалити бізнес
+            </button>
+          </div>
+          {deleteOpen && (
+            <div className="confirm-delete">
+              <b>Видалити «{business.name}»?</b>
+              <p>Цю дію не можна скасувати.</p>
+              <button type="button" onClick={() => setDeleteOpen(false)}>
+                Скасувати
+              </button>
+              <button
+                type="button"
+                className="delete-button"
+                onClick={onDelete}
+              >
+                Так, видалити
+              </button>
+            </div>
+          )}
+        </section>
+      </div>
+    </form>
+  );
 }
 
 function Metric({ label, value, trend, negative = false }: { label: string; value: string; trend: string; negative?: boolean }) { return <article className="metric-card"><p>{label}<span className={negative ? "negative" : ""}>{trend}</span></p><strong>{value}</strong><small>до попереднього періоду</small></article>; }
@@ -279,6 +627,11 @@ export default function AcquiringPage() {
   const [profile, setProfile] = useState<Profile>({ firstName: "Іван", lastName: "Петренко", email: "ivan.petrenko@example.com", phone: "+380 (67) 123 45 67", walletId: "Nezeriya ID", country: "🇺🇦 Україна", primaryBusiness: "" });
 
   const makeToken = () => `pay_${crypto.randomUUID().slice(0, 8)}-${crypto.randomUUID().slice(0, 4)}`;
+  useEffect(() => {
+    const refreshQr = () => setToken(makeToken());
+    window.addEventListener("nezeriya-pay-refresh-qr", refreshQr);
+    return () => window.removeEventListener("nezeriya-pay-refresh-qr", refreshQr);
+  }, []);
   const finishConnection = (connectedAccount: string, confirmedToken: string, wallet = "", session = "", expiresAt = Date.now() + 24 * 60 * 60 * 1000) => {
     const walletId = wallet || connectedAccount;
     localStorage.setItem("nezeriya_pay_connection", JSON.stringify({ token: confirmedToken, name: connectedAccount, walletId, session, expiresAt, connectedAt: Date.now() }));
@@ -369,7 +722,251 @@ export default function AcquiringPage() {
   const formatBalance = (value: number) => value.toLocaleString("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   if (view === "dashboard" && selectedBusiness) return <BusinessWorkspace business={selectedBusiness} account={account} onBack={() => setSelectedBusiness(null)} products={productsByBusiness[selectedBusiness.name] || []} payments={paymentsByBusiness[selectedBusiness.name] || []} payouts={payoutsByBusiness[selectedBusiness.name] || []} links={linksByBusiness[selectedBusiness.name] || []} payoutWallet={payoutWallet || account} payoutSession={payoutSession} onLinksChange={(nextLinks) => { const next = { ...linksByBusiness, [selectedBusiness.name]: nextLinks }; setLinksByBusiness(next); saveStore(businesses, productsByBusiness, paymentsByBusiness, payoutsByBusiness, next); }} onPayoutsChange={(nextPayouts) => { const next = { ...payoutsByBusiness, [selectedBusiness.name]: nextPayouts }; setPayoutsByBusiness(next); saveStore(businesses, productsByBusiness, paymentsByBusiness, next); }} onProductsChange={(nextProducts) => changeProducts(selectedBusiness.name, nextProducts)} onBusinessChange={(nextBusiness) => { const previousName = selectedBusiness.name; const nextBusinesses = businesses.map((item) => item.name === previousName ? nextBusiness : item); const nextProducts = previousName === nextBusiness.name ? productsByBusiness : { ...productsByBusiness, [nextBusiness.name]: productsByBusiness[previousName] || [] }; const nextPayments = previousName === nextBusiness.name ? paymentsByBusiness : { ...paymentsByBusiness, [nextBusiness.name]: paymentsByBusiness[previousName] || [] }; const nextPayouts = previousName === nextBusiness.name ? payoutsByBusiness : { ...payoutsByBusiness, [nextBusiness.name]: payoutsByBusiness[previousName] || [] }; const nextLinks = previousName === nextBusiness.name ? linksByBusiness : { ...linksByBusiness, [nextBusiness.name]: linksByBusiness[previousName] || [] }; if (previousName !== nextBusiness.name) { delete nextProducts[previousName]; delete nextPayments[previousName]; delete nextPayouts[previousName]; delete nextLinks[previousName]; } setBusinesses(nextBusinesses); setProductsByBusiness(nextProducts); setPaymentsByBusiness(nextPayments); setPayoutsByBusiness(nextPayouts); setLinksByBusiness(nextLinks); setSelectedBusiness(nextBusiness); saveStore(nextBusinesses, nextProducts, nextPayments, nextPayouts, nextLinks); }} onDelete={() => { const nextBusinesses = businesses.filter((item) => item.name !== selectedBusiness.name); const nextProducts = { ...productsByBusiness }; const nextPayments = { ...paymentsByBusiness }; const nextPayouts = { ...payoutsByBusiness }; const nextLinks = { ...linksByBusiness }; delete nextProducts[selectedBusiness.name]; delete nextPayments[selectedBusiness.name]; delete nextPayouts[selectedBusiness.name]; delete nextLinks[selectedBusiness.name]; setBusinesses(nextBusinesses); setProductsByBusiness(nextProducts); setPaymentsByBusiness(nextPayments); setPayoutsByBusiness(nextPayouts); setLinksByBusiness(nextLinks); saveStore(nextBusinesses, nextProducts, nextPayments, nextPayouts, nextLinks); setSelectedBusiness(null); }} />;
-  if (view === "dashboard" && showBusinessForm) return <main className="business-form-page"><header className="business-form-top"><div className="pay-logo">NEZERIYA <b>PAY</b></div><div className="user"><Mark small label={account} /><b>{account}</b></div></header><form className="business-form" onSubmit={saveBusiness}><section className="business-fields"><h1>Додати бізнес</h1><p>Додайте новий бізнес, щоб приймати платежі через Nezeriya Pay.</p><label>Назва бізнесу <b>*</b><input required value={businessForm.name} onChange={(e) => changeBusiness("name", e.target.value)} placeholder="Наприклад, Nezeriya Store" /></label><fieldset><legend>Тип бізнесу <b>*</b></legend><div className="choice-row">{["Магазин", "Кафе"].map((item) => <button type="button" className={businessForm.type === item ? "selected" : ""} onClick={() => changeBusiness("type", item)} key={item}>{item}</button>)}{!["Магазин", "Кафе"].includes(businessForm.type) && <button type="button" className="selected selected-category" onClick={() => setCategoryDialogOpen(true)}>{businessForm.type}</button>}<button type="button" className={categoryDialogOpen ? "selected" : ""} onClick={() => setCategoryDialogOpen(true)}>Інше</button></div></fieldset><fieldset><legend>Форма власності <b>*</b></legend><div className="choice-row ownership">{[["ПО", "Приватна особа"], ["ФОП", "Фізична особа-підприємець"], ["ТОВ", "Товариство з обмеженою відповідальністю"]].map(([item, hint]) => <button type="button" className={businessForm.ownership === item ? "selected" : ""} onClick={() => changeBusiness("ownership", item)} key={item}>{item}<i role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); setOwnershipHint(ownershipHint === item ? "" : item); }}>ⓘ</i>{ownershipHint === item && <span className="ownership-popover">{hint}</span>}</button>)}</div></fieldset><label>ПІБ власника <b>*</b><input required value={businessForm.owner} onChange={(e) => changeBusiness("owner", e.target.value)} /></label><div className="form-grid"><label>Email <b>*</b><input required type="email" value={businessForm.email} onChange={(e) => changeBusiness("email", e.target.value)} placeholder="example@domain.com" /></label><label>Телефон <b>*</b><input required type="tel" value={businessForm.phone} onChange={(e) => changeBusiness("phone", e.target.value)} placeholder="+380 (__) ___ __ __" /></label><label>IBAN <b>*</b><input required value={businessForm.iban} onChange={(e) => changeBusiness("iban", e.target.value)} placeholder="UA00 0000 0000 0000 0000 0000 000" /></label><label>Податковий номер / ЄДРПОУ <b>*</b><input required value={businessForm.taxId} onChange={(e) => changeBusiness("taxId", e.target.value)} placeholder="Наприклад, 1234567890" /></label></div><label>Опис бізнесу<textarea maxLength={300} value={businessForm.description} onChange={(e) => changeBusiness("description", e.target.value)} placeholder="Коротко опишіть, чим займається ваш бізнес" /></label></section><aside className="business-preview"><h3>Логотип бізнесу</h3><div className="logo-upload">{businessForm.logo ? <img src={businessForm.logo} alt="Логотип бізнесу" /> : <span>▧＋</span>}<input aria-label="Завантажити логотип" type="file" accept="image/*" onChange={(e) => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onload = () => changeBusiness("logo", String(reader.result)); reader.readAsDataURL(file); } }} /></div><p>Зображення автоматично обріжеться до кола.</p><fieldset><legend>Активи для оплати <b>*</b></legend><div className="asset-row">{["USDT", "GRAM"].map((asset) => <button type="button" className={businessForm.assets.includes(asset) ? "selected" : ""} onClick={() => toggleAsset(asset)} key={asset}>{asset}<i>{businessForm.assets.includes(asset) ? "✓" : "○"}</i></button>)}</div></fieldset><div className="preview-card"><h3>Попередній перегляд</h3><article>{businessForm.logo ? <img src={businessForm.logo} alt="" /> : <span>▣</span>}<div><b>{businessForm.name || "Назва бізнесу"}</b><small>{businessForm.owner || "ПІБ власника"}</small><em>Прибуток (загалом)<strong>0,00 {businessForm.assets[0]}</strong></em></div></article></div><div className="form-actions"><button type="button" onClick={() => setShowBusinessForm(false)}>Скасувати</button><button type="submit">Додати бізнес</button></div></aside></form>{categoryDialogOpen && <CategoryDialog selected={businessForm.type} onClose={() => setCategoryDialogOpen(false)} onSelect={(category) => { changeBusiness("type", category); setCategoryDialogOpen(false); }} />}</main>;
+  if (view === "dashboard" && showBusinessForm)
+    return (
+      <main className="business-form-page">
+        <header className="business-form-top">
+          <div className="pay-logo">
+            NEZERIYA <b>PAY</b>
+          </div>
+          <div className="user">
+            <Mark small label={account} />
+            <b>{account}</b>
+          </div>
+        </header>
+        <form className="business-form" onSubmit={saveBusiness}>
+          <section className="business-fields">
+            <h1>Додати бізнес</h1>
+            <p>
+              Додайте новий бізнес, щоб приймати платежі через Nezeriya Pay.
+            </p>
+            <label>
+              Назва бізнесу <b>*</b>
+              <input
+                required
+                value={businessForm.name}
+                onChange={(e) => changeBusiness("name", e.target.value)}
+                placeholder="Наприклад, Nezeriya Store"
+              />
+            </label>
+            <fieldset>
+              <legend>
+                Тип бізнесу <b>*</b>
+              </legend>
+              <div className="choice-row">
+                {["Магазин", "Кафе"].map((item) => (
+                  <button
+                    type="button"
+                    className={businessForm.type === item ? "selected" : ""}
+                    onClick={() => changeBusiness("type", item)}
+                    key={item}
+                  >
+                    {item}
+                  </button>
+                ))}
+                {!["Магазин", "Кафе"].includes(businessForm.type) && (
+                  <button
+                    type="button"
+                    className="selected selected-category"
+                    onClick={() => setCategoryDialogOpen(true)}
+                  >
+                    {businessForm.type}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={categoryDialogOpen ? "selected" : ""}
+                  onClick={() => setCategoryDialogOpen(true)}
+                >
+                  Інше
+                </button>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>
+                Форма власності <b>*</b>
+              </legend>
+              <div className="choice-row ownership">
+                {[
+                  ["ПО", "Приватна особа"],
+                  ["ФОП", "Фізична особа-підприємець"],
+                  ["ТОВ", "Товариство з обмеженою відповідальністю"],
+                ].map(([item, hint]) => (
+                  <button
+                    type="button"
+                    className={
+                      businessForm.ownership === item ? "selected" : ""
+                    }
+                    onClick={() => changeBusiness("ownership", item)}
+                    key={item}
+                  >
+                    {item}
+                    <i
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOwnershipHint(ownershipHint === item ? "" : item);
+                      }}
+                    >
+                      ⓘ
+                    </i>
+                    {ownershipHint === item && (
+                      <span className="ownership-popover">{hint}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <label>
+              ПІБ власника <b>*</b>
+              <input
+                required
+                value={businessForm.owner}
+                onChange={(e) => changeBusiness("owner", e.target.value)}
+              />
+            </label>
+            <div className="form-grid">
+              <label>
+                Email <b>*</b>
+                <input
+                  required
+                  type="email"
+                  value={businessForm.email}
+                  onChange={(e) => changeBusiness("email", e.target.value)}
+                  placeholder="example@domain.com"
+                />
+              </label>
+              <label>
+                Телефон <b>*</b>
+                <input
+                  required
+                  type="tel"
+                  value={businessForm.phone}
+                  onChange={(e) => changeBusiness("phone", e.target.value)}
+                  placeholder="+380 (__) ___ __ __"
+                />
+              </label>
+              <label>
+                IBAN <b>*</b>
+                <input
+                  required
+                  value={businessForm.iban}
+                  onChange={(e) => changeBusiness("iban", e.target.value)}
+                  placeholder="UA00 0000 0000 0000 0000 0000 000"
+                />
+              </label>
+              <label>
+                Податковий номер / ЄДРПОУ <b>*</b>
+                <input
+                  required
+                  value={businessForm.taxId}
+                  onChange={(e) => changeBusiness("taxId", e.target.value)}
+                  placeholder="Наприклад, 1234567890"
+                />
+              </label>
+            </div>
+            <label>
+              Адреса офлайн-бізнесу
+              <input
+                value={businessForm.address || ""}
+                onChange={(e) => changeBusiness("address", e.target.value)}
+                placeholder="Вулиця, номер будинку, місто"
+              />
+            </label>
+            <p className="business-address-note">Необов’язково. Якщо додати адресу, користувачі Nezeriya Wallet бачитимуть бізнес на карті.</p>
+            <label>
+              Опис бізнесу
+              <textarea
+                maxLength={300}
+                value={businessForm.description}
+                onChange={(e) => changeBusiness("description", e.target.value)}
+                placeholder="Коротко опишіть, чим займається ваш бізнес"
+              />
+            </label>
+          </section>
+          <aside className="business-preview">
+            <h3>Логотип бізнесу</h3>
+            <div className="logo-upload">
+              {businessForm.logo ? (
+                <img src={businessForm.logo} alt="Логотип бізнесу" />
+              ) : (
+                <span>▧＋</span>
+              )}
+              <input
+                aria-label="Завантажити логотип"
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = () =>
+                      changeBusiness("logo", String(reader.result));
+                    reader.readAsDataURL(file);
+                  }
+                }}
+              />
+            </div>
+            <p>Зображення автоматично обріжеться до кола.</p>
+            <fieldset>
+              <legend>
+                Активи для оплати <b>*</b>
+              </legend>
+              <div className="asset-row">
+                {["USDT", "GRAM"].map((asset) => (
+                  <button
+                    type="button"
+                    className={
+                      businessForm.assets.includes(asset) ? "selected" : ""
+                    }
+                    onClick={() => toggleAsset(asset)}
+                    key={asset}
+                  >
+                    {asset}
+                    <i>{businessForm.assets.includes(asset) ? "✓" : "○"}</i>
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <div className="preview-card">
+              <h3>Попередній перегляд</h3>
+              <article>
+                {businessForm.logo ? (
+                  <img src={businessForm.logo} alt="" />
+                ) : (
+                  <span>▣</span>
+                )}
+                <div>
+                  <b>{businessForm.name || "Назва бізнесу"}</b>
+                  <small>{businessForm.owner || "ПІБ власника"}</small>
+                  <em>
+                    Прибуток (загалом)
+                    <strong>0,00 {businessForm.assets[0]}</strong>
+                  </em>
+                </div>
+              </article>
+            </div>
+            <div className="form-actions">
+              <button type="button" onClick={() => setShowBusinessForm(false)}>
+                Скасувати
+              </button>
+              <button type="submit">Додати бізнес</button>
+            </div>
+          </aside>
+        </form>
+        {categoryDialogOpen && (
+          <CategoryDialog
+            selected={businessForm.type}
+            onClose={() => setCategoryDialogOpen(false)}
+            onSelect={(category) => {
+              changeBusiness("type", category);
+              setCategoryDialogOpen(false);
+            }}
+          />
+        )}
+      </main>
+    );
 
   if (view === "dashboard") return <main className="pay-app dashboard">
     <aside className="pay-sidebar"><div className="pay-logo">NEZERIYA <b>PAY</b></div>

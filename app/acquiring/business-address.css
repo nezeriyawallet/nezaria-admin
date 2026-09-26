@@ -1,0 +1,13 @@
+.business-address-note {
+  margin: -3px 0 3px;
+  color: #71809b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.settings-main .business-address-note {
+  justify-self: start;
+  margin: -3px 0 3px;
+  color: #71809b;
+  font-weight: 400;
+}
