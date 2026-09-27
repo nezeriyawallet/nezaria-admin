@@ -44,6 +44,12 @@
 .pay-qr-note { margin: -9px 0 16px; color: #71809b; font-size: 12px; line-height: 1.45; text-align: center; }
 .pay-external-note { display: grid; gap: 6px; margin: 18px 0; padding: 14px 16px; border: 1px solid #f2d9a2; border-radius: 13px; background: #fff8e9; color: #876117; font-size: 13px; line-height: 1.45; }
 .pay-external-note b { color: #5f4210; }
+.pay-tonconnect { display: grid; gap: 12px; margin: 18px 0; padding: 16px; border: 1px solid #dce2f0; border-radius: 15px; background: #f7f9fe; }
+.pay-tonconnect > div:first-child { display: grid; gap: 5px; }
+.pay-tonconnect b { color: #172038; font-size: 14px; }
+.pay-tonconnect span, .pay-tonconnect-message { color: #6f7c95; font-size: 12px; line-height: 1.45; }
+.pay-tonconnect #ton-connect-button { justify-self: start; }
+.pay-tonconnect-message { margin: 0; padding: 10px; border-radius: 10px; background: #fff4d9; color: #8b611d; }
 .pay-address { display: flex; align-items: center; gap: 8px; padding: 12px; }
 .pay-address div { min-width: 0; flex: 1; }
 .pay-address span, .pay-address code, .pay-address small { display: block; }

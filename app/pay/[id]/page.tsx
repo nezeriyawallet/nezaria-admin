@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import "../payment.css";
+import { ExternalWalletPayment } from "./external-wallet-payment";
 
 type Line = { name: string; quantity: number; price: string; currency?: string; photo?: string };
 type PaymentLink = {
@@ -65,7 +66,7 @@ export default function PublicPaymentPage({ params }: { params: Promise<{ id: st
     <h1 className="pay-title center">Оплата</h1>
     <div className="pay-amount-card"><span>До сплати</span><strong>{money(link.amount, link.currency)}</strong><small>Посилання {link.id}</small></div>
     <a className="pay-primary" href={data.walletUrl} onClick={() => setScreen("wallet")}>▣&nbsp; Оплатити в Nezeriya Wallet</a>
-    {data.externalPayment?.supported ? <><p className="pay-or">або відскануйте QR-код у TON-гаманці</p><div className="pay-qr"><img src={qrUrl} alt="QR-код для оплати GRAM" /></div><p className="pay-qr-note">{data.externalPayment.message}</p></> : <div className="pay-external-note"><b>Оплата з іншого гаманця</b><span>{data.externalPayment?.message || "Скористайтеся Nezeriya Wallet."}</span></div>}
+    {data.externalPayment?.supported ? <><p className="pay-or">або відскануйте QR-код у TON-гаманці</p><div className="pay-qr"><img src={qrUrl} alt="QR-код для оплати GRAM" /></div><p className="pay-qr-note">{data.externalPayment.message}</p></> : <ExternalWalletPayment linkId={link.id} currency={link.currency} />}
     <div className="pay-address"><div><span>Адреса отримувача</span><code>{data.recipient || "Гаманець магазину ще не підключено"}</code><small>Memo: {link.id}</small></div><button onClick={() => void copy(data.recipient)}>⧉</button></div>
     {screen === "copied" ? <p className="pay-copy-note">Адресу скопійовано</p> : <p className="pay-wait">Очікуємо оплату. Сторінка оновиться автоматично.</p>}
   </section></main>;
