@@ -22,6 +22,19 @@ async function serverRecipient() {
   return typeof data?.recipient === "string" ? data.recipient.trim() : "";
 }
 
+/**
+ * A `ton://transfer` URI is only safe for native TON/GRAM payments. USDT on
+ * TON is a jetton transfer, which requires an asset-specific payload; putting
+ * USDT into a generic URI would make many wallets send TON instead.
+ */
+function gramPaymentUri(recipient: string, amount: string, memo: string) {
+  const [whole = "0", decimal = ""] = amount.trim().replace(",", ".").split(".");
+  if (!/^\d+$/.test(whole) || !/^\d*$/.test(decimal)) return "";
+  const nano = BigInt(whole) * 1_000_000_000n + BigInt((decimal + "000000000").slice(0, 9));
+  if (nano <= 0n) return "";
+  return `ton://transfer/${recipient}?amount=${nano.toString()}&text=${encodeURIComponent(`Nezeriya Pay ${memo}`)}`;
+}
+
 export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const found = await locate((await context.params).id);
@@ -32,7 +45,8 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
     if (!recipient) return Response.json({ error: "Серверний гаманець Nezeriya тимчасово недоступний" }, { status: 503 });
     const bot = (process.env.NEZERIYA_WALLET_BOT || "Nezeriya_Wallet_Bot").replace(/^@/, "");
     const id = found.link.id;
-    return Response.json({ link: { ...found.link, status: expired ? "Прострочено" : found.link.status }, business: { name: found.businessName, logo: business?.logo }, recipient, recipientType: "server", walletUrl: `https://t.me/${bot}?startapp=pay_${encodeURIComponent(id)}` }, { headers: { "Cache-Control": "no-store" } });
+    const externalUri = found.link.currency === "GRAM" ? gramPaymentUri(recipient, found.link.amount, id) : "";
+    return Response.json({ link: { ...found.link, status: expired ? "Прострочено" : found.link.status }, business: { name: found.businessName, logo: business?.logo }, recipient, recipientType: "server", walletUrl: `https://t.me/${bot}?startapp=pay_${encodeURIComponent(id)}`, externalPayment: { uri: externalUri, supported: Boolean(externalUri), message: externalUri ? "QR заповнить адресу, суму та memo у сумісному TON-гаманці." : "Оплата USDT через сторонній гаманець ще не підтримується без захищеної Jetton/TonConnect-інтеграції. Скористайтеся Nezeriya Wallet." } }, { headers: { "Cache-Control": "no-store" } });
   } catch { return Response.json({ error: "Посилання тимчасово недоступне" }, { status: 503 }); }
 }
 

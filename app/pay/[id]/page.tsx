@@ -13,6 +13,7 @@ type PaymentData = {
   business: { name: string; logo?: string };
   recipient: string;
   walletUrl: string;
+  externalPayment?: { uri: string; supported: boolean; message: string };
 };
 
 const money = (value: string, currency: string) => `${Number(value || 0).toFixed(2)} ${currency}`;
@@ -41,7 +42,7 @@ export default function PublicPaymentPage({ params }: { params: Promise<{ id: st
     return () => { alive = false; window.clearInterval(poll); };
   }, [params]);
 
-  const qrUrl = useMemo(() => data ? `https://api.qrserver.com/v1/create-qr-code/?format=svg&size=260x260&margin=8&data=${encodeURIComponent(data.walletUrl)}` : "", [data]);
+  const qrUrl = useMemo(() => data?.externalPayment?.uri ? `https://api.qrserver.com/v1/create-qr-code/?format=svg&size=260x260&margin=8&data=${encodeURIComponent(data.externalPayment.uri)}` : "", [data]);
   const openWallet = () => {
     if (!data) return;
     setScreen("wallet");
@@ -64,8 +65,7 @@ export default function PublicPaymentPage({ params }: { params: Promise<{ id: st
     <h1 className="pay-title center">Оплата</h1>
     <div className="pay-amount-card"><span>До сплати</span><strong>{money(link.amount, link.currency)}</strong><small>Посилання {link.id}</small></div>
     <a className="pay-primary" href={data.walletUrl} onClick={() => setScreen("wallet")}>▣&nbsp; Оплатити в Nezeriya Wallet</a>
-    <p className="pay-or">або відскануйте QR-код у гаманці</p>
-    <div className="pay-qr"><img src={qrUrl} alt="QR-код для оплати в Nezeriya Wallet" /></div>
+    {data.externalPayment?.supported ? <><p className="pay-or">або відскануйте QR-код у TON-гаманці</p><div className="pay-qr"><img src={qrUrl} alt="QR-код для оплати GRAM" /></div><p className="pay-qr-note">{data.externalPayment.message}</p></> : <div className="pay-external-note"><b>Оплата з іншого гаманця</b><span>{data.externalPayment?.message || "Скористайтеся Nezeriya Wallet."}</span></div>}
     <div className="pay-address"><div><span>Адреса отримувача</span><code>{data.recipient || "Гаманець магазину ще не підключено"}</code><small>Memo: {link.id}</small></div><button onClick={() => void copy(data.recipient)}>⧉</button></div>
     {screen === "copied" ? <p className="pay-copy-note">Адресу скопійовано</p> : <p className="pay-wait">Очікуємо оплату. Сторінка оновиться автоматично.</p>}
   </section></main>;

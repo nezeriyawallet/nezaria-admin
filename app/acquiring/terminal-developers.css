@@ -51,3 +51,7 @@
 .event-tags { display: flex; flex-wrap: wrap; gap: 8px; }
 .event-tags b { border-radius: 99px; padding: 9px 13px; background: #f1f2f7; color: #4d5770; font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .developer-log { display: flex; width: 100%; justify-content: space-between; border: 1px solid #e0e5ef; border-radius: 18px; padding: 21px 24px; background: #fff; color: #111a36; font: 600 18px inherit; cursor: pointer; }
+
+.terminals-empty { display: grid; min-height: 290px; place-items: center; align-content: center; gap: 11px; border: 1px dashed #cdd5e5; border-radius: 20px; background: #fff; color: #778197; text-align: center; }
+.terminals-empty b { color: #111a36; font-size: 21px; }
+.terminals-empty button { margin-top: 10px; border: 0; border-radius: 12px; padding: 12px 18px; background: #10172f; color: #fff; font: inherit; cursor: pointer; }
