@@ -45,7 +45,6 @@ export default function PublicPaymentPage({ params }: { params: Promise<{ id: st
   const openWallet = () => {
     if (!data) return;
     setScreen("wallet");
-    window.location.assign(data.walletUrl);
   };
   const copy = async (value: string) => {
     await navigator.clipboard?.writeText(value);
