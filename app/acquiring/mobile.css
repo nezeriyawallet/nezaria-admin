@@ -27,7 +27,7 @@
   .analytics-filters button { flex: 0 0 auto; padding: 10px 14px; }
   .analytics-filters .export-button { width: 100%; min-height: 44px; background: #fff; }
   .metric-grid, .analytics-main, .analytics-bottom { gap: 13px; }
-  .metric-grid { grid-template-columns: 1fr; margin: 16px 0; }
+  .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 16px 0; }
   .metric-card, .chart-card, .terminal-card, .mini-card { border-radius: 18px; }
   .metric-card { padding: 18px 20px; }
   .metric-card strong { font-size: 26px; }
@@ -122,6 +122,29 @@
   .payout-row > span { grid-column: 1; }
   .payout-row > b { grid-column: 2; grid-row: 1; white-space: nowrap; }
   .payout-row em { grid-column: 2; grid-row: 2; }
+
+  .terminals-view, .developers-view { padding-top: 26px; }
+  .terminals-view > header { align-items: flex-start; }
+  .terminals-view > header p { font-size: 15px; }
+  .terminals-view > header button { padding: 12px 15px; }
+  .terminal-list { grid-template-columns: 1fr; gap: 14px; }
+  .terminal-list article { min-height: 0; border-radius: 19px; padding: 20px; }
+  .terminal-list h3 { font-size: 18px; }
+  .terminal-list footer { margin-top: 8px; }
+  .terminal-fab { position: fixed; right: 28px; bottom: calc(28px + env(safe-area-inset-bottom)); z-index: 10; display: grid; width: 62px; height: 62px; place-items: center; border: 0; border-radius: 50%; background: #10172f; color: #fff; box-shadow: 0 9px 24px rgba(16, 23, 47, .28); font-size: 27px; }
+  .terminal-modal-backdrop { align-items: end; padding: 0; }
+  .terminal-modal { width: 100%; max-height: 90dvh; overflow-y: auto; border-radius: 24px 24px 0 0; padding: 30px 20px calc(20px + env(safe-area-inset-bottom)); animation: mobile-sheet-in .24s ease-out; }
+  .terminal-modal > i { display: block; width: 52px; height: 5px; margin: -19px auto 19px; border-radius: 99px; background: #d9deea; }
+  .terminal-modal h2 { font-size: 27px; }
+  .terminal-types { gap: 10px; }
+  .terminal-types button { min-height: 104px; font-size: 14px; }
+  .terminal-modal footer { position: sticky; bottom: -20px; margin: 22px -20px -20px; padding: 12px 20px calc(12px + env(safe-area-inset-bottom)); background: #fff; }
+  .developers-view h2 { font-size: 29px; }
+  .developer-card { margin: 14px 0; border-radius: 18px; padding: 20px; }
+  .developer-card-heading { padding-bottom: 15px; }
+  .developer-card section { padding: 16px 0; }
+  .webhook-card section { grid-template-columns: 1fr; gap: 10px; }
+  .webhook-card em { justify-self: start; }
 
   .link-backdrop, .payout-modal-backdrop, .workspace-modal-backdrop { display: flex; align-items: flex-end; padding: 0; }
   .link-wizard, .payout-modal, .withdraw-modal, .business-details-modal { box-sizing: border-box; width: 100%; max-height: min(88dvh, 780px); border-radius: 24px 24px 0 0; padding: 27px 20px calc(20px + env(safe-area-inset-bottom)); box-shadow: 0 -16px 48px rgba(14, 25, 49, .2); animation: mobile-sheet-in .24s ease-out; }
