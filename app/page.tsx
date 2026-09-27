@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-type NavItem = "Огляд" | "Користувачі" | "Виграші" | "Магазин" | "Фінанси" | "Підтримка" | "Команда" | "Працівники" | "Медійка";
+type NavItem = "Огляд" | "Користувачі" | "Виграші" | "Магазин" | "Бізнес" | "Фінанси" | "Підтримка" | "Команда" | "Працівники" | "Медійка";
 type AccessRole = "owner" | "worker" | "media" | null;
 type WorkspaceMode = "ceo" | "admin";
 type WorkerApplication = {
@@ -26,12 +26,14 @@ type EmployeeProfile = {
 type DailyOnlinePeak = { date: string; peakOnline: number };
 type WalletMetrics = Record<string, string | number | null> & { dailyOnlinePeaks?: DailyOnlinePeak[] };
 type WalletUser = { id: number; username: string; name: string; premium: boolean; nzrPoints: number; walletIds: number[]; referralCount?: number; phoneCountry?: string };
+type AcquiringBusiness = { account: string; name: string; type: string; ownership: string; assets: string[]; updatedAt: string | null };
+type AcquiringMetrics = { businesses: number; merchants: number; products: number; payments: number; paymentLinks: number; payouts: number };
 type WheelWin = { id: number; username: string; name: string; walletId: number; wheel: number; dropped: string; reward: string; createdAt: string };
 type WheelWinSummary = { monthlyWonNzr: number; monthlyLostNzr: number; monthlyCollectedNzr: number; monthlyNetEarningsNzr: number; monthlyWheelSpentNzr: number; monthlyPlinkoSpentNzr: number; monthlyWheelWonNzr: number; monthlyPlinkoWonNzr: number };
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
 type SupportTicket = { id: string; client_name: string; client_username: string | null; status: "new" | "in_progress" | "awaiting_rating" | "closed"; assigned_to: string | null; rating: number | null; review: string | null; created_at: string; updated_at: string; messages: SupportMessage[] };
 
-const navigation: NavItem[] = ["Огляд", "Користувачі", "Виграші", "Магазин", "Фінанси", "Команда", "Працівники", "Медійка"];
+const navigation: NavItem[] = ["Огляд", "Користувачі", "Виграші", "Магазин", "Бізнес", "Фінанси", "Команда", "Працівники", "Медійка"];
 
 const metrics = [
   { label: "Загальна комісія", value: "$84,291.40", change: "+12.8%", icon: "◈", tone: "mint" },
@@ -115,6 +117,9 @@ export default function Home() {
   const [financeTurnoverYear, setFinanceTurnoverYear] = useState(() => new Date().getFullYear());
   const [hoveredOnlinePeak, setHoveredOnlinePeak] = useState<DailyOnlinePeak | null>(null);
   const [walletUsers, setWalletUsers] = useState<WalletUser[]>([]);
+  const [acquiringMetrics, setAcquiringMetrics] = useState<AcquiringMetrics | null>(null);
+  const [acquiringBusinesses, setAcquiringBusinesses] = useState<AcquiringBusiness[]>([]);
+  const [acquiringRefreshing, setAcquiringRefreshing] = useState(false);
   const [wheelWins, setWheelWins] = useState<WheelWin[]>([]);
   const [wheelWinSummary, setWheelWinSummary] = useState<WheelWinSummary>({ monthlyWonNzr: 0, monthlyLostNzr: 0, monthlyCollectedNzr: 0, monthlyNetEarningsNzr: 0, monthlyWheelSpentNzr: 0, monthlyPlinkoSpentNzr: 0, monthlyWheelWonNzr: 0, monthlyPlinkoWonNzr: 0 });
   const [winsRefreshing, setWinsRefreshing] = useState(false);
@@ -374,6 +379,29 @@ export default function Home() {
     }
   };
 
+  const loadAcquiringMetrics = async (showNotice = false) => {
+    if (accessRole !== "owner" || acquiringRefreshing) return;
+    const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
+    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session") || window.localStorage.getItem("nezeriya_owner_session");
+    if (!token || !ownerSession) return;
+    setAcquiringRefreshing(true);
+    try {
+      const response = await fetch(`/api/owner/acquiring?_=${Date.now()}`, { cache: "no-store", headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error();
+      setAcquiringMetrics(body.metrics || null);
+      setAcquiringBusinesses(Array.isArray(body.businesses) ? body.businesses : []);
+      if (showNotice) setNotice("Дані еквайрингу оновлено");
+    } catch {
+      if (showNotice) setNotice("Не вдалося оновити дані еквайрингу");
+    } finally {
+      setAcquiringRefreshing(false);
+      if (showNotice) window.setTimeout(() => setNotice(null), 2600);
+    }
+  };
+
+  useEffect(() => { void loadAcquiringMetrics(); }, [accessRole]);
+
   useEffect(() => {
     if (accessRole !== "owner") return;
     const refreshMetricsOnly = async () => {
@@ -389,6 +417,7 @@ export default function Home() {
     };
     const sync = () => {
       if (active === "Користувачі") void refreshUsers();
+      else if (active === "Бізнес") void loadAcquiringMetrics();
       else if (active === "Виграші") void loadWheelWins();
       else void refreshMetricsOnly();
     };
@@ -673,7 +702,7 @@ export default function Home() {
         <nav aria-label="Головна навігація">
           {(workspaceMode === "ceo" ? navigation : ["Підтримка"] as NavItem[]).map((item, index) => (
             <button key={item} onClick={() => setActive(item)} className={`nav-item ${active === item ? "active" : ""}`}>
-              <span className="nav-icon">{["▦", "◎", "◌", "▣", "◍", "◫", "♟", "◈", "★"][index]}</span>{item}
+              <span className="nav-icon">{["▦", "◎", "◌", "▣", "▰", "◍", "◫", "♟", "◈", "★"][index]}</span>{item}
             </button>
           ))}
         </nav>
@@ -683,7 +712,7 @@ export default function Home() {
       <section className="content">
 
         <div className="dashboard">
-          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} refreshing={usersRefreshing} onRefresh={() => void refreshUsers(true)} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} summary={wheelWinSummary} refreshing={winsRefreshing} onRefresh={() => void loadWheelWins(true)} /> : active === "Магазин" ? <ShopPanel walletMetrics={walletMetrics} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} selectedMonth={financeMonth} selectedTurnoverYear={financeTurnoverYear} onSelectedMonthChange={setFinanceMonth} onSelectedTurnoverYearChange={setFinanceTurnoverYear} /> : <>
+          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} refreshing={usersRefreshing} onRefresh={() => void refreshUsers(true)} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} summary={wheelWinSummary} refreshing={winsRefreshing} onRefresh={() => void loadWheelWins(true)} /> : active === "Магазин" ? <ShopPanel walletMetrics={walletMetrics} /> : active === "Бізнес" ? <BusinessPanel metrics={acquiringMetrics} businesses={acquiringBusinesses} refreshing={acquiringRefreshing} onRefresh={() => void loadAcquiringMetrics(true)} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} selectedMonth={financeMonth} selectedTurnoverYear={financeTurnoverYear} onSelectedMonthChange={setFinanceMonth} onSelectedTurnoverYearChange={setFinanceTurnoverYear} /> : <>
           <section className="heading-row">
             <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p></div>
             <div className="header-controls"><NotificationBell role="owner" owner /><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>
@@ -802,6 +831,16 @@ function ShopPanel({ walletMetrics: _walletMetrics }: { walletMetrics: WalletMet
   return <section className="finance-page">
     <section className="heading-row"><div><p className="eyebrow">МАГАЗИН</p><h1>Колекції <span>Nezeriya Wallet</span></h1><p className="subtle">Незабаром тут з&apos;являться колекції.</p></div></section>
     <article className="panel empty-applications"><p className="panel-label">СКОРО</p><h2>Колекції в розробці</h2><p>Коли колекції будуть готові, тут з&apos;являться їхні картки, ціна та можливість придбати.</p></article>
+  </section>;
+}
+
+function BusinessPanel({ metrics, businesses, refreshing, onRefresh }: { metrics: AcquiringMetrics | null; businesses: AcquiringBusiness[]; refreshing: boolean; onRefresh: () => void }) {
+  const value = (key: keyof AcquiringMetrics) => metrics ? displayMetric(metrics[key]) : "—";
+  const date = (value: string | null) => value ? new Date(value).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+  return <section className="users-page">
+    <section className="heading-row"><div><p className="eyebrow">ЕКВАЙРИНГ</p><h1>Бізнеси <span>Nezeriya Pay</span></h1><p className="subtle">Усі створені профілі бізнесів синхронізуються зі сховищем еквайрингу.</p></div><div className="heading-actions"><button className="outline-button" type="button" onClick={onRefresh} disabled={refreshing}>{refreshing ? "Оновлення..." : "↻ Оновити"}</button><span className="live"><i /> LIVE</span></div></section>
+    <section className="users-summary"><article className="panel users-primary"><p>Створено бізнесів</p><strong>{value("businesses")}</strong><span>Усі бізнес-профілі в еквайрингу</span></article><article className="panel"><p>Акаунти еквайрингу</p><strong>{value("merchants")}</strong><span>Унікальні власники бізнесів</span></article><article className="panel"><p>Товари</p><strong>{value("products")}</strong><span>Додано до каталогів бізнесів</span></article><article className="panel"><p>Оплати</p><strong>{value("payments")}</strong><span>Усі збережені платежі</span></article><article className="panel"><p>Платіжні посилання</p><strong>{value("paymentLinks")}</strong><span>Створено для приймання оплат</span></article><article className="panel"><p>Заявки на виплату</p><strong>{value("payouts")}</strong><span>Усі збережені виплати</span></article></section>
+    <article className="panel users-table-panel"><div className="panel-head"><div><p className="panel-label">РЕЄСТР ЕКВАЙРИНГУ</p><h2>Створені бізнеси</h2></div><span>{businesses.length} бізнесів показано</span></div>{businesses.length === 0 ? <p className="users-empty">Бізнесів у сховищі еквайрингу поки немає.</p> : <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Бізнес</th><th>Тип</th><th>Власність</th><th>Акаунт еквайрингу</th><th>Активи</th><th>Оновлено</th></tr></thead><tbody>{businesses.map((business, index) => <tr key={`${business.account}-${business.name}-${index}`}><td><strong>{business.name}</strong></td><td>{business.type}</td><td>{business.ownership}</td><td>{business.account}</td><td className="nzr-points">{business.assets.length ? business.assets.join(", ") : "—"}</td><td>{date(business.updatedAt)}</td></tr>)}</tbody></table></div>}</article>
   </section>;
 }
 
