@@ -35,6 +35,8 @@
 
 .receipt-detail h2 { font-size: 26px; }
 .receipt-detail > strong { font-size: 36px; margin: 23px 0 18px; }
+.receipt-detail:has(.receipt-verification.pending) { box-shadow: -24px 0 70px rgba(181, 122, 20, .18); }
+.receipt-detail:has(.receipt-verification.underpaid) { box-shadow: -24px 0 70px rgba(203, 79, 75, .16); }
 
 .receipt-verification {
   display: flex;
@@ -62,6 +64,12 @@
 .receipt-verification span { display: grid; gap: 3px; }
 .receipt-verification strong { font-size: 13px; color: #243048; }
 .receipt-verification small { color: #7f899f; font-size: 11px; }
+.receipt-verification.pending { border: 1px solid #ffe5b6; background: #fffaf0; }
+.receipt-verification.underpaid { border: 1px solid #ffd1d1; background: #fff6f6; }
+.receipt-verification.pending strong { color: #9a6514; }
+.receipt-verification.underpaid strong { color: #b63e3e; }
+.receipt-detail:has(.receipt-verification.pending) > strong { color: #a66c14; }
+.receipt-detail:has(.receipt-verification.underpaid) > strong { color: #cb4f4b; }
 .receipt-products > p { margin: 12px 0 0; color: #7e889e; font-size: 12px; }
 .receipt-detail footer b { overflow-wrap: anywhere; }
 .receipt-detail footer small:nth-of-type(n + 2) { margin-top: 8px; }
