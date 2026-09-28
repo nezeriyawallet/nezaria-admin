@@ -110,5 +110,21 @@ function PaymentHeader({ business }: { business: PaymentData["business"] }) {
 }
 
 function PaymentState({ kind, title, description, link }: { kind: "error" | "expired" | "success"; title: string; description: string; link?: PaymentLink }) {
-  return <main className="pay-shell"><section className="pay-card pay-state"><div className={`pay-state-icon ${kind}`}>{kind === "success" ? "✓" : kind === "expired" ? "◷" : "!"}</div><h1>{title}</h1>{link && kind === "success" ? <strong className="pay-state-amount">{money(link.amount, link.currency)}</strong> : null}<p>{description}</p>{link ? <div className="pay-state-info"><span>Посилання <b>{link.id}</b></span><span>{kind === "success" ? `Оплачено ${expiry(new Date().toISOString())}` : `Діяло до ${expiry(link.expiresAt)}`}</span></div> : null}<button className="pay-close" onClick={() => history.back()}>Закрити</button></section></main>;
+  const close = () => {
+    const telegram = (window as Window & { Telegram?: { WebApp?: { close: () => void } } }).Telegram?.WebApp;
+    if (telegram) {
+      telegram.close();
+      return;
+    }
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    window.close();
+    window.setTimeout(() => {
+      if (!window.closed) window.location.replace(window.location.origin);
+    }, 150);
+  };
+
+  return <main className="pay-shell"><section className="pay-card pay-state"><div className={`pay-state-icon ${kind}`}>{kind === "success" ? "✓" : kind === "expired" ? "◷" : "!"}</div><h1>{title}</h1>{link && kind === "success" ? <strong className="pay-state-amount">{money(link.amount, link.currency)}</strong> : null}<p>{description}</p>{link ? <div className="pay-state-info"><span>Посилання <b>{link.id}</b></span><span>{kind === "success" ? `Оплачено ${expiry(new Date().toISOString())}` : `Діяло до ${expiry(link.expiresAt)}`}</span></div> : null}<button className="pay-close" onClick={close}>Закрити</button></section></main>;
 }
