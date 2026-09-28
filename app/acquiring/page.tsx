@@ -752,7 +752,55 @@ export default function AcquiringPage() {
     return () => window.clearInterval(timer);
   }, [view]);
 
-  useEffect(() => { if (!account) return; let active = true; let migrated = false; const loadStore = async () => { try { const response = await fetch(`/api/acquiring/store?account=${encodeURIComponent(account)}`, { cache: "no-store" }); const state = response.ok ? await response.json() : null; if (!active || !state) return; if (Array.isArray(state.businesses) && state.businesses.length) { setBusinesses(state.businesses); if (state.productsByBusiness && typeof state.productsByBusiness === "object") setProductsByBusiness(state.productsByBusiness); if (state.paymentsByBusiness && typeof state.paymentsByBusiness === "object") setPaymentsByBusiness(state.paymentsByBusiness); if (state.payoutsByBusiness && typeof state.payoutsByBusiness === "object") setPayoutsByBusiness(state.payoutsByBusiness); if (state.linksByBusiness && typeof state.linksByBusiness === "object") setLinksByBusiness(state.linksByBusiness); if (typeof state.payoutWallet === "string" && state.payoutWallet) setPayoutWallet(state.payoutWallet); return; } if (migrated) return; const localBusinesses = JSON.parse(localStorage.getItem("nezeriya_pay_businesses") || "[]"); if (Array.isArray(localBusinesses) && localBusinesses.length) { migrated = true; void fetch("/api/acquiring/store", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, businesses: localBusinesses, productsByBusiness: {}, paymentsByBusiness: {}, payoutsByBusiness: {}, linksByBusiness: {}, payoutWallet }) }); } } catch {} }; void loadStore(); const timer = window.setInterval(() => void loadStore(), 8000); return () => { active = false; window.clearInterval(timer); }; }, [account, payoutWallet]);
+  useEffect(() => {
+    if (!account) return;
+    let active = true;
+    let loading = false;
+    let migrated = false;
+    const readStore = async () => {
+      const response = await fetch(`/api/acquiring/store?account=${encodeURIComponent(account)}`, { cache: "no-store" });
+      return response.ok ? await response.json() as { businesses?: Business[]; productsByBusiness?: Record<string, Product[]>; paymentsByBusiness?: Record<string, Payment[]>; payoutsByBusiness?: Record<string, Payout[]>; linksByBusiness?: Record<string, PaymentLink[]>; payoutWallet?: string } : null;
+    };
+    const applyStore = (state: NonNullable<Awaited<ReturnType<typeof readStore>>>) => {
+      if (Array.isArray(state.businesses) && state.businesses.length) setBusinesses(state.businesses);
+      if (state.productsByBusiness && typeof state.productsByBusiness === "object") setProductsByBusiness(state.productsByBusiness);
+      if (state.paymentsByBusiness && typeof state.paymentsByBusiness === "object") setPaymentsByBusiness(state.paymentsByBusiness);
+      if (state.payoutsByBusiness && typeof state.payoutsByBusiness === "object") setPayoutsByBusiness(state.payoutsByBusiness);
+      if (state.linksByBusiness && typeof state.linksByBusiness === "object") setLinksByBusiness(state.linksByBusiness);
+      if (typeof state.payoutWallet === "string" && state.payoutWallet) setPayoutWallet(state.payoutWallet);
+    };
+    const reconcileActiveGramLinks = async (state: NonNullable<Awaited<ReturnType<typeof readStore>>>) => {
+      const links = Object.values(state.linksByBusiness || {}).flat().filter((link) => link.status === "Активне" && link.currency === "GRAM").slice(0, 40);
+      await Promise.all(links.map((link) => fetch(`/api/acquiring/payment-link/${encodeURIComponent(link.id)}`, { cache: "no-store" }).catch(() => undefined)));
+      return links.length > 0;
+    };
+    const loadStore = async () => {
+      if (loading) return;
+      loading = true;
+      try {
+        let state = await readStore();
+        if (!active || !state) return;
+        if (Array.isArray(state.businesses) && state.businesses.length) {
+          if (await reconcileActiveGramLinks(state)) state = await readStore();
+          if (active && state) applyStore(state);
+          return;
+        }
+        if (migrated) return;
+        const localBusinesses = JSON.parse(localStorage.getItem("nezeriya_pay_businesses") || "[]");
+        if (Array.isArray(localBusinesses) && localBusinesses.length) {
+          migrated = true;
+          void fetch("/api/acquiring/store", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, businesses: localBusinesses, productsByBusiness: {}, paymentsByBusiness: {}, payoutsByBusiness: {}, linksByBusiness: {}, payoutWallet }) });
+        }
+      } catch {
+        // Keep the last successful dashboard state and try again on the next cycle.
+      } finally {
+        loading = false;
+      }
+    };
+    void loadStore();
+    const timer = window.setInterval(() => void loadStore(), 15_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [account, payoutWallet]);
 
   useEffect(() => {
     if (!token || view === "dashboard") return;
