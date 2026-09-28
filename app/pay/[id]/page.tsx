@@ -43,7 +43,11 @@ export default function PublicPaymentPage({ params }: { params: Promise<{ id: st
     return () => { alive = false; window.clearInterval(poll); };
   }, [params]);
 
-  const qrUrl = useMemo(() => data?.externalPayment?.uri ? `https://api.qrserver.com/v1/create-qr-code/?format=svg&size=260x260&margin=8&data=${encodeURIComponent(data.externalPayment.uri)}` : "", [data]);
+  // The Nezeriya Wallet QR is always available. It encodes the verified payment
+  // deep-link, not a bare TON address, so scanning never creates an invalid USDT
+  // transfer in another wallet.
+  const walletQrUrl = useMemo(() => data?.walletUrl ? `https://api.qrserver.com/v1/create-qr-code/?format=svg&size=260x260&margin=8&data=${encodeURIComponent(data.walletUrl)}` : "", [data]);
+  const externalQrUrl = useMemo(() => data?.externalPayment?.uri ? `https://api.qrserver.com/v1/create-qr-code/?format=svg&size=260x260&margin=8&data=${encodeURIComponent(data.externalPayment.uri)}` : "", [data]);
   const openWallet = () => {
     if (!data) return;
     setScreen("wallet");
@@ -65,9 +69,11 @@ export default function PublicPaymentPage({ params }: { params: Promise<{ id: st
     <button className="pay-back" onClick={() => setScreen("order")} aria-label="Назад">‹</button>
     <h1 className="pay-title center">Оплата</h1>
     <div className="pay-amount-card"><span>До сплати</span><strong>{money(link.amount, link.currency)}</strong><small>Посилання {link.id}</small></div>
-    <a className="pay-primary" href={data.walletUrl} onClick={() => setScreen("wallet")}>▣&nbsp; Оплатити в Nezeriya Wallet</a>
-    {data.externalPayment?.supported ? <><p className="pay-or">або відскануйте QR-код у TON-гаманці</p><div className="pay-qr"><img src={qrUrl} alt="QR-код для оплати GRAM" /></div><p className="pay-qr-note">{data.externalPayment.message}</p></> : <ExternalWalletPayment linkId={link.id} currency={link.currency} />}
-    <div className="pay-address"><div><span>Адреса отримувача</span><code>{data.recipient || "Гаманець магазину ще не підключено"}</code><small>Memo: {link.id}</small></div><button onClick={() => void copy(data.recipient)}>⧉</button></div>
+    <a className="pay-primary" href={data.walletUrl}>▣&nbsp; Оплатити в Nezeriya Wallet</a>
+    <p className="pay-or">або відскануйте QR-код у Nezeriya Wallet</p>
+    <div className="pay-qr"><img src={walletQrUrl} alt="QR-код для оплати в Nezeriya Wallet" /></div>
+    <p className="pay-qr-note">QR відкриває саме цей рахунок у Nezeriya Wallet — сума та призначення підставляються автоматично.</p>
+    {data.externalPayment?.supported ? <section className="pay-external-qr"><p className="pay-or">Оплата GRAM з іншого TON-гаманця</p><div className="pay-qr"><img src={externalQrUrl} alt="QR-код для оплати GRAM" /></div><p className="pay-qr-note">{data.externalPayment.message}</p><div className="pay-address"><div><span>Адреса отримувача</span><code>{data.recipient}</code><small>Memo: {link.id}</small></div><button onClick={() => void copy(data.recipient)}>⧉</button></div></section> : <ExternalWalletPayment linkId={link.id} currency={link.currency} />}
     {screen === "copied" ? <p className="pay-copy-note">Адресу скопійовано</p> : <p className="pay-wait">Очікуємо оплату. Сторінка оновиться автоматично.</p>}
   </section></main>;
 
