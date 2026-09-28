@@ -52,10 +52,9 @@ export default function PublicPaymentPage({ params }: { params: Promise<{ id: st
     if (!data) return "";
     return `${data.walletUrl}${data.walletUrl.includes("?") ? "&" : "?"}asset=${selectedAsset}`;
   }, [data, selectedAsset]);
-  // In a wallet's ordinary “Send” scanner a Telegram link is treated as an
-  // address and therefore fails validation. For native GRAM transfers encode
-  // the actual Nezeriya server wallet instead.
-  const walletQrPayload = useMemo(() => selectedAsset === "GRAM" && data?.recipient ? data.recipient : walletPaymentUrl, [data?.recipient, selectedAsset, walletPaymentUrl]);
+  // The QR is scanned in a wallet's ordinary “Send” screen. It must contain
+  // the real Nezeriya server wallet address, never a Telegram bot deep link.
+  const walletQrPayload = useMemo(() => data?.recipient || walletPaymentUrl, [data?.recipient, walletPaymentUrl]);
   // The Nezeriya Wallet QR is always available. It encodes the verified payment
   // deep-link, not a bare TON address, so scanning never creates an invalid USDT
   // transfer in another wallet.
@@ -82,10 +81,11 @@ export default function PublicPaymentPage({ params }: { params: Promise<{ id: st
     <h1 className="pay-title center">Оплата</h1>
     <div className="pay-amount-card"><span>До сплати</span><strong>{selectedAsset === link.currency ? money(link.amount, link.currency) : `Оплата в ${selectedAsset}`}</strong><small>{selectedAsset === link.currency ? `Посилання ${link.id}` : "Точна сума буде розрахована в Nezeriya Wallet"}</small></div>
     <a className="pay-primary" href={walletPaymentUrl}>▣&nbsp; Оплатити в Nezeriya Wallet</a>
-    <p className="pay-or">{selectedAsset === "GRAM" ? "відскануйте QR у режимі «Надіслати»" : "або відскануйте QR-код у Nezeriya Wallet"}</p>
-    <div className="pay-qr"><img src={walletQrUrl} alt={selectedAsset === "GRAM" ? "QR-код серверного гаманця Nezeriya" : "QR-код для оплати в Nezeriya Wallet"} /></div>
-    <p className="pay-qr-note">{selectedAsset === "GRAM" ? "QR містить серверну TON-адресу Nezeriya, а не Telegram-посилання. Для автоматичного заповнення суми та створення чека скористайтеся кнопкою «Оплатити в Nezeriya Wallet»." : "QR відкриває саме цей рахунок у Nezeriya Wallet — сума та призначення підставляються автоматично."}</p>
-    {selectedAsset === "GRAM" ? <div className="pay-address"><div><span>Серверний гаманець Nezeriya</span><code>{data.recipient}</code><small>Memo: {link.id}</small></div><button onClick={() => void copy(data.recipient)}>⧉</button></div> : selectedAsset !== link.currency ? <p className="pay-qr-note">Оплата в {selectedAsset} з перерахунком за курсом доступна в Nezeriya Wallet.</p> : <ExternalWalletPayment linkId={link.id} currency={selectedAsset} />}
+    <p className="pay-or">відскануйте QR у режимі «Надіслати»</p>
+    <div className="pay-qr"><img src={walletQrUrl} alt="QR-код серверного гаманця Nezeriya" /></div>
+    <p className="pay-qr-note">QR містить серверну адресу гаманця Nezeriya — не посилання на бот. Для автоматичного заповнення суми та створення чека скористайтеся кнопкою «Оплатити в Nezeriya Wallet».</p>
+    <div className="pay-address"><div><span>Серверний гаманець Nezeriya</span><code>{data.recipient}</code><small>Memo: {link.id}</small></div><button onClick={() => void copy(data.recipient)}>⧉</button></div>
+    {selectedAsset !== link.currency ? <p className="pay-qr-note">Оплата в {selectedAsset} з перерахунком за курсом доступна в Nezeriya Wallet.</p> : <ExternalWalletPayment linkId={link.id} currency={selectedAsset} />}
     {screen === "copied" ? <p className="pay-copy-note">Адресу скопійовано</p> : <p className="pay-wait">Очікуємо оплату. Сторінка оновиться автоматично.</p>}
   </section></main>;
 
