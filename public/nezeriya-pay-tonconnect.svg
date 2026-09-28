@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title">
+  <title id="title">Nezeriya Pay</title>
+  <rect width="100" height="100" rx="16" fill="#050505"/>
+  <path fill="#fff" d="M14 24 26 17v66L14 76V24Z"/>
+  <path fill="#fff" d="M34 14 49 8v84l-15-7V14Z"/>
+  <path fill="#fff" d="m73 17 13 7v52l-13 8V17Z"/>
+  <path fill="#fff" d="m49 8 24 22v19L49 28V8Z"/>
+  <path fill="#fff" d="m49 40 24 22v22L49 62V40Z"/>
+</svg>
