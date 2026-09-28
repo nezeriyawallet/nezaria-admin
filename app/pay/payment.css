@@ -26,9 +26,8 @@
 .pay-assets { margin-bottom: 12px; }
 .pay-assets > span { display: block; margin-bottom: 8px; }
 .pay-assets div { display: flex; overflow: hidden; border-radius: 13px; background: #f0f1f6; padding: 4px; }
-.pay-assets b, .pay-assets div span { flex: 1; text-align: center; padding: 9px; border-radius: 10px; font-size: 14px; }
-.pay-assets b { background: #111a34; color: white; }
-.pay-assets div span { color: #626c82; }
+.pay-assets div button { flex: 1; border: 0; text-align: center; padding: 9px; border-radius: 10px; background: transparent; color: #626c82; font: 14px inherit; cursor: pointer; }
+.pay-assets div button.selected { background: #111a34; color: white; font-weight: 700; }
 .pay-expiry { margin: 15px 0 20px; }
 .pay-primary, .pay-close { display: flex; width: 100%; min-height: 52px; border: 0; justify-content: center; align-items: center; border-radius: 14px; background: #101830; color: white; text-decoration: none; font: 700 15px inherit; cursor: pointer; }
 .pay-footnote { text-align: center; margin: 15px 0 0; }

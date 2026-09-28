@@ -7,7 +7,7 @@ import { ExternalWalletPayment } from "./external-wallet-payment";
 type Line = { name: string; quantity: number; price: string; currency?: string; photo?: string };
 type PaymentLink = {
   id: string; title: string; amount: string; currency: "USDT" | "GRAM"; products: Line[];
-  message: string; status: "Активне" | "Оплачено" | "Прострочено"; expiresAt: string;
+  assets?: Array<"USDT" | "GRAM">; message: string; status: "Активне" | "Оплачено" | "Прострочено"; expiresAt: string;
 };
 type PaymentData = {
   link: PaymentLink;
@@ -24,6 +24,7 @@ export default function PublicPaymentPage({ params }: { params: Promise<{ id: st
   const [data, setData] = useState<PaymentData | null>(null);
   const [error, setError] = useState("");
   const [screen, setScreen] = useState<"order" | "wallet" | "copied">("order");
+  const [selectedAsset, setSelectedAsset] = useState<"USDT" | "GRAM">("USDT");
 
   useEffect(() => {
     let alive = true;
@@ -43,10 +44,18 @@ export default function PublicPaymentPage({ params }: { params: Promise<{ id: st
     return () => { alive = false; window.clearInterval(poll); };
   }, [params]);
 
+  const paymentAssets = data?.link.assets?.filter((asset): asset is "USDT" | "GRAM" => asset === "USDT" || asset === "GRAM") || (data ? [data.link.currency] : []);
+  useEffect(() => {
+    if (data && !paymentAssets.includes(selectedAsset)) setSelectedAsset(data.link.currency);
+  }, [data, paymentAssets.join(","), selectedAsset]);
+  const walletPaymentUrl = useMemo(() => {
+    if (!data) return "";
+    return `${data.walletUrl}${data.walletUrl.includes("?") ? "&" : "?"}asset=${selectedAsset}`;
+  }, [data, selectedAsset]);
   // The Nezeriya Wallet QR is always available. It encodes the verified payment
   // deep-link, not a bare TON address, so scanning never creates an invalid USDT
   // transfer in another wallet.
-  const walletQrUrl = useMemo(() => data?.walletUrl ? `https://api.qrserver.com/v1/create-qr-code/?format=svg&size=260x260&margin=8&data=${encodeURIComponent(data.walletUrl)}` : "", [data]);
+  const walletQrUrl = useMemo(() => walletPaymentUrl ? `https://api.qrserver.com/v1/create-qr-code/?format=svg&size=260x260&margin=8&data=${encodeURIComponent(walletPaymentUrl)}` : "", [walletPaymentUrl]);
   const externalQrUrl = useMemo(() => data?.externalPayment?.uri ? `https://api.qrserver.com/v1/create-qr-code/?format=svg&size=260x260&margin=8&data=${encodeURIComponent(data.externalPayment.uri)}` : "", [data]);
   const openWallet = () => {
     if (!data) return;
@@ -68,12 +77,12 @@ export default function PublicPaymentPage({ params }: { params: Promise<{ id: st
     <PaymentHeader business={business} />
     <button className="pay-back" onClick={() => setScreen("order")} aria-label="Назад">‹</button>
     <h1 className="pay-title center">Оплата</h1>
-    <div className="pay-amount-card"><span>До сплати</span><strong>{money(link.amount, link.currency)}</strong><small>Посилання {link.id}</small></div>
-    <a className="pay-primary" href={data.walletUrl}>▣&nbsp; Оплатити в Nezeriya Wallet</a>
+    <div className="pay-amount-card"><span>До сплати</span><strong>{selectedAsset === link.currency ? money(link.amount, link.currency) : `Оплата в ${selectedAsset}`}</strong><small>{selectedAsset === link.currency ? `Посилання ${link.id}` : "Точна сума буде розрахована в Nezeriya Wallet"}</small></div>
+    <a className="pay-primary" href={walletPaymentUrl}>▣&nbsp; Оплатити в Nezeriya Wallet</a>
     <p className="pay-or">або відскануйте QR-код у Nezeriya Wallet</p>
     <div className="pay-qr"><img src={walletQrUrl} alt="QR-код для оплати в Nezeriya Wallet" /></div>
     <p className="pay-qr-note">QR відкриває саме цей рахунок у Nezeriya Wallet — сума та призначення підставляються автоматично.</p>
-    {data.externalPayment?.supported ? <section className="pay-external-qr"><p className="pay-or">Оплата GRAM з іншого TON-гаманця</p><div className="pay-qr"><img src={externalQrUrl} alt="QR-код для оплати GRAM" /></div><p className="pay-qr-note">{data.externalPayment.message}</p><div className="pay-address"><div><span>Адреса отримувача</span><code>{data.recipient}</code><small>Memo: {link.id}</small></div><button onClick={() => void copy(data.recipient)}>⧉</button></div></section> : <ExternalWalletPayment linkId={link.id} currency={link.currency} />}
+    {selectedAsset !== link.currency ? <p className="pay-qr-note">Оплата в {selectedAsset} з перерахунком за курсом доступна в Nezeriya Wallet.</p> : data.externalPayment?.supported ? <section className="pay-external-qr"><p className="pay-or">Оплата GRAM з іншого TON-гаманця</p><div className="pay-qr"><img src={externalQrUrl} alt="QR-код для оплати GRAM" /></div><p className="pay-qr-note">{data.externalPayment.message}</p><div className="pay-address"><div><span>Адреса отримувача</span><code>{data.recipient}</code><small>Memo: {link.id}</small></div><button onClick={() => void copy(data.recipient)}>⧉</button></div></section> : <ExternalWalletPayment linkId={link.id} currency={selectedAsset} />}
     {screen === "copied" ? <p className="pay-copy-note">Адресу скопійовано</p> : <p className="pay-wait">Очікуємо оплату. Сторінка оновиться автоматично.</p>}
   </section></main>;
 
@@ -86,10 +95,10 @@ export default function PublicPaymentPage({ params }: { params: Promise<{ id: st
       <div><b>{item.name}</b><span>× {item.quantity}</span></div><strong>{money((Number(item.price) * item.quantity).toString(), link.currency)}</strong>
     </div>) : <div className="pay-item"><div><b>{link.title}</b><span>Платіжне посилання</span></div><strong>{money(link.amount, link.currency)}</strong></div>}</div>
     <div className="pay-total"><span>Разом</span><strong>{money(link.amount, link.currency)}</strong></div>
-    <div className="pay-assets"><span>Оплатити в</span><div><b>{link.currency}</b><span>{link.currency === "USDT" ? "GRAM" : "USDT"}</span></div></div>
+    <div className="pay-assets"><span>Оплатити в</span><div>{paymentAssets.map((asset) => <button type="button" className={selectedAsset === asset ? "selected" : ""} key={asset} onClick={() => setSelectedAsset(asset)}>{asset}</button>)}</div></div>
     <p className="pay-expiry">◷ Діє до {expiry(link.expiresAt)}</p>
     <button className="pay-primary" onClick={openWallet}>Перейти до оплати</button>
-    <p className="pay-footnote">Оплата відбувається в Nezeriya Wallet</p>
+    <p className="pay-footnote">{selectedAsset === link.currency ? "Оплата відбувається в Nezeriya Wallet" : `Сума в ${selectedAsset} буде визначена за актуальним курсом у Nezeriya Wallet`}</p>
   </section></main>;
 }
 
