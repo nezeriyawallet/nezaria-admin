@@ -28,19 +28,26 @@ export default function PublicPaymentPage({ params }: { params: Promise<{ id: st
 
   useEffect(() => {
     let alive = true;
+    let loading = false;
     const load = async () => {
+      if (loading) return;
+      loading = true;
       const { id } = await params;
-      const response = await fetch(`/api/acquiring/payment-link/${id}`, { cache: "no-store" });
-      const body = await response.json().catch(() => ({}));
-      if (!alive) return;
-      if (!response.ok) setError(body.error || "Посилання недійсне");
-      else {
-        setData(body);
-        setError("");
+      try {
+        const response = await fetch(`/api/acquiring/payment-link/${id}`, { cache: "no-store" });
+        const body = await response.json().catch(() => ({}));
+        if (!alive) return;
+        if (!response.ok) setError(body.error || "Посилання недійсне");
+        else {
+          setData(body);
+          setError("");
+        }
+      } finally {
+        loading = false;
       }
     };
     void load();
-    const poll = window.setInterval(() => void load(), 5000);
+    const poll = window.setInterval(() => void load(), 3000);
     return () => { alive = false; window.clearInterval(poll); };
   }, [params]);
 
@@ -54,7 +61,7 @@ export default function PublicPaymentPage({ params }: { params: Promise<{ id: st
   }, [data, selectedAsset]);
   // The QR is scanned in a wallet's ordinary “Send” screen. It must contain
   // the real Nezeriya server wallet address, never a Telegram bot deep link.
-  const walletQrPayload = useMemo(() => data?.recipient || walletPaymentUrl, [data?.recipient, walletPaymentUrl]);
+  const walletQrPayload = useMemo(() => selectedAsset === "GRAM" ? data?.externalPayment?.uri || data?.recipient || walletPaymentUrl : data?.recipient || walletPaymentUrl, [data?.externalPayment?.uri, data?.recipient, selectedAsset, walletPaymentUrl]);
   // The Nezeriya Wallet QR is always available. It encodes the verified payment
   // deep-link, not a bare TON address, so scanning never creates an invalid USDT
   // transfer in another wallet.
@@ -83,7 +90,7 @@ export default function PublicPaymentPage({ params }: { params: Promise<{ id: st
     <a className="pay-primary" href={walletPaymentUrl}>▣&nbsp; Оплатити в Nezeriya Wallet</a>
     <p className="pay-or">відскануйте QR у режимі «Надіслати»</p>
     <div className="pay-qr"><img src={walletQrUrl} alt="QR-код серверного гаманця Nezeriya" /></div>
-    <p className="pay-qr-note">QR містить серверну адресу гаманця Nezeriya — не посилання на бот. Для автоматичного заповнення суми та створення чека скористайтеся кнопкою «Оплатити в Nezeriya Wallet».</p>
+    <p className="pay-qr-note">QR містить серверну адресу гаманця Nezeriya{selectedAsset === "GRAM" ? ", точну суму та memo цього замовлення" : ""} — не посилання на бот. Після надходження з memo чек створиться автоматично.</p>
     <div className="pay-address"><div><span>Серверний гаманець Nezeriya</span><code>{data.recipient}</code><small>Memo: {link.id}</small></div><button onClick={() => void copy(data.recipient)}>⧉</button></div>
     {selectedAsset !== link.currency ? <p className="pay-qr-note">Оплата в {selectedAsset} з перерахунком за курсом доступна в Nezeriya Wallet.</p> : <ExternalWalletPayment linkId={link.id} currency={selectedAsset} />}
     {screen === "copied" ? <p className="pay-copy-note">Адресу скопійовано</p> : <p className="pay-wait">Очікуємо оплату. Сторінка оновиться автоматично.</p>}
