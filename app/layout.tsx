@@ -14,11 +14,26 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nezeriya Wallet",
-  description: "Nezeriya Wallet Telegram Mini App.",
+  metadataBase: new URL("https://nezeriyapay.com"),
+  title: "Nezeriya Pay — крипто-еквайринг для бізнесу",
+  description: "Приймання оплат у USDT і GRAM для малого та середнього бізнесу: платіжні посилання, QR-коди, термінали й аналітика.",
+  applicationName: "Nezeriya Pay",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: [{ url: "/nezeriya-pay-tonconnect.svg", type: "image/svg+xml" }],
+    shortcut: "/nezeriya-pay-tonconnect.svg",
+  },
+  openGraph: {
+    type: "website",
+    locale: "uk_UA",
+    url: "/",
+    siteName: "Nezeriya Pay",
+    title: "Nezeriya Pay — крипто-еквайринг для бізнесу",
+    description: "Приймання оплат у USDT і GRAM: QR-коди, платіжні посилання, термінали й аналітика.",
+  },
+  twitter: {
+    card: "summary",
+    title: "Nezeriya Pay — крипто-еквайринг для бізнесу",
+    description: "Приймання оплат у USDT і GRAM для малого та середнього бізнесу.",
   },
 };
 
