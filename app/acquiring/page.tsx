@@ -83,12 +83,13 @@ function Icon({ name }: { name: "bolt" | "lock" | "phone" | "info" | "refresh" |
 }
 
 function Qr({ token }: { token: string }) {
-  // Keep the payload short so the built-in Wallet camera can recognize it
-  // reliably, even on lower-resolution Android cameras.
+  // Telegram's native QR popup reliably returns HTTPS links, while some
+  // Android builds discard custom URI schemes such as `nezeriya:`. The Wallet
+  // scanner recognizes the pay-connect query parameter and opens confirmation.
   const [source, setSource] = useState("");
   useEffect(() => {
-    const destination = `nezeriya:pay-connect:${token}`;
-    setSource(`https://api.qrserver.com/v1/create-qr-code/?format=svg&size=360x360&margin=12&ecc=H&data=${encodeURIComponent(destination)}`);
+    const destination = `https://nezeriya-pay.onrender.com/acquiring?pay-connect=${encodeURIComponent(token)}`;
+    setSource(`https://api.qrserver.com/v1/create-qr-code/?format=svg&size=420x420&margin=8&ecc=M&data=${encodeURIComponent(destination)}`);
   }, [token]);
   const [secondsLeft, setSecondsLeft] = useState(60);
   useEffect(() => {
