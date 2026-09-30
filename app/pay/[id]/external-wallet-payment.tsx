@@ -16,12 +16,12 @@ export function ExternalWalletPayment({ linkId, currency }: { linkId: string; cu
     try {
       const response = await fetch(`/api/acquiring/payment-link/${encodeURIComponent(linkId)}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet: wallet.account.address })
+        body: JSON.stringify({ wallet: wallet.account.address, currency })
       });
       const transaction = await response.json().catch(() => ({}));
       if (!response.ok || !transaction.validUntil || !Array.isArray(transaction.messages)) throw new Error(transaction.error || "Не вдалося підготувати платіж");
       await tonConnectUI.sendTransaction(transaction);
-      setMessage("Запит надіслано в гаманець. Підтвердьте його там. Не закривайте сторінку, доки мережа обробляє платіж.");
+      setMessage("Переказ надіслано в мережу. Після підтвердження чек буде створено автоматично — сторінка оновиться сама.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Платіж не виконано");
     } finally { setSending(false); }

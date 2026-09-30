@@ -1,4 +1,4 @@
-import { Address, beginCell } from "@ton/core";
+import { Address, beginCell, Cell } from "@ton/core";
 
 type ReceiptLine = { name: string; quantity: number; price: string; currency: "USDT" | "GRAM"; photo?: string };
 type PaymentLink = { id: string; createdAt: string; expiresAt: string; title: string; amount: string; currency: "USDT" | "GRAM"; assets: Array<"USDT" | "GRAM">; products: ReceiptLine[]; note: string; message: string; oneTime: boolean; status: "Активне" | "Оплачено" | "Прострочено" };
@@ -24,7 +24,36 @@ async function serverRecipient() {
   return typeof data?.recipient === "string" ? data.recipient.trim() : "";
 }
 
-type ChainTransaction = { transaction_id?: { hash?: unknown }; utime?: unknown; in_msg?: { source?: unknown; value?: unknown; msg_data?: { text?: unknown } } };
+type ChainTransaction = { transaction_id?: { hash?: unknown }; utime?: unknown; in_msg?: { source?: unknown; value?: unknown; msg_data?: { text?: unknown; body?: unknown } } };
+
+async function serverJettonWallet(owner: string) {
+  const secret = process.env.NEZERIYA_PAYMENT_CALLBACK_SECRET;
+  if (!secret) return "";
+  const walletApi = (process.env.NEZERIYA_WALLET_API_URL || "https://bot-5k6u.onrender.com").replace(/\/+$/, "");
+  const response = await fetch(`${walletApi}/api/wallet/acquiring-jetton-wallet?owner=${encodeURIComponent(owner)}`, {
+    headers: { Authorization: `Bearer ${secret}` }, cache: "no-store"
+  });
+  const data = response.ok ? await response.json().catch(() => ({})) as { jettonWallet?: unknown } : {};
+  return typeof data.jettonWallet === "string" ? data.jettonWallet.trim() : "";
+}
+
+function jettonNotification(body: unknown) {
+  if (typeof body !== "string" || !body) return null;
+  try {
+    const slice = Cell.fromBase64(body).beginParse();
+    // TEP-74: transfer_notification#7362d09c query_id amount sender forward_payload
+    if (slice.remainingBits < 32 || slice.loadUint(32) !== 0x7362d09c) return null;
+    slice.skip(64);
+    const amount = slice.loadCoins();
+    const sender = slice.loadAddress()?.toString() || "";
+    const forwardPayload = slice.loadBit() ? slice.loadRef() : slice.asCell();
+    const textSlice = forwardPayload.beginParse();
+    if (textSlice.remainingBits < 32 || textSlice.loadUint(32) !== 0) return null;
+    return { amount, sender, text: textSlice.loadStringTail() };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * A direct TON transfer is credited only when its on-chain comment contains
@@ -53,6 +82,37 @@ async function findGramReceipt(recipient: string, link: PaymentLink) {
   } catch {
     // Chain providers are best-effort here. The authenticated Wallet callback
     // remains the primary confirmation path and will retry on the next poll.
+  }
+  return null;
+}
+
+/**
+ * TonConnect sends USDT as a TEP-74 jetton transfer. Unlike a native TON
+ * transfer it cannot be verified from the owner's wallet transaction list:
+ * the notification arrives at Nezeriya's jetton wallet. Scan that wallet and
+ * require both the exact memo and amount before creating a receipt.
+ */
+async function findUsdtReceipt(recipient: string, link: PaymentLink) {
+  try {
+    const jettonWallet = await serverJettonWallet(recipient);
+    if (!jettonWallet) return null;
+    const address = Address.parse(jettonWallet).toRawString();
+    const response = await fetch(`https://toncenter.com/api/v2/getTransactions?address=${encodeURIComponent(address)}&limit=30&archival=true`, { cache: "no-store" });
+    const data = response.ok ? await response.json() as { result?: ChainTransaction[] } : null;
+    const expected = tokenUnits(link.amount, 6);
+    const createdAt = Math.floor(new Date(link.createdAt).getTime() / 1000) - 60;
+    const memo = `Nezeriya Pay ${link.id}`;
+    for (const transaction of data?.result || []) {
+      const receivedAt = typeof transaction.utime === "number" ? transaction.utime : 0;
+      const notification = jettonNotification(transaction.in_msg?.msg_data?.body);
+      if (!notification || notification.text !== memo || notification.amount < expected || receivedAt < createdAt) continue;
+      return {
+        transaction: typeof transaction.transaction_id?.hash === "string" ? transaction.transaction_id.hash : "",
+        wallet: notification.sender,
+      };
+    }
+  } catch {
+    // The next short poll retries when the public chain provider is delayed.
   }
   return null;
 }
@@ -107,17 +167,22 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
     if (!recipient) return Response.json({ error: "Серверний гаманець Nezeriya тимчасово недоступний" }, { status: 503 });
     const bot = (process.env.NEZERIYA_WALLET_BOT || "Nezeriya_Wallet_Bot").replace(/^@/, "");
     const id = found.link.id;
-    const receipt = !expired && found.link.status === "Активне" && found.link.currency === "GRAM" ? await findGramReceipt(recipient, found.link) : null;
-    if (receipt) await saveReceipt(found, { ...receipt, amount: found.link.amount, currency: "GRAM" });
+    const active = !expired && found.link.status === "Активне";
+    const supportsGram = (found.link.assets || [found.link.currency]).includes("GRAM");
+    const supportsUsdt = (found.link.assets || [found.link.currency]).includes("USDT");
+    const gramReceipt = active && supportsGram ? await findGramReceipt(recipient, found.link) : null;
+    const usdtReceipt = !gramReceipt && active && supportsUsdt ? await findUsdtReceipt(recipient, found.link) : null;
+    const receipt = gramReceipt || usdtReceipt;
+    if (receipt) await saveReceipt(found, { ...receipt, amount: found.link.amount, currency: gramReceipt ? "GRAM" : "USDT" });
     const externalUri = found.link.currency === "GRAM" ? gramPaymentUri(recipient, found.link.amount, id) : "";
     return Response.json({ link: { ...found.link, status: receipt ? "Оплачено" : expired ? "Прострочено" : found.link.status }, business: { name: found.businessName, logo: business?.logo }, recipient, recipientType: "server", walletUrl: `https://t.me/${bot}?startapp=pay_${encodeURIComponent(id)}`, externalPayment: { uri: externalUri, supported: Boolean(externalUri), message: externalUri ? "QR заповнить адресу, суму та memo у сумісному TON-гаманці." : "Оплата USDT через сторонній гаманець ще не підтримується без захищеної Jetton/TonConnect-інтеграції. Скористайтеся Nezeriya Wallet." } }, { headers: { "Cache-Control": "no-store" } });
   } catch { return Response.json({ error: "Посилання тимчасово недоступне" }, { status: 503 }); }
 }
 
-/** Builds a TonConnect transaction; it never marks an invoice paid on a client claim. */
+/** Builds a TonConnect transaction; the later chain scan, never a client claim, marks an invoice paid. */
 export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const input = await request.json().catch(() => ({})) as { wallet?: unknown };
+    const input = await request.json().catch(() => ({})) as { wallet?: unknown; currency?: unknown };
     const owner = typeof input.wallet === "string" ? input.wallet.trim() : "";
     if (!owner) return Response.json({ error: "Підключіть TON-гаманець" }, { status: 400 });
     Address.parse(owner);
@@ -126,17 +191,14 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     const recipient = await serverRecipient();
     if (!recipient) return Response.json({ error: "Серверний гаманець тимчасово недоступний" }, { status: 503 });
     const validUntil = Math.floor(Date.now() / 1000) + 5 * 60;
-    if (found.link.currency === "GRAM") {
+    const currency = input.currency === "GRAM" || input.currency === "USDT" ? input.currency : found.link.currency;
+    if (!(found.link.assets || [found.link.currency]).includes(currency)) return Response.json({ error: "Цей актив не дозволений для посилання" }, { status: 400 });
+    if (currency === "GRAM") {
       const amount = tokenUnits(found.link.amount, 9);
       if (amount <= 0n) return Response.json({ error: "Некоректна сума" }, { status: 400 });
       return Response.json({ validUntil, network: "-239", messages: [{ address: recipient, amount: amount.toString(), payload: commentPayload(found.link.id) }] });
     }
-    const secret = process.env.NEZERIYA_PAYMENT_CALLBACK_SECRET;
-    const walletApi = (process.env.NEZERIYA_WALLET_API_URL || "https://bot-5k6u.onrender.com").replace(/\/+$/, "");
-    if (!secret) return Response.json({ error: "Сервіс оплати ще налаштовується" }, { status: 503 });
-    const resolved = await fetch(`${walletApi}/api/wallet/acquiring-jetton-wallet?owner=${encodeURIComponent(owner)}`, { headers: { Authorization: `Bearer ${secret}` }, cache: "no-store" });
-    const data = resolved.ok ? await resolved.json().catch(() => ({})) as { jettonWallet?: unknown } : {};
-    const senderJettonWallet = typeof data.jettonWallet === "string" ? data.jettonWallet : "";
+    const senderJettonWallet = await serverJettonWallet(owner);
     if (!senderJettonWallet) return Response.json({ error: "Не вдалося знайти USDT-гаманець. Переконайтеся, що в ньому є USDT у мережі TON." }, { status: 422 });
     const amount = tokenUnits(found.link.amount, 6);
     if (amount <= 0n) return Response.json({ error: "Некоректна сума" }, { status: 400 });
