@@ -28,7 +28,11 @@
 
 /* Supplied analytics mark for the Statistics item in the left navigation. */
 .pay-sidebar nav button:nth-child(5) > i {
-  height: 17px;
-  background: center / contain no-repeat url("/statistics-menu.png");
-  font-size: 0;
+  display: block !important;
+  width: 20px !important;
+  height: 20px !important;
+  flex: 0 0 20px;
+  background: center / 100% 100% no-repeat url("/statistics-menu.png") !important;
+  color: transparent !important;
+  font-size: 0 !important;
 }
