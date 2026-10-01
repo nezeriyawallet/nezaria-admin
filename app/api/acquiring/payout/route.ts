@@ -1,4 +1,4 @@
-type Payout = { id: string; createdAt: string; amount: string; currency: "USDT" | "GRAM"; status: "В обробці" | "Виконано"; wallet: string; transaction?: string; serverWallet?: string; business: string };
+type Payout = { id: string; createdAt: string; amount: string; currency: "USDT" | "GRAM"; status: "В обробці" | "Підтверджується" | "Виконано"; wallet: string; transaction?: string; serverWallet?: string; business: string };
 type Payment = { amount: string; currency: "USDT" | "GRAM"; status: "Оплачено" | "Очікує підтвердження" | "Недоплата" };
 type Store = { payoutsByBusiness?: Record<string, Payout[]>; paymentsByBusiness?: Record<string, Payment[]> };
 type Row = { account: string; products_by_business: Store };
@@ -52,6 +52,8 @@ export async function POST(request: Request) {
   if (!saved.ok) return Response.json({ error: "Не вдалося створити заявку" }, { status: 503 });
   const sent = await sendImmediately(payout.id);
   if (!sent.ok) return Response.json({ error: sent.error }, { status: 503 });
-  return Response.json({ payout: { ...payout, status: "Виконано", transaction: sent.transaction } });
+  // Nezeriya Wallet reserves the payout and confirms it on-chain asynchronously.
+  // The Wallet callback updates this record to "Виконано" only after confirmation.
+  return Response.json({ payout: { ...payout, status: "Підтверджується" } }, { status: 202 });
 }
 import { validSession } from "../connect/state";
