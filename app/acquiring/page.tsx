@@ -206,7 +206,7 @@ function PayoutsPanel({ account, business, payments, payouts, wallet, session, a
   const fee = 0;
   const valid = Boolean(wallet) && numeric > 0 && numeric <= available(asset) && numeric > fee;
   const openWithdraw = () => { setAmount(available(asset).toFixed(6).replace(/0+$/, "").replace(/\.$/, "")); setOpen(true); };
-  const create = async (event: FormEvent) => { event.preventDefault(); if (!valid) return; const response = await fetch("/api/acquiring/payout", { method: "POST", headers: { "Content-Type": "application/json", "x-acquiring-session": session }, body: JSON.stringify({ account, business, amount: numeric.toFixed(6), currency: asset, wallet }) }); const data = await response.json().catch(() => ({})) as { payout?: Payout; error?: string }; if (!response.ok || !data.payout) { window.alert(data.error || "Не вдалося виконати виплату"); return; } onCreate(data.payout); setAmount(""); setOpen(false); };
+  const create = async (event: FormEvent) => { event.preventDefault(); if (!valid) return; const response = await fetch("/api/acquiring/payout", { method: "POST", headers: { "Content-Type": "application/json", "x-acquiring-session": session }, body: JSON.stringify({ account, business, amount: numeric.toFixed(6), currency: asset, wallet }) }); const data = await response.json().catch(() => ({})) as { payout?: Payout; error?: string }; if (!response.ok || !data.payout) { if (response.status === 401) window.dispatchEvent(new Event("nezeriya-pay-session-expired")); else window.alert(data.error || "Не вдалося виконати виплату"); return; } onCreate(data.payout); setAmount(""); setOpen(false); };
   const exportHistory = () => { const csv = ["Дата,Виплата,Сума,Статус,Гаманець", ...payouts.map((item) => `${new Date(item.createdAt).toLocaleString("uk-UA")},Виведення на Nezeriya Wallet,${item.amount} ${item.currency},${item.status},${item.wallet}`)].join("\n"); const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); const link = document.createElement("a"); link.href = url; link.download = "payouts.csv"; link.click(); URL.revokeObjectURL(url); };
   return <section className="payouts-view"><div className="payouts-cards"><article><small>Доступно до виведення</small><strong>{format(available("USDT"))} USDT</strong>{assets.includes("GRAM") && <span>{format(available("GRAM"))} GRAM</span>}<button type="button" disabled={!wallet || available(asset) <= 0} onClick={openWithdraw}>Вивести</button></article><article><small>Виведено за 30 днів</small><strong>{format(amountFor(payouts, "USDT"))} USDT</strong><span>{format(amountFor(payouts, "GRAM"))} GRAM · {payouts.length} виплат</span></article><article><small>Гаманець для виплат</small><strong>Nezeriya Wallet</strong><span title={wallet}>{wallet || "Підключиться після QR-реєстрації"}</span><em className={wallet ? "connected" : "disconnected"}>{wallet ? "Підключено" : "Не підключено"}</em></article><article><small>Автовиплата</small><strong>Вручну</strong><span>Кошти надсилаються одразу після виведення</span></article></div><section className="payout-history"><header><h2>Історія виплат</h2><div><select value={filter} onChange={(event) => setFilter(event.target.value)}><option>Усі</option><option>USDT</option><option>GRAM</option></select><button type="button" onClick={exportHistory}>▧ Виписка</button></div></header>{visible.length ? <div className="payout-table"><div className="payout-head"><span>Дата і час</span><span>Виплата</span><span>Сума</span><span>Статус</span><span>Транзакція</span></div>{visible.map((item) => <div className="payout-row" key={item.id}><span>{new Intl.DateTimeFormat("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(item.createdAt))}</span><span><b>Виведення на Nezeriya Wallet</b><small>{item.wallet}</small></span><b>−{item.amount} {item.currency}</b><em className={item.status === "Виконано" ? "done" : "processing"}>{item.status}</em><small>{item.transaction || "Виконується"}</small></div>)}</div> : <div className="payout-empty"><b>Виплат поки немає</b><p>Після виведення коштів у підключений гаманець тут з’явиться запис.</p></div>}</section>{open && <div className="payout-modal-backdrop" onMouseDown={() => setOpen(false)}><form className="payout-modal withdraw-modal" onSubmit={create} onMouseDown={(event) => event.stopPropagation()}><button type="button" aria-label="Закрити" onClick={() => setOpen(false)}>×</button><h2>Вивести кошти</h2><p>Кошти одразу надійдуть на ваш Nezeriya Wallet</p><label>Актив</label><div className="withdraw-assets">{assets.map((item) => <button type="button" className={asset === item ? "selected" : ""} key={item} onClick={() => setAsset(item as "USDT" | "GRAM")}>{item}</button>)}</div><label>Сума <b>*</b><span className="withdraw-amount"><input autoFocus inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" /><button type="button" onClick={() => setAmount(available(asset).toFixed(2))}>Макс.</button></span></label><small>Доступно: {format(available(asset))} {asset}</small><label>Отримувач</label><section className="withdraw-wallet"><i>▣</i><span><b>Nezeriya Wallet</b><small>{wallet}</small></span><em>Ваш</em></section><dl className="withdraw-summary"><div><dt>Комісія за виведення</dt><dd>0,00 {asset}</dd></div><div><dt>Ви отримаєте</dt><dd>{format(numeric)} {asset}</dd></div></dl><aside className="withdraw-notice">Кошти буде надіслано із серверного гаманця Nezeriya одразу після натискання кнопки.</aside><footer><button type="button" onClick={() => setOpen(false)}>Скасувати</button><button type="submit" disabled={!valid}>▣&nbsp; Вивести кошти</button></footer></form></div>}</section>;
 }
@@ -217,7 +217,7 @@ function GlobalPayoutModal({ account, business, payments, payouts, wallet, sessi
   const [amount, setAmount] = useState(() => (payments.filter((item) => item.status === "Оплачено" && item.currency === "USDT").reduce((sum, item) => sum + Number(item.amount || 0), 0) * .995 - payouts.filter((item) => item.currency === "USDT").reduce((sum, item) => sum + Number(item.amount || 0), 0)).toFixed(6).replace(/0+$/, "").replace(/\.$/, ""));
   const numeric = Number(amount.replace(",", "."));
   const available = Math.max(0, payments.filter((item) => item.status === "Оплачено" && item.currency === "USDT").reduce((sum, item) => sum + Number(item.amount || 0), 0) * .995 - payouts.filter((item) => item.currency === "USDT").reduce((sum, item) => sum + Number(item.amount || 0), 0));
-  const submit = async (event: FormEvent) => { event.preventDefault(); if (!wallet || !numeric || numeric > available) return; const response = await fetch("/api/acquiring/payout", { method: "POST", headers: { "Content-Type": "application/json", "x-acquiring-session": session }, body: JSON.stringify({ account, business: business.name, amount: numeric.toFixed(6), currency: "USDT", wallet }) }); const data = await response.json().catch(() => ({})) as { payout?: Payout; error?: string }; if (!response.ok || !data.payout) return window.alert(data.error || "Не вдалося виконати виплату"); onDone(data.payout); onClose(); };
+  const submit = async (event: FormEvent) => { event.preventDefault(); if (!wallet || !numeric || numeric > available) return; const response = await fetch("/api/acquiring/payout", { method: "POST", headers: { "Content-Type": "application/json", "x-acquiring-session": session }, body: JSON.stringify({ account, business: business.name, amount: numeric.toFixed(6), currency: "USDT", wallet }) }); const data = await response.json().catch(() => ({})) as { payout?: Payout; error?: string }; if (!response.ok || !data.payout) { if (response.status === 401) window.dispatchEvent(new Event("nezeriya-pay-session-expired")); else window.alert(data.error || "Не вдалося виконати виплату"); return; } onDone(data.payout); onClose(); };
   return <div className="payout-modal-backdrop" onMouseDown={onClose}><form className="payout-modal withdraw-modal" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}><button type="button" aria-label="Закрити" onClick={onClose}>×</button><h2>Вивести кошти</h2><p>{business.name} · Nezeriya Wallet</p><label>Сума <span className="withdraw-amount"><input autoFocus inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} /><button type="button" onClick={() => setAmount(available.toFixed(6).replace(/0+$/, "").replace(/\.$/, ""))}>Макс.</button></span></label><small>Доступно після комісії 0,5%: {available.toLocaleString("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 3 })} USDT</small><footer><button type="button" onClick={onClose}>Скасувати</button><button type="submit" disabled={!wallet || !numeric || numeric > available}>Вивести кошти</button></footer></form></div>;
 }
 
@@ -751,6 +751,19 @@ export default function AcquiringPage() {
 
   const makeToken = () => `pay_${crypto.randomUUID().slice(0, 8)}-${crypto.randomUUID().slice(0, 4)}`;
   const makeAcquiringId = () => `acq_${crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase()}`;
+  const endExpiredSession = () => {
+    localStorage.removeItem("nezeriya_pay_connection");
+    localStorage.removeItem("nezeriya_pay_account");
+    setPayoutSession("");
+    setPayoutWallet("");
+    setSelectedBusiness(null);
+    setGlobalPayoutOpen(false);
+    setShowBusinessForm(false);
+    setLogoutOpen(false);
+    setDashboardSection("home");
+    setView("landing");
+    window.history.replaceState({}, "", "/acquiring");
+  };
   useEffect(() => {
     const refreshQr = () => setToken(makeToken());
     window.addEventListener("nezeriya-pay-refresh-qr", refreshQr);
@@ -809,22 +822,25 @@ export default function AcquiringPage() {
 
   useEffect(() => {
     if (view !== "dashboard") return;
+    let timeout: number | undefined;
     const expireIfNeeded = () => {
       try {
         const connection = JSON.parse(localStorage.getItem("nezeriya_pay_connection") || "null");
-        if (!connection?.expiresAt || Number(connection.expiresAt) > Date.now()) return;
-      } catch { /* malformed session is handled like an expired session */ }
-      localStorage.removeItem("nezeriya_pay_connection");
-      localStorage.removeItem("nezeriya_pay_account");
-      setPayoutSession("");
-      setPayoutWallet("");
-      setSelectedBusiness(null);
-      setView("landing");
-      window.history.replaceState({}, "", "/acquiring");
+        const expiresAt = Number(connection?.expiresAt);
+        if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+          endExpiredSession();
+          return;
+        }
+        timeout = window.setTimeout(endExpiredSession, expiresAt - Date.now());
+      } catch { endExpiredSession(); }
     };
     expireIfNeeded();
-    const timer = window.setInterval(expireIfNeeded, 60_000);
-    return () => window.clearInterval(timer);
+    const onSessionExpired = () => endExpiredSession();
+    window.addEventListener("nezeriya-pay-session-expired", onSessionExpired);
+    return () => {
+      if (timeout) window.clearTimeout(timeout);
+      window.removeEventListener("nezeriya-pay-session-expired", onSessionExpired);
+    };
   }, [view]);
 
   useEffect(() => {
