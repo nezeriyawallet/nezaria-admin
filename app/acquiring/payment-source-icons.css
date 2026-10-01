@@ -1,9 +1,20 @@
 /* Preserve the transparent background of the supplied PNGs. */
+.payment-sources article > b {
+  position: relative;
+}
+
 .payment-sources article > b::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
   width: 30px !important;
   height: 30px !important;
+  margin: 0;
   border-radius: 0;
   background-color: transparent;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
   background-size: contain !important;
   mix-blend-mode: normal !important;
+  transform: translate(-50%, -50%);
 }
