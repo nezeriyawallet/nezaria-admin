@@ -21,3 +21,7 @@
 .global-create-grid aside button::after { content: "Створити платіж" !important; }
 .terminals-view > header > button::after { content: "Додати" !important; }
 .terminal-fab::after { content: "Додати" !important; }
+
+/* The terminal screen already has primary creation actions; do not duplicate
+   them with the floating control at the bottom of an empty list. */
+.terminal-fab { display: none !important; }
