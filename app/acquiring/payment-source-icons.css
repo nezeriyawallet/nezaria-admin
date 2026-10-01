@@ -29,8 +29,8 @@
 
 .payments-empty > button::before {
   display: inline-block;
-  width: 18px;
-  height: 18px;
+  width: 34px;
+  height: 34px;
   background: center / contain no-repeat url("/payment-source-terminal.png");
   content: "";
 }
