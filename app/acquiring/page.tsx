@@ -17,6 +17,7 @@ import "./product-catalog.css";
 import "./business-settings.css";
 import "./profile-settings.css";
 import "./payments.css";
+import "./payment-source-icons.css";
 import "./payment-drawer.css";
 import "./payouts.css";
 import "./analytics-real.css";
