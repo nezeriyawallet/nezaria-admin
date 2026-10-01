@@ -25,3 +25,10 @@
 /* The terminal screen already has primary creation actions; do not duplicate
    them with the floating control at the bottom of an empty list. */
 .terminal-fab { display: none !important; }
+
+/* Supplied analytics mark for the Statistics item in the left navigation. */
+.pay-sidebar nav button:nth-child(5) > i {
+  height: 17px;
+  background: center / contain no-repeat url("/statistics-menu.png");
+  font-size: 0;
+}
