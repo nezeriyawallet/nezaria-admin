@@ -55,3 +55,4 @@
 .terminals-empty { display: grid; min-height: 290px; place-items: center; align-content: center; gap: 11px; border: 1px dashed #cdd5e5; border-radius: 20px; background: #fff; color: #778197; text-align: center; }
 .terminals-empty b { color: #111a36; font-size: 21px; }
 .terminals-empty button { margin-top: 10px; border: 0; border-radius: 12px; padding: 12px 18px; background: #10172f; color: #fff; font: inherit; cursor: pointer; }
+.terminals-view>header>button,.terminal-fab{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:0}.terminals-view>header>button:before,.terminal-fab:before{width:17px;height:17px;background:center/contain no-repeat url("/create-link-plus.png");content:"";mix-blend-mode:screen}.terminals-view>header>button:after{color:#fff;content:"Додати";font:600 14px inherit}
