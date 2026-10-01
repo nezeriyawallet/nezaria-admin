@@ -56,3 +56,4 @@
 .terminals-empty b { color: #111a36; font-size: 21px; }
 .terminals-empty button { margin-top: 10px; border: 0; border-radius: 12px; padding: 12px 18px; background: #10172f; color: #fff; font: inherit; cursor: pointer; }
 .terminals-view>header>button,.terminal-fab{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:0}.terminals-view>header>button:before,.terminal-fab:before{width:17px;height:17px;background:center/contain no-repeat url("/create-link-plus.png");content:"";mix-blend-mode:screen}.terminals-view>header>button:after{color:#fff;content:"Додати";font:600 14px inherit}
+.terminals-view>header>button:after{font-size:14px;font-weight:600;line-height:1}
