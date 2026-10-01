@@ -697,7 +697,14 @@ function GlobalWorkspace({ section, businesses, productsByBusiness, paymentsByBu
 
 function ProfileSettings({ profile, businesses, onSave, onCancel }: { profile: Profile; businesses: Business[]; onSave: (profile: Profile) => void; onCancel: () => void }) {
   const [draft, setDraft] = useState(profile);
-  useEffect(() => { const input = document.querySelector<HTMLInputElement>(".profile-user-id input"); if (input) input.value = draft.acquiringId; }, [draft.acquiringId]);
+  useEffect(() => {
+    const walletInput = document.querySelector<HTMLInputElement>(".profile-fields > label:nth-child(5) input");
+    if (walletInput) { walletInput.readOnly = true; walletInput.value = draft.walletId === "Nezeriya ID" ? "Не підключено" : draft.walletId; }
+    const payInput = document.querySelector<HTMLInputElement>(".profile-user-id input");
+    if (payInput) { payInput.readOnly = true; payInput.value = draft.acquiringId || "Буде створено після реєстрації"; }
+    const payLabel = document.querySelector<HTMLElement>(".profile-user-id > span");
+    if (payLabel) payLabel.textContent = "Nezeriya Pay ID";
+  }, [draft.acquiringId, draft.walletId]);
   const update = <K extends keyof Profile>(key: K, value: Profile[K]) => setDraft((current) => ({ ...current, [key]: value }));
   const choosePhoto = (file?: File) => { if (!file) return; const reader = new FileReader(); reader.onload = () => update("photo", String(reader.result)); reader.readAsDataURL(file); };
   const copyUserId = async () => { await navigator.clipboard?.writeText(draft.acquiringId); };
