@@ -36,12 +36,16 @@ type ChainTransaction = { transaction_id?: { hash?: unknown }; utime?: unknown; 
 async function serverJettonWallet(owner: string) {
   const secret = process.env.NEZERIYA_PAYMENT_CALLBACK_SECRET;
   if (!secret) return "";
-  const walletApi = (process.env.NEZERIYA_WALLET_API_URL || "https://bot-5k6u.onrender.com").replace(/\/+$/, "");
-  const response = await fetch(`${walletApi}/api/wallet/acquiring-jetton-wallet?owner=${encodeURIComponent(owner)}`, {
-    headers: { Authorization: `Bearer ${secret}` }, cache: "no-store"
-  });
-  const data = response.ok ? await response.json().catch(() => ({})) as { jettonWallet?: unknown } : {};
-  return typeof data.jettonWallet === "string" ? data.jettonWallet.trim() : "";
+  try {
+    const walletApi = (process.env.NEZERIYA_WALLET_API_URL || "https://bot-5k6u.onrender.com").replace(/\/+$/, "");
+    const response = await fetch(`${walletApi}/api/wallet/acquiring-jetton-wallet?owner=${encodeURIComponent(owner)}`, {
+      headers: { Authorization: `Bearer ${secret}` }, cache: "no-store"
+    });
+    const data = response.ok ? await response.json().catch(() => ({})) as { jettonWallet?: unknown } : {};
+    return typeof data.jettonWallet === "string" ? data.jettonWallet.trim() : "";
+  } catch {
+    return "";
+  }
 }
 
 function jettonNotification(body: unknown) {
