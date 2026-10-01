@@ -69,3 +69,4 @@
 .pay-state-info b { color: #25304a; }
 .pay-close { margin-top: 14px; background: #eff1f6; color: #172038; }
 @media (max-width: 480px) { .pay-shell { padding: 0; align-items: start; } .pay-card { min-height: 100dvh; border: 0; border-radius: 0; box-shadow: none; padding: 24px 21px; } .pay-state { min-height: 100dvh; } }
+@media (max-width: 700px) { .pay-shell { display: block; padding: 0; } .pay-card { width: 100%; min-height: 100dvh; border: 0; border-radius: 0; box-shadow: none; padding: 22px 20px calc(28px + env(safe-area-inset-bottom)); } .pay-header { margin-bottom: 18px; } .pay-title { margin-bottom: 17px; } .pay-amount-card { margin-bottom: 14px; } .pay-qr { width: min(220px, 62vw); height: min(220px, 62vw); margin-bottom: 14px; } .pay-qr-note { margin: -2px 0 14px; } .pay-tonconnect { margin: 14px 0; padding: 14px; } .pay-primary { min-height: 50px; } .pay-state { min-height: 100dvh; } }

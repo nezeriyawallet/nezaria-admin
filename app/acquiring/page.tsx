@@ -822,8 +822,8 @@ export default function AcquiringPage() {
       if (state.linksByBusiness && typeof state.linksByBusiness === "object") setLinksByBusiness(state.linksByBusiness);
       if (typeof state.payoutWallet === "string" && state.payoutWallet) setPayoutWallet(state.payoutWallet);
     };
-    const reconcileActiveGramLinks = async (state: NonNullable<Awaited<ReturnType<typeof readStore>>>) => {
-      const links = Object.values(state.linksByBusiness || {}).flat().filter((link) => link.status === "Активне" && link.currency === "GRAM").slice(0, 40);
+    const reconcileActiveLinks = async (state: NonNullable<Awaited<ReturnType<typeof readStore>>>) => {
+      const links = Object.values(state.linksByBusiness || {}).flat().filter((link) => link.status === "Активне" && (link.assets || [link.currency]).some((asset) => asset === "USDT" || asset === "GRAM")).slice(0, 40);
       await Promise.all(links.map((link) => fetch(`/api/acquiring/payment-link/${encodeURIComponent(link.id)}`, { cache: "no-store" }).catch(() => undefined)));
       return links.length > 0;
     };
@@ -834,7 +834,7 @@ export default function AcquiringPage() {
         let state = await readStore();
         if (!active || !state) return;
         if (Array.isArray(state.businesses) && state.businesses.length) {
-          if (await reconcileActiveGramLinks(state)) state = await readStore();
+          if (await reconcileActiveLinks(state)) state = await readStore();
           if (active && state) applyStore(state);
           return;
         }
@@ -851,7 +851,7 @@ export default function AcquiringPage() {
       }
     };
     void loadStore();
-    const timer = window.setInterval(() => void loadStore(), 15_000);
+    const timer = window.setInterval(() => void loadStore(), 5_000);
     return () => { active = false; window.clearInterval(timer); };
   }, [account, payoutWallet]);
 

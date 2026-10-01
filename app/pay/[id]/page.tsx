@@ -25,6 +25,7 @@ export default function PublicPaymentPage({ params }: { params: Promise<{ id: st
   const [error, setError] = useState("");
   const [screen, setScreen] = useState<"order" | "wallet" | "copied">("order");
   const [selectedAsset, setSelectedAsset] = useState<"USDT" | "GRAM">("USDT");
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -49,7 +50,7 @@ export default function PublicPaymentPage({ params }: { params: Promise<{ id: st
     void load();
     const poll = window.setInterval(() => void load(), 3000);
     return () => { alive = false; window.clearInterval(poll); };
-  }, [params]);
+  }, [params, refreshNonce]);
 
   const paymentAssets = data?.link.assets?.filter((asset): asset is "USDT" | "GRAM" => asset === "USDT" || asset === "GRAM") || (data ? [data.link.currency] : []);
   useEffect(() => {
@@ -92,7 +93,7 @@ export default function PublicPaymentPage({ params }: { params: Promise<{ id: st
     <div className="pay-qr"><img src={walletQrUrl} alt="QR-код серверного гаманця Nezeriya" /></div>
     <p className="pay-qr-note">QR містить серверну адресу гаманця Nezeriya{selectedAsset === "GRAM" ? ", точну суму та memo цього замовлення" : ""} — не посилання на бот. Після надходження з memo чек створиться автоматично.</p>
     <div className="pay-address"><div><span>Серверний гаманець Nezeriya</span><code>{data.recipient}</code><small>Memo: {link.id}</small></div><button onClick={() => void copy(data.recipient)}>⧉</button></div>
-    {selectedAsset !== link.currency ? <p className="pay-qr-note">Оплата в {selectedAsset} з перерахунком за курсом доступна в Nezeriya Wallet.</p> : <ExternalWalletPayment linkId={link.id} currency={selectedAsset} />}
+    {selectedAsset !== link.currency ? <p className="pay-qr-note">Оплата в {selectedAsset} з перерахунком за курсом доступна в Nezeriya Wallet.</p> : <ExternalWalletPayment linkId={link.id} currency={selectedAsset} onSubmitted={() => setRefreshNonce((value) => value + 1)} />}
     {screen === "copied" ? <p className="pay-copy-note">Адресу скопійовано</p> : <p className="pay-wait">Очікуємо оплату. Сторінка оновиться автоматично.</p>}
   </section></main>;
 

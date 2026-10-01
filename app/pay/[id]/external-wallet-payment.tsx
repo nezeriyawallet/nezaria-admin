@@ -3,7 +3,7 @@
 import { TonConnectButton, useTonConnectUI, useTonWallet } from "@tonconnect/ui-react";
 import { useState } from "react";
 
-export function ExternalWalletPayment({ linkId, currency }: { linkId: string; currency: "USDT" | "GRAM" }) {
+export function ExternalWalletPayment({ linkId, currency, onSubmitted }: { linkId: string; currency: "USDT" | "GRAM"; onSubmitted: () => void }) {
   const wallet = useTonWallet();
   const [tonConnectUI] = useTonConnectUI();
   const [message, setMessage] = useState("");
@@ -21,7 +21,8 @@ export function ExternalWalletPayment({ linkId, currency }: { linkId: string; cu
       const transaction = await response.json().catch(() => ({}));
       if (!response.ok || !transaction.validUntil || !Array.isArray(transaction.messages)) throw new Error(transaction.error || "Не вдалося підготувати платіж");
       await tonConnectUI.sendTransaction(transaction);
-      setMessage("Переказ надіслано в мережу. Після підтвердження чек буде створено автоматично — сторінка оновиться сама.");
+      onSubmitted();
+      setMessage("Переказ надіслано. Перевіряємо підтвердження мережі та оновлюємо статус платежу…");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Платіж не виконано");
     } finally { setSending(false); }
