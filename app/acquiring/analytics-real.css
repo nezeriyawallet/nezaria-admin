@@ -10,6 +10,12 @@
 
 .chart-card .chart-bar:hover { fill: #4238c8; }
 
+.chart-card .chart-bar { cursor: pointer; outline: none; }
+.chart-card .chart-bar:focus { fill: #4238c8; }
+.chart-tooltip { position: absolute; z-index: 2; top: 48px; transform: translateX(-50%); display: grid; gap: 2px; min-width: 112px; border-radius: 9px; background: #151e37; padding: 8px 10px; color: #fff; box-shadow: 0 8px 18px #1720382e; pointer-events: none; }
+.chart-tooltip small { color: #c7cce0; font-size: 11px; }
+.chart-tooltip b { font-size: 13px; white-space: nowrap; }
+
 .chart-empty {
   position: absolute;
   top: 116px;
