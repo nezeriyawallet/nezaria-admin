@@ -29,6 +29,7 @@ import "./qr-timer.css";
 import "./business-address.css";
 import "./terminal-developers.css";
 import "./mobile.css";
+import "./action-labels.css";
 
 type View = "landing" | "register" | "dashboard";
 type Business = { name: string; type: string; ownership: string; owner: string; email: string; phone: string; iban: string; taxId: string; description: string; address?: string; logo?: string; assets: string[]; suspended?: boolean };

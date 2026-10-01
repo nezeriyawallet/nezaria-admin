@@ -1,0 +1,23 @@
+/* Keep action labels visible next to the supplied plus image.  These labels
+   used to inherit the button's zero font-size that hides the legacy ⊕ glyph. */
+.links-page > header > button::after,
+.add-product::after,
+.invite-button::after,
+.global-create-grid aside button::after,
+.terminals-view > header > button::after,
+.terminal-fab::after {
+  display: inline-block !important;
+  font-family: var(--font-geist-sans), Arial, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  letter-spacing: normal;
+  white-space: nowrap;
+}
+
+.links-page > header > button::after { content: "Створити посилання" !important; }
+.add-product::after { content: "Додати товар" !important; }
+.invite-button::after { content: "Запросити учасника" !important; }
+.global-create-grid aside button::after { content: "Створити платіж" !important; }
+.terminals-view > header > button::after { content: "Додати" !important; }
+.terminal-fab::after { content: "Додати" !important; }
