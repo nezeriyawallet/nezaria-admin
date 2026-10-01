@@ -102,21 +102,26 @@ async function findGramReceipt(recipient: string, link: PaymentLink) {
 async function findUsdtReceipt(recipient: string, link: PaymentLink) {
   try {
     const jettonWallet = await serverJettonWallet(recipient);
-    if (!jettonWallet) return null;
-    const address = Address.parse(jettonWallet).toRawString();
-    const response = await fetch(`https://toncenter.com/api/v2/getTransactions?address=${encodeURIComponent(address)}&limit=30&archival=true`, { cache: "no-store" });
-    const data = response.ok ? await response.json() as { result?: ChainTransaction[] } : null;
     const expected = tokenUnits(link.amount, 6);
     const createdAt = Math.floor(new Date(link.createdAt).getTime() / 1000) - 60;
     const memo = `Nezeriya Pay ${link.id}`;
-    for (const transaction of data?.result || []) {
-      const receivedAt = typeof transaction.utime === "number" ? transaction.utime : 0;
-      const notification = jettonNotification(transaction.in_msg?.msg_data?.body);
-      if (!notification || notification.text !== memo || notification.amount < expected || receivedAt < createdAt) continue;
-      return {
-        transaction: typeof transaction.transaction_id?.hash === "string" ? transaction.transaction_id.hash : "",
-        wallet: notification.sender,
-      };
+    // Jetton transfer notifications normally arrive at the recipient owner
+    // wallet (with 1 nanoton), not at the recipient jetton wallet. Check the
+    // owner first and keep the jetton wallet scan as a provider fallback.
+    const addresses = [...new Set([recipient, jettonWallet].filter(Boolean))];
+    for (const candidate of addresses) {
+      const address = Address.parse(candidate).toRawString();
+      const response = await fetch(`https://toncenter.com/api/v2/getTransactions?address=${encodeURIComponent(address)}&limit=30&archival=true`, { cache: "no-store" });
+      const data = response.ok ? await response.json() as { result?: ChainTransaction[] } : null;
+      for (const transaction of data?.result || []) {
+        const receivedAt = typeof transaction.utime === "number" ? transaction.utime : 0;
+        const notification = jettonNotification(transaction.in_msg?.msg_data?.body);
+        if (!notification || notification.text !== memo || notification.amount < expected || receivedAt < createdAt) continue;
+        return {
+          transaction: typeof transaction.transaction_id?.hash === "string" ? transaction.transaction_id.hash : "",
+          wallet: notification.sender,
+        };
+      }
     }
   } catch {
     // The next short poll retries when the public chain provider is delayed.
