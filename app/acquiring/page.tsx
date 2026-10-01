@@ -39,7 +39,7 @@ type ReceiptLine = { name: string; quantity: number; price: string; currency: "U
 type Payment = { id: string; createdAt: string; source: "Термінал" | "Платіжне посилання" | "Сайт"; sourceName: string; status: "Оплачено" | "Очікує підтвердження" | "Недоплата"; currency: "USDT" | "GRAM"; amount: string; products: ReceiptLine[]; transaction?: string; wallet?: string };
 type Payout = { id: string; createdAt: string; amount: string; currency: "USDT" | "GRAM"; status: "В обробці" | "Підтверджується" | "Виконано"; wallet: string; transaction?: string };
 type PaymentLink = { id: string; createdAt: string; expiresAt: string; title: string; amount: string; currency: "USDT" | "GRAM"; assets: Array<"USDT" | "GRAM">; products: ReceiptLine[]; note: string; message: string; oneTime: boolean; status: "Активне" | "Оплачено" | "Прострочено" };
-type Profile = { firstName: string; lastName: string; email: string; phone: string; walletId: string; country: string; photo?: string; primaryBusiness: string };
+type Profile = { firstName: string; lastName: string; email: string; phone: string; walletId: string; acquiringId: string; country: string; photo?: string; primaryBusiness: string };
 
 const businessCategories = [
   "Магазин", "Ресторан", "Кафе", "Бар", "Фастфуд", "Піцерія", "Суші-бар", "Пекарня", "Кондитерська", "Доставка їжі", "Кейтеринг", "Їдальня",
@@ -696,9 +696,10 @@ function GlobalWorkspace({ section, businesses, productsByBusiness, paymentsByBu
 
 function ProfileSettings({ profile, businesses, onSave, onCancel }: { profile: Profile; businesses: Business[]; onSave: (profile: Profile) => void; onCancel: () => void }) {
   const [draft, setDraft] = useState(profile);
+  useEffect(() => { const input = document.querySelector<HTMLInputElement>(".profile-user-id input"); if (input) input.value = draft.acquiringId; }, [draft.acquiringId]);
   const update = <K extends keyof Profile>(key: K, value: Profile[K]) => setDraft((current) => ({ ...current, [key]: value }));
   const choosePhoto = (file?: File) => { if (!file) return; const reader = new FileReader(); reader.onload = () => update("photo", String(reader.result)); reader.readAsDataURL(file); };
-  const copyUserId = async () => { await navigator.clipboard?.writeText(`usr_${draft.walletId.replace(/\W/g, "").slice(0, 16)}`); };
+  const copyUserId = async () => { await navigator.clipboard?.writeText(draft.acquiringId); };
   const save = (event: FormEvent) => { event.preventDefault(); if (!draft.firstName.trim() || !draft.lastName.trim() || !draft.email.trim() || !draft.phone.trim()) return; onSave({ ...draft, firstName: draft.firstName.trim(), lastName: draft.lastName.trim() }); };
   return <section className="profile-settings-page"><header><h1>Налаштування профілю</h1><p>Керуйте вашими особистими даними, безпекою та налаштуваннями сповіщень.</p></header><form className="profile-settings-card" onSubmit={save}><h2>Основна інформація</h2><div className="profile-identity"><div className="profile-photo">{draft.photo ? <img src={draft.photo} alt="Фото профілю" /> : <span>{draft.firstName.slice(0, 1)}{draft.lastName.slice(0, 1)}</span>}</div><div><b>{draft.firstName || "Ім’я"} {draft.lastName || "Прізвище"}</b><small>Власник бізнесу</small><em>● Активний</em></div></div><div className="profile-photo-action"><label>▧&nbsp; Змінити фото<input type="file" accept="image/*" onChange={(event) => choosePhoto(event.target.files?.[0])} /></label><span>JPG, PNG або SVG, до 5 МБ.</span>{draft.photo && <button type="button" onClick={() => update("photo", undefined)}>Прибрати фото</button>}</div><div className="profile-fields"><label><span>Ім’я <b>*</b></span><input required value={draft.firstName} onChange={(event) => update("firstName", event.target.value)} /></label><label><span>Прізвище <b>*</b></span><input required value={draft.lastName} onChange={(event) => update("lastName", event.target.value)} /></label><label><span>Email <b>*</b></span><input required type="email" value={draft.email} onChange={(event) => update("email", event.target.value)} /></label><label><span>Телефон <b>*</b></span><input required type="tel" value={draft.phone} onChange={(event) => update("phone", event.target.value)} /></label><label><span>Nezeriya Wallet ID</span><input value={draft.walletId} onChange={(event) => update("walletId", event.target.value)} /></label><label><span>Країна <b>*</b></span><select value={draft.country} onChange={(event) => update("country", event.target.value)}><option>🇺🇦 Україна</option><option>🇵🇱 Польща</option><option>🇩🇪 Німеччина</option></select></label><label className="profile-user-id"><span>ID користувача</span><div><input readOnly value={`usr_${draft.walletId.replace(/\W/g, "").slice(0, 16) || "nezeriya"}`} /><button type="button" aria-label="Копіювати ID" onClick={copyUserId}>▣</button></div></label><label><span>Основний бізнес</span><select value={draft.primaryBusiness} onChange={(event) => update("primaryBusiness", event.target.value)}><option value="">Оберіть бізнес</option>{businesses.map((business) => <option value={business.name} key={business.name}>{business.name}</option>)}</select></label></div><footer><button type="button" onClick={() => { setDraft(profile); onCancel(); }}>Скасувати</button><button type="submit">Зберегти зміни</button></footer></form></section>;
 }
@@ -723,9 +724,10 @@ export default function AcquiringPage() {
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [currency, setCurrency] = useState<"USDT" | "GRAM">("USDT");
   const [dashboardSection, setDashboardSection] = useState<"home" | "create" | "links" | "payments" | "stats" | "settings">("home");
-  const [profile, setProfile] = useState<Profile>({ firstName: "Іван", lastName: "Петренко", email: "ivan.petrenko@example.com", phone: "+380 (67) 123 45 67", walletId: "Nezeriya ID", country: "🇺🇦 Україна", primaryBusiness: "" });
+  const [profile, setProfile] = useState<Profile>({ firstName: "Іван", lastName: "Петренко", email: "ivan.petrenko@example.com", phone: "+380 (67) 123 45 67", walletId: "Nezeriya ID", acquiringId: "", country: "🇺🇦 Україна", primaryBusiness: "" });
 
   const makeToken = () => `pay_${crypto.randomUUID().slice(0, 8)}-${crypto.randomUUID().slice(0, 4)}`;
+  const makeAcquiringId = () => `acq_${crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase()}`;
   useEffect(() => {
     const refreshQr = () => setToken(makeToken());
     window.addEventListener("nezeriya-pay-refresh-qr", refreshQr);
@@ -738,6 +740,11 @@ export default function AcquiringPage() {
     setPayoutWallet(walletId);
     setPayoutSession(session);
     setAccount(connectedAccount);
+    setProfile((current) => {
+      const next = { ...current, walletId, acquiringId: current.acquiringId || makeAcquiringId() };
+      localStorage.setItem("nezeriya_pay_profile", JSON.stringify(next));
+      return next;
+    });
     setView("dashboard");
   };
   useEffect(() => {
@@ -751,7 +758,7 @@ export default function AcquiringPage() {
     }
     const loginRequested = params.get("login") === "1";
     try { const connection = JSON.parse(localStorage.getItem("nezeriya_pay_connection") || "null"); if (connection?.walletId && connection?.session && Number(connection?.expiresAt) > Date.now()) { setPayoutWallet(String(connection.walletId)); setPayoutSession(String(connection.session)); const saved = localStorage.getItem("nezeriya_pay_account"); if (saved) { setAccount(saved); setView("dashboard"); } } else { localStorage.removeItem("nezeriya_pay_connection"); localStorage.removeItem("nezeriya_pay_account"); setView(loginRequested ? "register" : "landing"); } } catch { localStorage.removeItem("nezeriya_pay_connection"); localStorage.removeItem("nezeriya_pay_account"); setView(loginRequested ? "register" : "landing"); }
-    try { const savedProfile = JSON.parse(localStorage.getItem("nezeriya_pay_profile") || "null"); if (savedProfile && typeof savedProfile === "object") setProfile((current) => ({ ...current, ...savedProfile })); } catch {}
+    try { const savedProfile = JSON.parse(localStorage.getItem("nezeriya_pay_profile") || "null"); if (savedProfile && typeof savedProfile === "object") { const next = { ...profile, ...savedProfile, acquiringId: typeof savedProfile.acquiringId === "string" && savedProfile.acquiringId ? savedProfile.acquiringId : makeAcquiringId() }; localStorage.setItem("nezeriya_pay_profile", JSON.stringify(next)); setProfile(next); } } catch {}
     try { setBusinesses(JSON.parse(localStorage.getItem("nezeriya_pay_businesses") || "[]").map((item: Business | string) => typeof item === "string" ? { name: item, type: "Магазин", ownership: "ФОП", owner: "", email: "", phone: "", iban: "", taxId: "", description: "", assets: ["USDT"] } : item)); } catch { setBusinesses([]); }
     setToken(makeToken());
     const onConnected = (event: StorageEvent) => {
@@ -767,6 +774,15 @@ export default function AcquiringPage() {
     window.addEventListener("storage", onConnected);
     return () => window.removeEventListener("storage", onConnected);
   }, []);
+
+  useEffect(() => {
+    if (view !== "dashboard" || profile.acquiringId) return;
+    setProfile((current) => {
+      const next = { ...current, acquiringId: makeAcquiringId() };
+      localStorage.setItem("nezeriya_pay_profile", JSON.stringify(next));
+      return next;
+    });
+  }, [view, profile.acquiringId]);
 
   useEffect(() => {
     if (view !== "dashboard") return;
