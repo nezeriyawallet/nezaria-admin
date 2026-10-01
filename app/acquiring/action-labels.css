@@ -42,15 +42,15 @@
 
 .pay-sidebar nav button > i:has(img) {
   display: grid;
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
   place-items: center;
 }
 
 .pay-sidebar nav button > i img {
   display: block;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   object-fit: contain;
 }
