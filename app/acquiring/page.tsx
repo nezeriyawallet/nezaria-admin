@@ -88,7 +88,9 @@ function Qr({ token }: { token: string }) {
   // scanner recognizes the pay-connect query parameter and opens confirmation.
   const [source, setSource] = useState("");
   useEffect(() => {
-    const destination = `https://nezeriya-pay.onrender.com/acquiring?pay-connect=${encodeURIComponent(token)}`;
+    // Keep the scanned address on the canonical domain.  The Wallet extracts
+    // `pay-connect` from this URL and confirms it against this same service.
+    const destination = `https://nezeriyapay.com/miniapp?pay-connect=${encodeURIComponent(token)}`;
     setSource(`https://api.qrserver.com/v1/create-qr-code/?format=svg&size=420x420&margin=8&ecc=M&data=${encodeURIComponent(destination)}`);
   }, [token]);
   const [secondsLeft, setSecondsLeft] = useState(60);
