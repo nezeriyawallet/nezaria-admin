@@ -3,6 +3,13 @@ import { Address, beginCell, Cell } from "@ton/core";
 type ReceiptLine = { name: string; quantity: number; price: string; currency: "USDT" | "GRAM"; photo?: string };
 type PaymentLink = { id: string; createdAt: string; expiresAt: string; title: string; amount: string; currency: "USDT" | "GRAM"; assets: Array<"USDT" | "GRAM">; products: ReceiptLine[]; note: string; message: string; oneTime: boolean; status: "Активне" | "Оплачено" | "Прострочено" };
 
+declare global {
+  // eslint-disable-next-line no-var
+  var __nezeriyaPaymentLinkLocks: Set<string> | undefined;
+}
+
+const paymentLinkLocks = globalThis.__nezeriyaPaymentLinkLocks ??= new Set<string>();
+
 const config = () => { const url = process.env.NEXT_PUBLIC_SUPABASE_URL; const key = process.env.SUPABASE_SERVICE_ROLE_KEY; return url && key ? { url, key } : null; };
 const apiHeaders = (key: string, extra: HeadersInit = {}) => ({ apikey: key, Authorization: `Bearer ${key}`, ...extra });
 
@@ -118,20 +125,39 @@ async function findUsdtReceipt(recipient: string, link: PaymentLink) {
 }
 
 async function saveReceipt(found: NonNullable<Awaited<ReturnType<typeof locate>>>, proof: { transaction?: string; wallet?: string; amount?: string; currency?: string }) {
-  const paidCurrency = proof.currency === "USDT" || proof.currency === "GRAM" ? proof.currency : found.link.currency;
-  const paidAmount = typeof proof.amount === "string" && /^(?:0|[1-9]\d*)(?:\.\d{1,9})?$/.test(proof.amount) && Number(proof.amount) > 0 ? proof.amount : found.link.amount;
-  if (!(found.link.assets || [found.link.currency]).includes(paidCurrency)) throw new Error("Цей актив не дозволений для посилання");
-  const links = found.store.linksByBusiness as Record<string, PaymentLink[]>;
-  const nextLink = { ...found.link, status: "Оплачено" as const };
-  links[found.businessName] = [...links[found.businessName]];
-  links[found.businessName][found.index] = nextLink;
-  const payments = (found.store.paymentsByBusiness as Record<string, unknown[]> | undefined) || {};
-  const existing = Array.isArray(payments[found.businessName]) ? payments[found.businessName] : [];
-  payments[found.businessName] = [{ id: `P-${Date.now().toString().slice(-6)}`, createdAt: new Date().toISOString(), source: "Платіжне посилання", sourceName: "Платіжне посилання", status: "Оплачено", currency: paidCurrency, amount: paidAmount, products: found.link.products, transaction: proof.transaction, wallet: proof.wallet }, ...existing];
-  found.store.linksByBusiness = links;
-  found.store.paymentsByBusiness = payments;
-  const response = await fetch(`${found.connection.url}/rest/v1/acquiring_stores?account=eq.${encodeURIComponent(found.row.account)}`, { method: "PATCH", headers: apiHeaders(found.connection.key, { "Content-Type": "application/json", Prefer: "return=minimal" }), body: JSON.stringify({ products_by_business: found.store, updated_at: new Date().toISOString() }) });
-  if (!response.ok) throw new Error("Save failed");
+  const linkId = found.link.id;
+  if (paymentLinkLocks.has(linkId)) return false;
+  paymentLinkLocks.add(linkId);
+  try {
+    // Reload while holding the lock, so a polling request and a Wallet callback
+    // cannot both turn the same link into separate receipts.
+    const current = await locate(linkId);
+    if (!current) throw new Error("Посилання не знайдено");
+    if (current.link.status === "Оплачено") return false;
+    if (current.link.status !== "Активне" || new Date(current.link.expiresAt).getTime() < Date.now()) throw new Error("Посилання вже недійсне");
+
+    const paidCurrency = proof.currency === "USDT" || proof.currency === "GRAM" ? proof.currency : current.link.currency;
+    const paidAmount = typeof proof.amount === "string" && /^(?:0|[1-9]\d*)(?:\.\d{1,9})?$/.test(proof.amount) && Number(proof.amount) > 0 ? proof.amount : current.link.amount;
+    if (!(current.link.assets || [current.link.currency]).includes(paidCurrency)) throw new Error("Цей актив не дозволений для посилання");
+
+    const links = current.store.linksByBusiness as Record<string, PaymentLink[]>;
+    links[current.businessName] = [...links[current.businessName]];
+    links[current.businessName][current.index] = { ...current.link, status: "Оплачено" as const };
+    const payments = (current.store.paymentsByBusiness as Record<string, unknown[]> | undefined) || {};
+    const existing = Array.isArray(payments[current.businessName]) ? payments[current.businessName] : [];
+    const duplicate = existing.some((payment) => {
+      const saved = payment && typeof payment === "object" ? payment as { paymentLinkId?: unknown; transaction?: unknown } : {};
+      return saved.paymentLinkId === linkId || Boolean(proof.transaction && saved.transaction === proof.transaction);
+    });
+    if (!duplicate) payments[current.businessName] = [{ id: `P-${Date.now().toString().slice(-6)}`, paymentLinkId: linkId, createdAt: new Date().toISOString(), source: "Платіжне посилання", sourceName: "Платіжне посилання", status: "Оплачено", currency: paidCurrency, amount: paidAmount, products: current.link.products, transaction: proof.transaction, wallet: proof.wallet }, ...existing];
+    current.store.linksByBusiness = links;
+    current.store.paymentsByBusiness = payments;
+    const response = await fetch(`${current.connection.url}/rest/v1/acquiring_stores?account=eq.${encodeURIComponent(current.row.account)}`, { method: "PATCH", headers: apiHeaders(current.connection.key, { "Content-Type": "application/json", Prefer: "return=minimal" }), body: JSON.stringify({ products_by_business: current.store, updated_at: new Date().toISOString() }) });
+    if (!response.ok) throw new Error("Save failed");
+    return !duplicate;
+  } finally {
+    paymentLinkLocks.delete(linkId);
+  }
 }
 
 /**

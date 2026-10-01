@@ -26,6 +26,9 @@
    them with the floating control at the bottom of an empty list. */
 .terminal-fab { display: none !important; }
 
+/* Payment links are always single-use: one link creates one receipt. */
+.parameters .switch-row { display: none !important; }
+
 /* Supplied analytics mark for the Statistics item in the left navigation. */
 .pay-sidebar nav button:nth-child(5) > i {
   display: block !important;
