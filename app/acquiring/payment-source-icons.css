@@ -1,10 +1,9 @@
-/* The supplied PNGs have a black field and a fine white outline.  Do not use
-   blend modes here: they can erase the outline in Chromium on light cards. */
+/* Preserve the transparent background of the supplied PNGs. */
 .payment-sources article > b::before {
-  width: 42px !important;
-  height: 42px !important;
-  border-radius: 50%;
-  background-color: #050505;
-  background-size: 100% 100% !important;
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 0;
+  background-color: transparent;
+  background-size: contain !important;
   mix-blend-mode: normal !important;
 }
