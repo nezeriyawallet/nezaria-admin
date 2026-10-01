@@ -42,15 +42,31 @@
 
 .pay-sidebar nav button > i:has(img) {
   display: grid;
-  width: 26px;
-  height: 26px;
-  flex: 0 0 26px;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
   place-items: center;
 }
 
 .pay-sidebar nav button > i img {
   display: block;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   object-fit: contain;
+  image-rendering: auto;
+}
+
+/* The supplied marks have different transparent margins. Normalize their
+   visible artwork rather than their canvas dimensions. */
+.pay-sidebar nav button:nth-child(1) > i img { transform: scale(1.2); }
+.pay-sidebar nav button:nth-child(2) > i img { transform: scale(1.34); }
+.pay-sidebar nav button:nth-child(3) > i img { transform: scale(1.62); }
+.pay-sidebar nav button:nth-child(4) > i img { transform: scale(1.12); }
+.pay-sidebar nav button:nth-child(6) > i img { transform: scale(1.35); }
+
+.pay-sidebar nav button:nth-child(5) > i {
+  width: 30px !important;
+  height: 30px !important;
+  flex: 0 0 30px;
+  background-size: 28px 28px !important;
 }
