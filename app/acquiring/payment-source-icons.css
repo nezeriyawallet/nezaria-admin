@@ -18,3 +18,27 @@
   mix-blend-mode: normal !important;
   transform: translate(-50%, -50%);
 }
+
+/* Reuse the supplied terminal mark in the empty-payments call to action. */
+.payments-empty > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0 !important;
+}
+
+.payments-empty > button::before {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  background: center / contain no-repeat url("/payment-source-terminal.png");
+  content: "";
+}
+
+.payments-empty > button::after {
+  color: #323d55;
+  content: "Перейти до терміналів";
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+}

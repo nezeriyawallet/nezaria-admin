@@ -39,3 +39,18 @@
   color: transparent !important;
   font-size: 0 !important;
 }
+
+.pay-sidebar nav button > i:has(img) {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  place-items: center;
+}
+
+.pay-sidebar nav button > i img {
+  display: block;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
