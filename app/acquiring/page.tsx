@@ -20,6 +20,7 @@ import "./payments.css";
 import "./payment-source-icons.css";
 import "./payment-drawer.css";
 import "./payouts.css";
+import "./receipt-cleanup.css";
 import "./analytics-real.css";
 import "./payment-links.css";
 import "./marketing.css";
