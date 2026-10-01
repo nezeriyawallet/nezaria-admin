@@ -16,6 +16,9 @@
 .chart-tooltip small { color: #c7cce0; font-size: 11px; }
 .chart-tooltip b { font-size: 13px; white-space: nowrap; }
 
+.withdraw-modal footer button[type="submit"] { font-size: 0; }
+.withdraw-modal footer button[type="submit"]::after { content: "Вивести кошти"; font-size: 14px; }
+
 .chart-empty {
   position: absolute;
   top: 116px;

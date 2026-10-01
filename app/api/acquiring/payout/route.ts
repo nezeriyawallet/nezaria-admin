@@ -1,5 +1,6 @@
 type Payout = { id: string; createdAt: string; amount: string; currency: "USDT" | "GRAM"; status: "В обробці" | "Виконано"; wallet: string; transaction?: string; serverWallet?: string; business: string };
-type Store = { payoutsByBusiness?: Record<string, Payout[]> };
+type Payment = { amount: string; currency: "USDT" | "GRAM"; status: "Оплачено" | "Очікує підтвердження" | "Недоплата" };
+type Store = { payoutsByBusiness?: Record<string, Payout[]>; paymentsByBusiness?: Record<string, Payment[]> };
 type Row = { account: string; products_by_business: Store };
 
 function config() { const url = process.env.NEXT_PUBLIC_SUPABASE_URL; const key = process.env.SUPABASE_SERVICE_ROLE_KEY; return url && key ? { url, key } : null; }
@@ -39,6 +40,11 @@ export async function POST(request: Request) {
   if (!row) return Response.json({ error: "Бізнес не знайдено" }, { status: 404 });
   const store = row.products_by_business && typeof row.products_by_business === "object" ? row.products_by_business : {};
   const payouts = store.payoutsByBusiness && typeof store.payoutsByBusiness === "object" ? store.payoutsByBusiness : {};
+  const payments = store.paymentsByBusiness && typeof store.paymentsByBusiness === "object" ? store.paymentsByBusiness : {};
+  const paid = (Array.isArray(payments[business]) ? payments[business] : []).filter((payment) => payment.currency === currency && payment.status === "Оплачено").reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
+  const alreadyWithdrawn = (Array.isArray(payouts[business]) ? payouts[business] : []).filter((payout) => payout.currency === currency).reduce((sum, payout) => sum + (Number(payout.amount) || 0), 0);
+  const available = Math.max(0, paid * 0.995 - alreadyWithdrawn);
+  if (Number(body.amount) > available + 0.0000001) return Response.json({ error: `Доступно до виведення: ${available.toFixed(6)} ${currency}` }, { status: 400 });
   const payout: Payout = { id: `W-${crypto.randomUUID().replace(/-/g, "").slice(0, 18)}`, createdAt: new Date().toISOString(), amount: String(body.amount), currency, status: "В обробці", wallet, business };
   payouts[business] = [payout, ...(Array.isArray(payouts[business]) ? payouts[business] : [])];
   store.payoutsByBusiness = payouts;
