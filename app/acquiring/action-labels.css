@@ -68,5 +68,6 @@
   width: 22px !important;
   height: 22px !important;
   flex: 0 0 22px;
-  background-size: 20px 20px !important;
+  /* This raster has more transparent margin than the supplied SVG marks. */
+  background-size: 24px 24px !important;
 }
