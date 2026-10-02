@@ -19,8 +19,8 @@ export const metadata: Metadata = {
   description: "Приймання оплат у USDT і GRAM для малого та середнього бізнесу: платіжні посилання, QR-коди, термінали й аналітика.",
   applicationName: "Nezeriya Pay",
   icons: {
-    icon: [{ url: "/nezeriya-pay-favicon-20260929.jpg", type: "image/jpeg", sizes: "640x640" }],
-    shortcut: "/nezeriya-pay-favicon-20260929.jpg",
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml", sizes: "any" }],
+    shortcut: "/favicon.svg",
     apple: "/nezeriya-pay-favicon-20260929.jpg",
   },
   openGraph: {
