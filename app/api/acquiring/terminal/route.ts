@@ -1,5 +1,3 @@
-import { validSession } from "../connect/state";
-
 type Terminal = { id: string; name: string; location: string; business: string; assets: Array<"USDT" | "GRAM">; online: boolean; createdAt: string };
 type Ticket = { id: string; code: string; account: string; business: string; name: string; location: string; expiresAt: string; used: boolean };
 type Store = { terminalsByBusiness?: Record<string, Terminal[]>; terminalPairings?: Record<string, Ticket> };
@@ -23,18 +21,14 @@ async function persist(connection: NonNullable<ReturnType<typeof config>>, accou
   return fetch(`${connection.url}/rest/v1/acquiring_stores?account=eq.${encodeURIComponent(account)}`, { method: "PATCH", headers: headers(connection.key, { "Content-Type": "application/json", Prefer: "return=minimal" }), body: JSON.stringify({ products_by_business: store, updated_at: new Date().toISOString() }) });
 }
 
-async function validUser(request: Request, account: string, wallet: string) {
-  return Boolean(account && wallet && await validSession(request.headers.get("x-acquiring-session") || "", account, wallet));
-}
-
 export async function GET(request: Request) {
   const account = clean(new URL(request.url).searchParams.get("account"), 120).toLocaleLowerCase("uk-UA");
   const business = clean(new URL(request.url).searchParams.get("business"), 120);
-  const wallet = clean(new URL(request.url).searchParams.get("wallet"), 180);
   const code = clean(new URL(request.url).searchParams.get("code"), 8);
-  if (!await validUser(request, account, wallet) || !business) return Response.json({ error: "Сесія закінчилась" }, { status: 401 });
+  if (!account || !business) return Response.json({ error: "Не вказано бізнес" }, { status: 400 });
   const found = await rows(); if (!found) return Response.json({ error: "Сховище недоступне" }, { status: 503 });
   const row = found.rows.find((item) => item.account === account);
+  if (!row) return Response.json({ error: "Бізнес не знайдено" }, { status: 404 });
   const store = row?.products_by_business && typeof row.products_by_business === "object" ? row.products_by_business : {};
   const ticket = code ? Object.values(store.terminalPairings || {}).find((item) => item.code === code && item.business === business && item.account === account) : undefined;
   return Response.json({ terminals: Array.isArray(store.terminalsByBusiness?.[business]) ? store.terminalsByBusiness[business] : [], pairing: ticket ? { used: ticket.used, expiresAt: ticket.expiresAt } : null }, { headers: { "Cache-Control": "no-store" } });
@@ -45,7 +39,6 @@ export async function POST(request: Request) {
   const action = clean(body.action, 24);
   const account = clean(body.account, 120).toLocaleLowerCase("uk-UA");
   const business = clean(body.business, 120);
-  const wallet = clean(body.wallet, 180);
   const found = await rows(); if (!found) return Response.json({ error: "Сховище недоступне" }, { status: 503 });
 
   if (action === "activate") {
@@ -61,7 +54,7 @@ export async function POST(request: Request) {
     return saved.ok ? Response.json({ terminal }) : Response.json({ error: "Не вдалося додати термінал" }, { status: 503 });
   }
 
-  if (!await validUser(request, account, wallet) || !business) return Response.json({ error: "Сесія закінчилась" }, { status: 401 });
+  if (!account || !business) return Response.json({ error: "Не вказано бізнес" }, { status: 400 });
   const owner = found.rows.find((row) => row.account === account); if (!owner) return Response.json({ error: "Бізнес не знайдено" }, { status: 404 });
   const store = owner.products_by_business || {};
 
