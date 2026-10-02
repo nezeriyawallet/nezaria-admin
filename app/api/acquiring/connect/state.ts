@@ -26,12 +26,41 @@ export function getConnection(token: string) {
   return connection;
 }
 
-export function validSession(session: string, account: string, wallet: string) {
+function matchesSession(connection: Connection, session: string, account: string, wallet: string) {
+  return connection.session === session && connection.expiresAt > Date.now()
+    && connection.merchant.trim().toLocaleLowerCase("uk-UA") === account.trim().toLocaleLowerCase("uk-UA")
+    && connection.wallet === wallet;
+}
+
+export async function validSession(session: string, account: string, wallet: string) {
   const now = Date.now();
   for (const connection of connections.values()) {
-    if (connection.session === session && connection.expiresAt > now
-      && connection.merchant.trim().toLocaleLowerCase("uk-UA") === account.trim().toLocaleLowerCase("uk-UA")
-      && connection.wallet === wallet) return true;
+    if (matchesSession(connection, session, account, wallet)) return true;
+  }
+  // Render replaces the Node process on every deployment. Connections are also
+  // saved in acquiring_stores, so recover a valid wallet session rather than
+  // incorrectly logging an active merchant out after a deploy.
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!session || !url || !key) return false;
+  try {
+    const response = await fetch(`${url.replace(/\/$/, "")}/rest/v1/acquiring_stores?select=products_by_business`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: "no-store",
+    });
+    if (!response.ok) return false;
+    const rows = await response.json() as Array<{ products_by_business?: unknown }>;
+    for (const row of rows) {
+      const store = row.products_by_business && typeof row.products_by_business === "object" ? row.products_by_business as Record<string, unknown> : {};
+      const saved = store.acquiringConnections && typeof store.acquiringConnections === "object" ? store.acquiringConnections as Record<string, Connection> : {};
+      for (const connection of Object.values(saved)) {
+        if (matchesSession(connection, session, account, wallet)) {
+          connections.set(`restored_${session}`, connection);
+          return true;
+        }
+      }
+    }
+  } catch {
+    // The caller will retry on the next action if storage is temporarily down.
   }
   return false;
 }

@@ -1,3 +1,5 @@
+import { validSession } from "../connect/state";
+
 type Payout = { id: string; createdAt: string; amount: string; currency: "USDT" | "GRAM"; status: "В обробці" | "Підтверджується" | "Виконано"; wallet: string; transaction?: string; serverWallet?: string; business: string };
 type Payment = { amount: string; currency: "USDT" | "GRAM"; status: "Оплачено" | "Очікує підтвердження" | "Недоплата" };
 type Store = { payoutsByBusiness?: Record<string, Payout[]>; paymentsByBusiness?: Record<string, Payment[]> };
@@ -33,7 +35,7 @@ export async function POST(request: Request) {
   const currency = body.currency === "GRAM" ? "GRAM" : body.currency === "USDT" ? "USDT" : null;
   if (!account || !business || !wallet || !currency || !number(body.amount)) return Response.json({ error: "Некоректні дані виплати" }, { status: 400 });
   const session = request.headers.get("x-acquiring-session") || "";
-  if (!validSession(session, account, wallet)) return Response.json({ error: "Сесія закінчилась. Відскануйте QR-код у Nezeriya Wallet ще раз." }, { status: 401 });
+  if (!await validSession(session, account, wallet)) return Response.json({ error: "Сесія закінчилась. Відскануйте QR-код у Nezeriya Wallet ще раз." }, { status: 401 });
   const connection = config(); if (!connection) return Response.json({ error: "Сховище недоступне" }, { status: 503 });
   const found = await fetch(`${connection.url}/rest/v1/acquiring_stores?account=eq.${encodeURIComponent(account)}&select=account,products_by_business&limit=1`, { headers: headers(connection.key), cache: "no-store" });
   const [row] = found.ok ? await found.json() as Row[] : [];
@@ -56,4 +58,3 @@ export async function POST(request: Request) {
   // The Wallet callback updates this record to "Виконано" only after confirmation.
   return Response.json({ payout: { ...payout, status: "Підтверджується" } }, { status: 202 });
 }
-import { validSession } from "../connect/state";
