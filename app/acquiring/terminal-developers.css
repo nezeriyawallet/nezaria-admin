@@ -6,6 +6,7 @@
 .terminal-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .terminal-list article { display: grid; grid-template-columns: 68px 1fr auto; gap: 12px; align-items: center; min-height: 166px; border: 1px solid #e2e6f0; border-radius: 20px; padding: 20px; background: #fff; }
 .terminal-list article > i { display: grid; width: 58px; height: 58px; place-items: center; border-radius: 17px; background: #f0f1f8; color: #4b43e9; font-size: 25px; font-style: normal; }
+.terminal-list article > i.terminal-card-mark img { width: 42px; height: 42px; object-fit: contain; }
 .terminal-list h3 { margin: 0 0 5px; font-size: 18px; }
 .terminal-list p { margin: 0; color: #737d95; font-size: 14px; }
 .terminal-list em, .webhook-card em { border-radius: 99px; padding: 7px 12px; font-style: normal; font-size: 13px; }
