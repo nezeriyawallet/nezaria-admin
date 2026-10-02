@@ -7,7 +7,7 @@ declare global {
 
 const connections = globalThis.__nezeriyaPayConnections ??= new Map<string, Connection>();
 const pendingTtlMs = 15 * 60 * 1000;
-const sessionTtlMs = 24 * 60 * 60 * 1000;
+const sessionTtlMs = 30 * 24 * 60 * 60 * 1000;
 
 export function connectWallet(token: string, merchant: string, wallet: string) {
   const now = Date.now();
@@ -53,8 +53,15 @@ export async function validSession(session: string, account: string, wallet: str
       const store = row.products_by_business && typeof row.products_by_business === "object" ? row.products_by_business as Record<string, unknown> : {};
       const saved = store.acquiringConnections && typeof store.acquiringConnections === "object" ? store.acquiringConnections as Record<string, Connection> : {};
       for (const connection of Object.values(saved)) {
-        if (matchesSession(connection, session, account, wallet)) {
-          connections.set(`restored_${session}`, connection);
+        const sameWallet = connection.session === session
+          && connection.merchant.trim().toLocaleLowerCase("uk-UA") === account.trim().toLocaleLowerCase("uk-UA")
+          && connection.wallet === wallet;
+        // Sessions created before this release had a short 24-hour lifetime.
+        // Give a stored Wallet connection a 30-day renewal window so a Render
+        // restart never locks the merchant out of their own cabinet.
+        if (sameWallet && Number(connection.connectedAt) > now - sessionTtlMs) {
+          const restored = { ...connection, expiresAt: now + sessionTtlMs };
+          connections.set(`restored_${session}`, restored);
           return true;
         }
       }

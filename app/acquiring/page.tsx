@@ -219,8 +219,7 @@ function PayoutsPanel({ account, business, payments, payouts, wallet, session, a
       const response = await fetch("/api/acquiring/payout", { method: "POST", headers: { "Content-Type": "application/json", "x-acquiring-session": session }, body: JSON.stringify({ account, business, amount: numeric.toFixed(6), currency: asset, wallet }) });
       const data = await response.json().catch(() => ({})) as { payout?: Payout; error?: string };
       if (!response.ok || !data.payout) {
-        if (response.status === 401) window.dispatchEvent(new Event("nezeriya-pay-session-expired"));
-        else window.alert(data.error || "Не вдалося виконати виплату");
+        window.alert(data.error || "Не вдалося виконати виплату");
         return;
       }
       onCreate(data.payout);
@@ -247,8 +246,7 @@ function GlobalPayoutModal({ account, business, payments, payouts, wallet, sessi
       const response = await fetch("/api/acquiring/payout", { method: "POST", headers: { "Content-Type": "application/json", "x-acquiring-session": session }, body: JSON.stringify({ account, business: business.name, amount: numeric.toFixed(6), currency: "USDT", wallet }) });
       const data = await response.json().catch(() => ({})) as { payout?: Payout; error?: string };
       if (!response.ok || !data.payout) {
-        if (response.status === 401) window.dispatchEvent(new Event("nezeriya-pay-session-expired"));
-        else window.alert(data.error || "Не вдалося виконати виплату");
+        window.alert(data.error || "Не вдалося виконати виплату");
         return;
       }
       onDone(data.payout);
@@ -836,7 +834,7 @@ export default function AcquiringPage() {
       return;
     }
     const loginRequested = params.get("login") === "1";
-    try { const connection = JSON.parse(localStorage.getItem("nezeriya_pay_connection") || "null"); if (connection?.walletId && connection?.session && Number(connection?.expiresAt) > Date.now()) { setPayoutWallet(String(connection.walletId)); setPayoutSession(String(connection.session)); const saved = localStorage.getItem("nezeriya_pay_account"); if (saved) { setAccount(saved); setView("dashboard"); } } else { localStorage.removeItem("nezeriya_pay_connection"); localStorage.removeItem("nezeriya_pay_account"); setView(loginRequested ? "register" : "landing"); } } catch { localStorage.removeItem("nezeriya_pay_connection"); localStorage.removeItem("nezeriya_pay_account"); setView(loginRequested ? "register" : "landing"); }
+    try { const connection = JSON.parse(localStorage.getItem("nezeriya_pay_connection") || "null"); const recent = Number(connection?.connectedAt) > Date.now() - 30 * 24 * 60 * 60 * 1000; if (connection?.walletId && connection?.session && recent) { const renewed = { ...connection, expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 }; localStorage.setItem("nezeriya_pay_connection", JSON.stringify(renewed)); setPayoutWallet(String(renewed.walletId)); setPayoutSession(String(renewed.session)); const saved = localStorage.getItem("nezeriya_pay_account"); if (saved) { setAccount(saved); setView("dashboard"); } } else { localStorage.removeItem("nezeriya_pay_connection"); localStorage.removeItem("nezeriya_pay_account"); setView(loginRequested ? "register" : "landing"); } } catch { localStorage.removeItem("nezeriya_pay_connection"); localStorage.removeItem("nezeriya_pay_account"); setView(loginRequested ? "register" : "landing"); }
     try { const savedProfile = JSON.parse(localStorage.getItem("nezeriya_pay_profile") || "null"); if (savedProfile && typeof savedProfile === "object") { const next = { ...profile, ...savedProfile, acquiringId: typeof savedProfile.acquiringId === "string" && savedProfile.acquiringId ? savedProfile.acquiringId : makeAcquiringId() }; localStorage.setItem("nezeriya_pay_profile", JSON.stringify(next)); setProfile(next); } } catch {}
     try { setBusinesses(JSON.parse(localStorage.getItem("nezeriya_pay_businesses") || "[]").map((item: Business | string) => typeof item === "string" ? { name: item, type: "Магазин", ownership: "ФОП", owner: "", email: "", phone: "", iban: "", taxId: "", description: "", assets: ["USDT"] } : item)); } catch { setBusinesses([]); }
     setToken(makeToken());
@@ -863,28 +861,6 @@ export default function AcquiringPage() {
     });
   }, [view, profile.acquiringId]);
 
-  useEffect(() => {
-    if (view !== "dashboard") return;
-    let timeout: number | undefined;
-    const expireIfNeeded = () => {
-      try {
-        const connection = JSON.parse(localStorage.getItem("nezeriya_pay_connection") || "null");
-        const expiresAt = Number(connection?.expiresAt);
-        if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
-          endExpiredSession();
-          return;
-        }
-        timeout = window.setTimeout(endExpiredSession, expiresAt - Date.now());
-      } catch { endExpiredSession(); }
-    };
-    expireIfNeeded();
-    const onSessionExpired = () => endExpiredSession();
-    window.addEventListener("nezeriya-pay-session-expired", onSessionExpired);
-    return () => {
-      if (timeout) window.clearTimeout(timeout);
-      window.removeEventListener("nezeriya-pay-session-expired", onSessionExpired);
-    };
-  }, [view]);
 
   useEffect(() => {
     if (!account) return;
