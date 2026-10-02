@@ -19,7 +19,7 @@
 .add-product::after { content: "Додати товар" !important; }
 .invite-button::after { content: "Запросити учасника" !important; }
 .global-create-grid aside button::after { content: "Створити платіж" !important; }
-.terminals-view > header > button::after { content: "Додати" !important; }
+.terminals-view > header > button::after { content: "Додати термінал" !important; }
 .terminal-fab::after { content: "Додати" !important; }
 
 /* The terminal screen already has primary creation actions; do not duplicate

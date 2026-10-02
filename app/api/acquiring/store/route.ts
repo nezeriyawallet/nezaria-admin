@@ -63,10 +63,22 @@ export async function POST(request: Request) {
   const payoutsByBusiness = data.payoutsByBusiness && typeof data.payoutsByBusiness === "object" ? data.payoutsByBusiness : {};
   const linksByBusiness = data.linksByBusiness && typeof data.linksByBusiness === "object" ? data.linksByBusiness : {};
   const payoutWallet = typeof data.payoutWallet === "string" ? data.payoutWallet.trim().slice(0, 180) : "";
+  // The terminal pairing service stores its state alongside the cabinet data.
+  // Read it first so a normal cabinet save cannot overwrite a live pairing or
+  // an already connected terminal.
+  let retained: Record<string, unknown> = {};
+  try {
+    const current = await fetch(`${connection.url}/rest/v1/acquiring_stores?account=eq.${encodeURIComponent(account)}&select=products_by_business&limit=1`, { headers: headers(connection), cache: "no-store" });
+    const row = current.ok ? (await current.json() as Array<{ products_by_business?: unknown }>)[0] : undefined;
+    if (row?.products_by_business && typeof row.products_by_business === "object") retained = row.products_by_business as Record<string, unknown>;
+  } catch {
+    // Saving the supplied cabinet data still has the same behaviour when the
+    // optional read is temporarily unavailable.
+  }
   const response = await fetch(`${connection.url}/rest/v1/acquiring_stores?on_conflict=account`, {
     method: "POST",
     headers: headers(connection, { "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" }),
-    body: JSON.stringify({ account, businesses, products_by_business: { productsByBusiness, paymentsByBusiness, payoutsByBusiness, linksByBusiness, payoutWallet }, updated_at: new Date().toISOString() }),
+    body: JSON.stringify({ account, businesses, products_by_business: { ...retained, productsByBusiness, paymentsByBusiness, payoutsByBusiness, linksByBusiness, payoutWallet }, updated_at: new Date().toISOString() }),
   });
   if (!response.ok) return Response.json({ error: "Unable to save acquiring store" }, { status: 503 });
   return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
