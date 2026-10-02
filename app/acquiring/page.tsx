@@ -128,7 +128,7 @@ function Qr({ token }: { token: string }) {
 }
 
 function WalletLink() {
-  return <a className="wallet-link" href="https://t.me/NezeriyaWallet" target="_blank" rel="noreferrer">Nezeriya Wallet</a>;
+  return <a className="wallet-link" href="https://t.me/Nezeriya_Wallet_Bot?startapp" target="_blank" rel="noreferrer">Nezeriya Wallet</a>;
 }
 
 function MarketingSite({ token, onRefresh, onEnter }: { token: string; onRefresh: () => void; onEnter: () => void }) {
