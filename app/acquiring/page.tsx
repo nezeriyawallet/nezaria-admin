@@ -413,7 +413,7 @@ function BusinessSettings({
         </div>
         <div className="settings-grid">
           <label>
-            Назва бізнесу <b>*</b>
+            Назва бізнесу
             <input
               required
               value={draft.name}
@@ -421,7 +421,7 @@ function BusinessSettings({
             />
           </label>
           <label>
-            Тип бізнесу <b>*</b>
+            Тип бізнесу
             <select
               value={draft.type}
               onChange={(event) => update("type", event.target.value)}
@@ -432,7 +432,7 @@ function BusinessSettings({
             </select>
           </label>
           <label>
-            Форма власності <b>*</b>
+            Форма власності
             <select
               value={draft.ownership}
               onChange={(event) => update("ownership", event.target.value)}
@@ -443,7 +443,7 @@ function BusinessSettings({
             </select>
           </label>
           <label>
-            ІПН / ЄДРПОУ <b>*</b>
+            ІПН / ЄДРПОУ
             <input
               required
               value={draft.taxId}
@@ -452,7 +452,7 @@ function BusinessSettings({
           </label>
         </div>
         <label>
-          ПІБ власника <b>*</b>
+          ПІБ власника
           <input
             required
             value={draft.owner}
@@ -461,7 +461,7 @@ function BusinessSettings({
         </label>
         <div className="settings-grid">
           <label>
-            Email <b>*</b>
+            Email
             <input
               required
               type="email"
@@ -470,7 +470,7 @@ function BusinessSettings({
             />
           </label>
           <label>
-            Телефон <b>*</b>
+            Телефон
             <input
               required
               value={draft.phone}
@@ -487,14 +487,6 @@ function BusinessSettings({
           />
         </label>
         <p className="business-address-note">Необов’язково. Після збереження адреси користувачі бачитимуть цей бізнес на карті Nezeriya Wallet.</p>
-        <label>
-          IBAN для виплат <b>*</b>
-          <input
-            required
-            value={draft.iban}
-            onChange={(event) => update("iban", event.target.value)}
-          />
-        </label>
         <label>
           Опис бізнесу
           <textarea
@@ -969,7 +961,7 @@ export default function AcquiringPage() {
               Додайте новий бізнес, щоб приймати платежі через Nezeriya Pay.
             </p>
             <label>
-              Назва бізнесу <b>*</b>
+              Назва бізнесу
               <input
                 required
                 value={businessForm.name}
@@ -979,7 +971,7 @@ export default function AcquiringPage() {
             </label>
             <fieldset>
               <legend>
-                Тип бізнесу <b>*</b>
+                Тип бізнесу
               </legend>
               <div className="choice-row">
                 {["Магазин", "Кафе"].map((item) => (
@@ -1012,7 +1004,7 @@ export default function AcquiringPage() {
             </fieldset>
             <fieldset>
               <legend>
-                Форма власності <b>*</b>
+                Форма власності
               </legend>
               <div className="choice-row ownership">
                 {[
@@ -1047,7 +1039,7 @@ export default function AcquiringPage() {
               </div>
             </fieldset>
             <label>
-              ПІБ власника <b>*</b>
+              ПІБ власника
               <input
                 required
                 value={businessForm.owner}
@@ -1056,7 +1048,7 @@ export default function AcquiringPage() {
             </label>
             <div className="form-grid">
               <label>
-                Email <b>*</b>
+                Email
                 <input
                   required
                   type="email"
@@ -1066,7 +1058,7 @@ export default function AcquiringPage() {
                 />
               </label>
               <label>
-                Телефон <b>*</b>
+                Телефон
                 <input
                   required
                   type="tel"
@@ -1076,16 +1068,7 @@ export default function AcquiringPage() {
                 />
               </label>
               <label>
-                IBAN <b>*</b>
-                <input
-                  required
-                  value={businessForm.iban}
-                  onChange={(e) => changeBusiness("iban", e.target.value)}
-                  placeholder="UA00 0000 0000 0000 0000 0000 000"
-                />
-              </label>
-              <label>
-                Податковий номер / ЄДРПОУ <b>*</b>
+                Податковий номер / ЄДРПОУ
                 <input
                   required
                   value={businessForm.taxId}
@@ -1139,7 +1122,7 @@ export default function AcquiringPage() {
             <p>Зображення автоматично обріжеться до кола.</p>
             <fieldset>
               <legend>
-                Активи для оплати <b>*</b>
+                Активи для оплати
               </legend>
               <div className="asset-row">
                 {["USDT", "GRAM"].map((asset) => (
