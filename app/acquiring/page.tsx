@@ -127,6 +127,13 @@ function Qr({ token }: { token: string }) {
   return <><div className="qr" aria-label="QR-код для підключення">{source && <img style={{ position: "absolute", inset: 13, width: "calc(100% - 26px)", height: "calc(100% - 26px)" }} src={source} alt="Відкрийте Nezeriya Wallet для підключення" />}</div><p className="qr-expiry" aria-live="polite">Наступне оновлення QR через <strong>{minutes}:{seconds}</strong></p></>;
 }
 
+// The API may return the expired-session text with any HTTP status when an
+// upstream Wallet service is unavailable. Keep this check text-based as well
+// as status-based, so the cabinet always opens the QR recovery screen instead
+// of a browser alert.
+const isExpiredWalletSession = (status: number, error?: string) =>
+  status === 401 || String(error || "").toLocaleLowerCase("uk-UA").includes("сесі");
+
 function SessionRecoveryModal({ token, onClose, onRefresh }: { token: string; onClose: () => void; onRefresh: () => void }) {
   return <div className="session-recovery-backdrop" role="presentation" onMouseDown={onClose}>
     <section className="session-recovery-modal" role="dialog" aria-modal="true" aria-labelledby="session-recovery-title" onMouseDown={(event) => event.stopPropagation()}>
@@ -233,7 +240,7 @@ function PayoutsPanel({ account, business, payments, payouts, wallet, session, a
     try {
       const response = await fetch("/api/acquiring/payout", { method: "POST", headers: { "Content-Type": "application/json", "x-acquiring-session": session }, body: JSON.stringify({ account, business, amount: numeric.toFixed(6), currency: asset, wallet }) });
       const data = await response.json().catch(() => ({})) as { payout?: Payout; error?: string };
-      if (response.status === 401 || /сесі[яї].*закінчил/i.test(data.error || "")) {
+      if (isExpiredWalletSession(response.status, data.error)) {
         setOpen(false);
         onSessionExpired();
         return;
@@ -265,7 +272,7 @@ function GlobalPayoutModal({ account, business, payments, payouts, wallet, sessi
     try {
       const response = await fetch("/api/acquiring/payout", { method: "POST", headers: { "Content-Type": "application/json", "x-acquiring-session": session }, body: JSON.stringify({ account, business: business.name, amount: numeric.toFixed(6), currency: "USDT", wallet }) });
       const data = await response.json().catch(() => ({})) as { payout?: Payout; error?: string };
-      if (response.status === 401 || /сесі[яї].*закінчил/i.test(data.error || "")) {
+      if (isExpiredWalletSession(response.status, data.error)) {
         onClose();
         onSessionExpired();
         return;
