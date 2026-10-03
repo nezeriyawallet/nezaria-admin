@@ -1,13 +1,17 @@
 type Terminal = { id: string; name: string; location: string; business: string; assets: Array<"USDT" | "GRAM">; online: boolean; createdAt: string };
-type Ticket = { id: string; code: string; account: string; business: string; name: string; location: string; expiresAt: string; used: boolean };type Product = { name?: unknown; price?: unknown; currency?: unknown; category?: unknown; description?: unknown; photo?: unknown; quantity?: unknown };
-type Store = { productsByBusiness?: Record<string, Product[]>; terminalsByBusiness?: Record<string, Terminal[]>; terminalPairings?: Record<string, Ticket> };
+type Ticket = { id: string; code: string; account: string; business: string; name: string; location: string; expiresAt: string; used: boolean };
+type Product = { name?: unknown; price?: unknown; currency?: unknown; category?: unknown; description?: unknown; photo?: unknown; quantity?: unknown };
+type ReceiptLine = { name: string; quantity: number; price: string; currency: "USDT" | "GRAM"; photo?: string };
+type TerminalPayment = { id: string; createdAt: string; expiresAt: string; title: string; amount: string; currency: "USDT" | "GRAM"; assets: Array<"USDT" | "GRAM">; products: ReceiptLine[]; note: string; message: string; oneTime: boolean; status: "Активне" | "Оплачено" | "Прострочено"; source?: "Термінал"; terminalId?: string; terminalName?: string };
+type Store = { productsByBusiness?: Record<string, Product[]>; terminalsByBusiness?: Record<string, Terminal[]>; terminalPairings?: Record<string, Ticket>; linksByBusiness?: Record<string, TerminalPayment[]> };
 type Row = { account: string; products_by_business: Store };
 
 const TEN_MINUTES = 10 * 60 * 1000;
 const config = () => { const url = process.env.NEXT_PUBLIC_SUPABASE_URL; const key = process.env.SUPABASE_SERVICE_ROLE_KEY; return url && key ? { url, key } : null; };
 const headers = (key: string, extra: HeadersInit = {}) => ({ apikey: key, Authorization: `Bearer ${key}`, ...extra });
 const secure = () => crypto.getRandomValues(new Uint32Array(1))[0];
-const clean = (value: unknown, maximum: number) => typeof value === "string" ? value.trim().slice(0, maximum) : "";const serviceAllowed = (request: Request) => { const secret = process.env.NEZERIYA_PAYMENT_CALLBACK_SECRET; return Boolean(secret) && request.headers.get("authorization") === `Bearer ${secret}`; };
+const clean = (value: unknown, maximum: number) => typeof value === "string" ? value.trim().slice(0, maximum) : "";
+const serviceAllowed = (request: Request) => { const secret = process.env.NEZERIYA_PAYMENT_CALLBACK_SECRET; return Boolean(secret) && request.headers.get("authorization") === `Bearer ${secret}`; };
 const catalogueProduct = (product: Product) => {
   const name = clean(product.name, 120);
   const price = Number(product.price);
@@ -15,6 +19,27 @@ const catalogueProduct = (product: Product) => {
   const currency = product.currency === "GRAM" ? "GRAM" : "USDT";
   const photo = clean(product.photo, 2_000_000);
   return { name, price: Number(price.toFixed(6)), currency, category: clean(product.category, 80), description: clean(product.description, 240), photo };
+};
+const terminalPayment = (body: Record<string, unknown>, terminal: Terminal, products: Product[]) => {
+  const requested = Array.isArray(body.products) ? body.products : [];
+  const lines: ReceiptLine[] = [];
+  for (const row of requested.slice(0, 60)) {
+    if (!row || typeof row !== "object") continue;
+    const input = row as Record<string, unknown>;
+    const name = clean(input.name, 120);
+    const quantity = Math.floor(Number(input.quantity));
+    const product = products.find((item) => clean(item.name, 120) === name);
+    const normalized = product ? catalogueProduct(product) : null;
+    if (!normalized || !Number.isFinite(quantity) || quantity < 1 || quantity > 99) continue;
+    lines.push({ name: normalized.name, quantity, price: normalized.price.toFixed(6), currency: normalized.currency, photo: normalized.photo || undefined });
+  }
+  if (!lines.length) return null;
+  const currency = lines[0].currency;
+  if (lines.some((line) => line.currency !== currency)) return null;
+  const amount = lines.reduce((sum, line) => sum + Number(line.price) * line.quantity, 0);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  const now = Date.now();
+  return { id: "T-" + now.toString().slice(-8) + "-" + secure().toString(36), createdAt: new Date(now).toISOString(), expiresAt: new Date(now + TEN_MINUTES).toISOString(), title: lines.map((line) => line.name).join(", ").slice(0, 160), amount: amount.toFixed(6), currency, assets: [currency], products: lines, note: "", message: "Дякуємо за покупку!", oneTime: true, status: "Активне" as const, source: "Термінал" as const, terminalId: terminal.id, terminalName: terminal.name };
 };
 
 async function rows() {
@@ -46,7 +71,9 @@ export async function POST(request: Request) {
   const action = clean(body.action, 24);
   const account = clean(body.account, 120).toLocaleLowerCase("uk-UA");
   const business = clean(body.business, 120);
-  const found = await rows(); if (!found) return Response.json({ error: "Сховище недоступне" }, { status: 503 });  if (action === "catalog") {
+  const found = await rows(); if (!found) return Response.json({ error: "Сховище недоступне" }, { status: 503 });
+
+  if (action === "catalog") {
     if (!serviceAllowed(request)) return Response.json({ error: "Недійсний службовий запит" }, { status: 403 });
     const terminalId = clean(body.terminalId, 80);
     if (!terminalId) return Response.json({ error: "Не вказано термінал" }, { status: 400 });
@@ -60,6 +87,34 @@ export async function POST(request: Request) {
           .filter((item): item is NonNullable<typeof item> => Boolean(item))
           .slice(0, 60);
         return Response.json({ terminal: { id: terminal.id, name: terminal.name, business: terminal.business }, products }, { headers: { "Cache-Control": "no-store" } });
+      }
+    }
+    return Response.json({ error: "Термінал не знайдено або відключено" }, { status: 404 });
+  }
+
+  if (action === "create-payment" || action === "payment-status") {
+    if (!serviceAllowed(request)) return Response.json({ error: "Недійсний службовий запит" }, { status: 403 });
+    const terminalId = clean(body.terminalId, 80);
+    const paymentId = clean(body.paymentId, 120);
+    for (const row of found.rows) {
+      const store = row.products_by_business || {};
+      for (const [businessName, terminals] of Object.entries(store.terminalsByBusiness || {})) {
+        const terminal = Array.isArray(terminals) ? terminals.find((item) => item.id === terminalId && item.online) : undefined;
+        if (!terminal) continue;
+        const links = { ...(store.linksByBusiness || {}) };
+        if (action === "payment-status") {
+          const payment = (links[businessName] || []).find((item) => item.id === paymentId && item.terminalId === terminal.id);
+          if (!payment) return Response.json({ error: "Платіж не знайдено" }, { status: 404 });
+          const expired = payment.status === "Активне" && new Date(payment.expiresAt).getTime() <= Date.now();
+          return Response.json({ payment: { id: payment.id, status: expired ? "Прострочено" : payment.status } }, { headers: { "Cache-Control": "no-store" } });
+        }
+        const payment = terminalPayment(body, terminal, Array.isArray(store.productsByBusiness?.[businessName]) ? store.productsByBusiness[businessName] : []);
+        if (!payment) return Response.json({ error: "Оберіть товари одного активу" }, { status: 400 });
+        links[businessName] = [payment, ...(links[businessName] || [])];
+        const saved = await persist(found.connection, row.account, { ...store, linksByBusiness: links });
+        if (!saved.ok) return Response.json({ error: "Не вдалося створити платіж" }, { status: 503 });
+        const base = (process.env.NEZERIYA_PAY_PUBLIC_URL || new URL(request.url).origin).replace(/\/$/, "");
+        return Response.json({ payment: { id: payment.id, status: payment.status, expiresAt: payment.expiresAt, amount: payment.amount, currency: payment.currency, paymentUrl: base + "/pay/" + payment.id } }, { status: 201 });
       }
     }
     return Response.json({ error: "Термінал не знайдено або відключено" }, { status: 404 });

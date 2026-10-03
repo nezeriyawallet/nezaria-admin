@@ -1,7 +1,7 @@
 import { Address, beginCell, Cell } from "@ton/core";
 
 type ReceiptLine = { name: string; quantity: number; price: string; currency: "USDT" | "GRAM"; photo?: string };
-type PaymentLink = { id: string; createdAt: string; expiresAt: string; title: string; amount: string; currency: "USDT" | "GRAM"; assets: Array<"USDT" | "GRAM">; products: ReceiptLine[]; note: string; message: string; oneTime: boolean; status: "Активне" | "Оплачено" | "Прострочено" };
+type PaymentLink = { id: string; createdAt: string; expiresAt: string; title: string; amount: string; currency: "USDT" | "GRAM"; assets: Array<"USDT" | "GRAM">; products: ReceiptLine[]; note: string; message: string; oneTime: boolean; status: "Активне" | "Оплачено" | "Прострочено"; source?: "Термінал"; terminalId?: string; terminalName?: string };
 
 declare global {
   // eslint-disable-next-line no-var
@@ -164,7 +164,8 @@ async function saveReceipt(found: NonNullable<Awaited<ReturnType<typeof locate>>
       const saved = payment && typeof payment === "object" ? payment as { paymentLinkId?: unknown; transaction?: unknown } : {};
       return saved.paymentLinkId === linkId || Boolean(proof.transaction && saved.transaction === proof.transaction);
     });
-    if (!duplicate) payments[current.businessName] = [{ id: `P-${Date.now().toString().slice(-6)}`, paymentLinkId: linkId, createdAt: new Date().toISOString(), source: "Платіжне посилання", sourceName: "Платіжне посилання", status: "Оплачено", currency: paidCurrency, amount: paidAmount, products: current.link.products, transaction: proof.transaction, wallet: proof.wallet }, ...existing];
+    const isTerminal = current.link.source === "Термінал";
+    if (!duplicate) payments[current.businessName] = [{ id: `P-${Date.now().toString().slice(-6)}`, paymentLinkId: linkId, createdAt: new Date().toISOString(), source: isTerminal ? "Термінал" : "Платіжне посилання", sourceName: isTerminal ? `Термінал — ${current.link.terminalName || "Термінал"}` : "Платіжне посилання", status: "Оплачено", currency: paidCurrency, amount: paidAmount, products: current.link.products, transaction: proof.transaction, wallet: proof.wallet }, ...existing];
     current.store.linksByBusiness = links;
     current.store.paymentsByBusiness = payments;
     const response = await fetch(`${current.connection.url}/rest/v1/acquiring_stores?account=eq.${encodeURIComponent(current.row.account)}`, { method: "PATCH", headers: apiHeaders(current.connection.key, { "Content-Type": "application/json", Prefer: "return=minimal" }), body: JSON.stringify({ products_by_business: current.store, updated_at: new Date().toISOString() }) });
