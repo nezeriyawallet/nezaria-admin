@@ -77,5 +77,14 @@ export async function POST(request: Request) {
     const saved = await persist(found.connection, account, { ...store, terminalsByBusiness: { ...(store.terminalsByBusiness || {}), [business]: next } });
     return saved.ok ? Response.json({ terminals: next }) : Response.json({ error: "Не вдалося зберегти зміни" }, { status: 503 });
   }
+
+  if (action === "delete") {
+    const id = clean(body.id, 80);
+    const current = store.terminalsByBusiness?.[business] || [];
+    const next = current.filter((item) => item.id !== id);
+    if (next.length === current.length) return Response.json({ error: "Термінал не знайдено" }, { status: 404 });
+    const saved = await persist(found.connection, account, { ...store, terminalsByBusiness: { ...(store.terminalsByBusiness || {}), [business]: next } });
+    return saved.ok ? Response.json({ terminals: next }) : Response.json({ error: "Не вдалося видалити термінал" }, { status: 503 });
+  }
   return Response.json({ error: "Невідома дія" }, { status: 400 });
 }
