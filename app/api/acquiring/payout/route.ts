@@ -20,8 +20,15 @@ async function sendImmediately(payoutId: string) {
       body: JSON.stringify({ payoutId }),
       cache: "no-store",
     });
-    const data = await response.json().catch(() => ({})) as { transaction?: unknown; message?: unknown };
-    return response.ok && typeof data.transaction === "string" ? { ok: true, transaction: data.transaction } : { ok: false, error: typeof data.message === "string" ? data.message : "Не вдалося виконати виплату" };
+    const data = await response.json().catch(() => ({})) as { transaction?: unknown; pending?: unknown; message?: unknown };
+    // A real transfer is asynchronous: the Wallet reserves the payout and
+    // returns 202 while it waits for blockchain confirmation. Treat that as a
+    // successful hand-off, otherwise the cabinet reports an error even though
+    // the server wallet has already started the transfer.
+    if (response.ok && (typeof data.transaction === "string" || data.pending === true)) {
+      return { ok: true, transaction: typeof data.transaction === "string" ? data.transaction : undefined };
+    }
+    return { ok: false, error: typeof data.message === "string" ? data.message : "Не вдалося виконати виплату" };
   } catch {
     return { ok: false, error: "Не вдалося зв’язатися з Nezeriya Wallet" };
   }
