@@ -102,7 +102,9 @@ function responseTimerState(ticket: SupportTicket | undefined, now: number) {
 }
 
 export default function Home() {
-  useEffect(() => { if (window.location.pathname === "/") window.location.replace("/admin"); }, []);
+  // A fallback for hosts that do not execute middleware. The dashboard has
+  // its own deployment and is intentionally not reachable from this domain.
+  useEffect(() => { if (window.location.pathname === "/") window.location.replace("/acquiring"); }, []);
   const [active, setActive] = useState<NavItem>("Огляд");
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("ceo");
   const [period, setPeriod] = useState("30 днів");

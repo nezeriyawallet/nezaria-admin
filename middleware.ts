@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Render exposes only the service root URL. The primary product is the
-// administration dashboard; Nezeriya Pay remains available at /acquiring.
+// This Render service belongs exclusively to Nezeriya Pay acquiring.
+// The company dashboard is deployed separately and must never be served by
+// the acquiring domain.
 export function middleware(request: NextRequest) {
-  return NextResponse.redirect(new URL("/admin", request.url));
+  return NextResponse.redirect(new URL("/acquiring", request.url));
 }
 
-export const config = { matcher: ["/"] };
+export const config = { matcher: ["/", "/admin"] };
