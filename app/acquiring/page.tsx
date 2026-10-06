@@ -904,6 +904,10 @@ export default function AcquiringPage() {
       const response = await fetch(`/api/acquiring/store?account=${encodeURIComponent(account)}`, { cache: "no-store" });
       return response.ok ? await response.json() as { businesses?: Business[]; productsByBusiness?: Record<string, Product[]>; paymentsByBusiness?: Record<string, Payment[]>; payoutsByBusiness?: Record<string, Payout[]>; linksByBusiness?: Record<string, PaymentLink[]>; payoutWallet?: string } : null;
     };
+    const cacheStore = (state: { businesses: Business[]; productsByBusiness: Record<string, Product[]>; paymentsByBusiness: Record<string, Payment[]>; payoutsByBusiness: Record<string, Payout[]>; linksByBusiness: Record<string, PaymentLink[]>; payoutWallet: string }) => {
+      localStorage.setItem("nezeriya_pay_businesses", JSON.stringify(state.businesses));
+      localStorage.setItem("nezeriya_pay_store_cache", JSON.stringify(state));
+    };
     const applyStore = (state: NonNullable<Awaited<ReturnType<typeof readStore>>>) => {
       if (Array.isArray(state.businesses) && state.businesses.length) setBusinesses(state.businesses);
       if (state.productsByBusiness && typeof state.productsByBusiness === "object") setProductsByBusiness(state.productsByBusiness);
@@ -911,6 +915,7 @@ export default function AcquiringPage() {
       if (state.payoutsByBusiness && typeof state.payoutsByBusiness === "object") setPayoutsByBusiness(state.payoutsByBusiness);
       if (state.linksByBusiness && typeof state.linksByBusiness === "object") setLinksByBusiness(state.linksByBusiness);
       if (typeof state.payoutWallet === "string" && state.payoutWallet) setPayoutWallet(state.payoutWallet);
+      if (Array.isArray(state.businesses) && state.businesses.length) cacheStore({ businesses: state.businesses, productsByBusiness: state.productsByBusiness || {}, paymentsByBusiness: state.paymentsByBusiness || {}, payoutsByBusiness: state.payoutsByBusiness || {}, linksByBusiness: state.linksByBusiness || {}, payoutWallet: state.payoutWallet || "" });
     };
     const reconcileActiveLinks = async (state: NonNullable<Awaited<ReturnType<typeof readStore>>>) => {
       const links = Object.values(state.linksByBusiness || {}).flat().filter((link) => link.status === "Активне" && (link.assets || [link.currency]).some((asset) => asset === "USDT" || asset === "GRAM")).slice(0, 40);
@@ -929,10 +934,13 @@ export default function AcquiringPage() {
           return;
         }
         if (migrated) return;
-        const localBusinesses = JSON.parse(localStorage.getItem("nezeriya_pay_businesses") || "[]");
+        const local = JSON.parse(localStorage.getItem("nezeriya_pay_store_cache") || "null") as { businesses?: Business[]; productsByBusiness?: Record<string, Product[]>; paymentsByBusiness?: Record<string, Payment[]>; payoutsByBusiness?: Record<string, Payout[]>; linksByBusiness?: Record<string, PaymentLink[]>; payoutWallet?: string } | null;
+        const localBusinesses = Array.isArray(local?.businesses) && local.businesses.length ? local.businesses : JSON.parse(localStorage.getItem("nezeriya_pay_businesses") || "[]");
         if (Array.isArray(localBusinesses) && localBusinesses.length) {
           migrated = true;
-          void fetch("/api/acquiring/store", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, businesses: localBusinesses, productsByBusiness: {}, paymentsByBusiness: {}, payoutsByBusiness: {}, linksByBusiness: {}, payoutWallet }) });
+          const payload = { businesses: localBusinesses, productsByBusiness: local?.productsByBusiness || {}, paymentsByBusiness: local?.paymentsByBusiness || {}, payoutsByBusiness: local?.payoutsByBusiness || {}, linksByBusiness: local?.linksByBusiness || {}, payoutWallet: local?.payoutWallet || payoutWallet };
+          cacheStore(payload);
+          void fetch("/api/acquiring/store", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, ...payload }) });
         }
       } catch {
         // Keep the last successful dashboard state and try again on the next cycle.
@@ -964,7 +972,7 @@ export default function AcquiringPage() {
   const changeBusiness = (key: keyof Business, value: string | string[]) => setBusinessForm((current) => ({ ...current, [key]: value }));
   const toggleAsset = (asset: string) => setBusinessForm((current) => ({ ...current, assets: current.assets.includes(asset) ? (current.assets.length > 1 ? current.assets.filter((item) => item !== asset) : current.assets) : [...current.assets, asset] }));
   const openBusinessForm = () => { setBusinessForm({ name: "", type: "Магазин", ownership: "ФОП", owner: "", email: "", phone: "", iban: "", taxId: "", description: "", assets: ["USDT"] }); setShowBusinessForm(true); };
-  const saveStore = (nextBusinesses: Business[], nextProducts: Record<string, Product[]>, nextPayments = paymentsByBusiness, nextPayouts = payoutsByBusiness, nextLinks = linksByBusiness, nextWallet = payoutWallet) => { localStorage.setItem("nezeriya_pay_businesses", JSON.stringify(nextBusinesses)); void fetch("/api/acquiring/store", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, businesses: nextBusinesses, productsByBusiness: nextProducts, paymentsByBusiness: nextPayments, payoutsByBusiness: nextPayouts, linksByBusiness: nextLinks, payoutWallet: nextWallet }) }); };
+  const saveStore = (nextBusinesses: Business[], nextProducts: Record<string, Product[]>, nextPayments = paymentsByBusiness, nextPayouts = payoutsByBusiness, nextLinks = linksByBusiness, nextWallet = payoutWallet) => { const payload = { businesses: nextBusinesses, productsByBusiness: nextProducts, paymentsByBusiness: nextPayments, payoutsByBusiness: nextPayouts, linksByBusiness: nextLinks, payoutWallet: nextWallet }; localStorage.setItem("nezeriya_pay_businesses", JSON.stringify(nextBusinesses)); localStorage.setItem("nezeriya_pay_store_cache", JSON.stringify(payload)); void fetch("/api/acquiring/store", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, ...payload }) }); };
   const saveBusiness = (event: React.FormEvent) => { event.preventDefault(); if (!businessForm.name.trim() || !businessForm.owner.trim() || !businessForm.email.trim() || !businessForm.phone.trim() || !businessForm.taxId.trim()) return; const next = [...businesses, { ...businessForm, name: businessForm.name.trim() }]; setBusinesses(next); saveStore(next, productsByBusiness); setShowBusinessForm(false); };
   const changeProducts = (businessName: string, nextProducts: Product[]) => { const next = { ...productsByBusiness, [businessName]: nextProducts }; setProductsByBusiness(next); saveStore(businesses, next); };
   const openQrLogin = () => { setToken(makeToken()); setView("register"); window.history.pushState({}, "", "/acquiring?login=1"); };

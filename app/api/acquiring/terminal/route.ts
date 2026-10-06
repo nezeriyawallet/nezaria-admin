@@ -79,10 +79,19 @@ export async function POST(request: Request) {
     if (!terminalId) return Response.json({ error: "Не вказано термінал" }, { status: 400 });
     for (const row of found.rows) {
       const store = row.products_by_business || {};
-      for (const [businessName, terminals] of Object.entries(store.terminalsByBusiness || {})) {
+      for (const [storedBusinessName, terminals] of Object.entries(store.terminalsByBusiness || {})) {
         const terminal = Array.isArray(terminals) ? terminals.find((item) => item.id === terminalId && item.online) : undefined;
         if (!terminal) continue;
-        const products = (Array.isArray(store.productsByBusiness?.[businessName]) ? store.productsByBusiness[businessName] : [])
+        // A business can be renamed after its terminal has been paired.  The
+        // terminal ID stays the same, so prefer its current business name and
+        // then fall back to the stored key.  For legacy one-business stores
+        // this also safely recovers a catalogue saved under the new name.
+        const catalogues = store.productsByBusiness || {};
+        const direct = Array.isArray(catalogues[terminal.business]) ? catalogues[terminal.business] : [];
+        const stored = Array.isArray(catalogues[storedBusinessName]) ? catalogues[storedBusinessName] : [];
+        const available = Object.values(catalogues).filter((items): items is Product[] => Array.isArray(items) && items.length > 0);
+        const source = direct.length ? direct : stored.length ? stored : available.length === 1 ? available[0] : [];
+        const products = source
           .map(catalogueProduct)
           .filter((item): item is NonNullable<typeof item> => Boolean(item))
           .slice(0, 60);
