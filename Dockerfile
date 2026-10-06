@@ -1,11 +1,14 @@
 # Render currently cannot clone this repository (GitHub returns 403), so the
 # same application is also published as a container image by GitHub Actions.
-FROM node:22-alpine
+# Use Debian rather than Alpine for the runtime.  Vinext's Node production
+# server can fail to initialise on musl/Alpine without producing a useful
+# process log, which leaves Render waiting for a port that never opens.
+FROM node:22-bookworm-slim
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm install
+RUN npm ci
 
 COPY . ./
 
@@ -24,6 +27,9 @@ RUN npm run build
 
 ENV NODE_ENV=production
 ENV PORT=10000
+ENV HOST=0.0.0.0
 EXPOSE 10000
 
-CMD ["npm", "run", "start"]
+# Invoke the server directly, rather than via npm's shell wrapper, so Render
+# observes the listening Node process as soon as it starts.
+CMD ["node", "scripts/vinext-render.mjs", "start"]
