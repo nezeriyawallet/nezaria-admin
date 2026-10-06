@@ -102,8 +102,9 @@ function responseTimerState(ticket: SupportTicket | undefined, now: number) {
 }
 
 export default function Home() {
-  // Fallback for hosts that do not execute middleware.
-  useEffect(() => { if (window.location.pathname === "/") window.location.replace("/admin"); }, []);
+  // Fallback for hosts that do not execute middleware. The company dashboard
+  // is deployed separately and is intentionally unavailable on this domain.
+  useEffect(() => { if (window.location.pathname === "/") window.location.replace("/acquiring"); }, []);
   const [active, setActive] = useState<NavItem>("Огляд");
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("ceo");
   const [period, setPeriod] = useState("30 днів");
