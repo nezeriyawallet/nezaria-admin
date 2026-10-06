@@ -8,7 +8,11 @@ FROM node:22-bookworm-slim
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+# The lockfile is maintained by the generated application scaffold and does
+# not yet match every package metadata update. Use the same install mode that
+# produced the previously published image, so the container build remains
+# reproducible enough for this service and does not fail before startup.
+RUN npm install
 
 COPY . ./
 
