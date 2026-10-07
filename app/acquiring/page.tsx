@@ -922,6 +922,31 @@ export default function AcquiringPage() {
       await Promise.all(links.map((link) => fetch(`/api/acquiring/payment-link/${encodeURIComponent(link.id)}`, { cache: "no-store" }).catch(() => undefined)));
       return links.length > 0;
     };
+    const restoreCachedCatalogue = async (state: NonNullable<Awaited<ReturnType<typeof readStore>>>) => {
+      // Older versions could save the business record before the product map.
+      // Recover a non-empty local catalogue once, but never replace a server
+      // catalogue (including an intentional empty catalogue) after it exists.
+      const local = JSON.parse(localStorage.getItem("nezeriya_pay_store_cache") || "null") as { productsByBusiness?: Record<string, Product[]> } | null;
+      const cached = local?.productsByBusiness;
+      if (!cached || typeof cached !== "object") return state;
+      const remote = state.productsByBusiness || {};
+      let changed = false;
+      const productsByBusiness = { ...remote };
+      for (const business of state.businesses || []) {
+        const cachedProducts = cached[business.name];
+        const remoteProducts = remote[business.name];
+        if (Array.isArray(cachedProducts) && cachedProducts.length && (!Array.isArray(remoteProducts) || !remoteProducts.length)) {
+          productsByBusiness[business.name] = cachedProducts;
+          changed = true;
+        }
+      }
+      if (!changed) return state;
+      const recovered = { ...state, productsByBusiness };
+      const response = await fetch("/api/acquiring/store", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, ...recovered }) });
+      if (!response.ok) return state;
+      cacheStore({ businesses: recovered.businesses || [], productsByBusiness, paymentsByBusiness: recovered.paymentsByBusiness || {}, payoutsByBusiness: recovered.payoutsByBusiness || {}, linksByBusiness: recovered.linksByBusiness || {}, payoutWallet: recovered.payoutWallet || "" });
+      return recovered;
+    };
     const loadStore = async () => {
       if (loading) return;
       loading = true;
@@ -929,6 +954,7 @@ export default function AcquiringPage() {
         let state = await readStore();
         if (!active || !state) return;
         if (Array.isArray(state.businesses) && state.businesses.length) {
+          state = await restoreCachedCatalogue(state);
           if (await reconcileActiveLinks(state)) state = await readStore();
           if (active && state) applyStore(state);
           return;

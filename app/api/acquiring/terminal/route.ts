@@ -21,16 +21,28 @@ const catalogueProduct = (product: Product) => {
   const photo = clean(product.photo, 2_000_000);
   return { name, price: Number(price.toFixed(6)), currency, category: clean(product.category, 80), description: clean(product.description, 240), photo };
 };
+const businessKey = (value: unknown) => clean(value, 120).normalize("NFKC").toLocaleLowerCase("uk-UA");
+const catalogueForBusiness = (catalogues: Record<string, Product[]>, ...names: string[]) => {
+  // Business names can be renamed or entered with a different letter case in
+  // the cabinet. The terminal ID is authoritative, so resolve its catalogue
+  // by a normalized name instead of requiring byte-for-byte equality.
+  for (const name of names) {
+    const key = businessKey(name);
+    const match = Object.entries(catalogues).find(([storedName, items]) => businessKey(storedName) === key && Array.isArray(items));
+    if (match) return { name: match[0], products: match[1] };
+  }
+  return null;
+};
 const findTerminalCatalogue = (store: Store, terminalId: string): TerminalCatalogue | null => {
   for (const [storedBusinessName, terminals] of Object.entries(store.terminalsByBusiness || {})) {
     const terminal = Array.isArray(terminals) ? terminals.find((item) => item.id === terminalId && item.online) : undefined;
     if (!terminal) continue;
     const catalogues = store.productsByBusiness || {};
-    const direct = Array.isArray(catalogues[terminal.business]) ? catalogues[terminal.business] : [];
-    const stored = Array.isArray(catalogues[storedBusinessName]) ? catalogues[storedBusinessName] : [];
+    const matched = catalogueForBusiness(catalogues, terminal.business, storedBusinessName);
+    const direct = matched?.products || [];
     const available = Object.values(catalogues).filter((items): items is Product[] => Array.isArray(items) && items.length > 0);
-    const products = direct.length ? direct : stored.length ? stored : available.length === 1 ? available[0] : [];
-    return { terminal, businessName: direct.length ? terminal.business : stored.length ? storedBusinessName : available.length === 1 ? Object.entries(catalogues).find(([, items]) => items === available[0])?.[0] || storedBusinessName : storedBusinessName, products };
+    const products = direct.length ? direct : available.length === 1 ? available[0] : [];
+    return { terminal, businessName: direct.length ? matched?.name || storedBusinessName : available.length === 1 ? Object.entries(catalogues).find(([, items]) => items === available[0])?.[0] || storedBusinessName : storedBusinessName, products };
   }
   return null;
 };
