@@ -5,6 +5,7 @@ type ReceiptLine = { name: string; quantity: number; price: string; currency: "U
 type TerminalPayment = { id: string; createdAt: string; expiresAt: string; title: string; amount: string; currency: "USDT" | "GRAM"; assets: Array<"USDT" | "GRAM">; products: ReceiptLine[]; note: string; message: string; oneTime: boolean; status: "Активне" | "Оплачено" | "Прострочено"; source?: "Термінал"; terminalId?: string; terminalName?: string };
 type Store = { productsByBusiness?: Record<string, Product[]>; terminalsByBusiness?: Record<string, Terminal[]>; terminalPairings?: Record<string, Ticket>; linksByBusiness?: Record<string, TerminalPayment[]> };
 type Row = { account: string; products_by_business: Store };
+type TerminalCatalogue = { terminal: Terminal; businessName: string; products: Product[] };
 
 const TEN_MINUTES = 10 * 60 * 1000;
 const config = () => { const url = process.env.NEXT_PUBLIC_SUPABASE_URL; const key = process.env.SUPABASE_SERVICE_ROLE_KEY; return url && key ? { url, key } : null; };
@@ -19,6 +20,19 @@ const catalogueProduct = (product: Product) => {
   const currency = product.currency === "GRAM" ? "GRAM" : "USDT";
   const photo = clean(product.photo, 2_000_000);
   return { name, price: Number(price.toFixed(6)), currency, category: clean(product.category, 80), description: clean(product.description, 240), photo };
+};
+const findTerminalCatalogue = (store: Store, terminalId: string): TerminalCatalogue | null => {
+  for (const [storedBusinessName, terminals] of Object.entries(store.terminalsByBusiness || {})) {
+    const terminal = Array.isArray(terminals) ? terminals.find((item) => item.id === terminalId && item.online) : undefined;
+    if (!terminal) continue;
+    const catalogues = store.productsByBusiness || {};
+    const direct = Array.isArray(catalogues[terminal.business]) ? catalogues[terminal.business] : [];
+    const stored = Array.isArray(catalogues[storedBusinessName]) ? catalogues[storedBusinessName] : [];
+    const available = Object.values(catalogues).filter((items): items is Product[] => Array.isArray(items) && items.length > 0);
+    const products = direct.length ? direct : stored.length ? stored : available.length === 1 ? available[0] : [];
+    return { terminal, businessName: direct.length ? terminal.business : stored.length ? storedBusinessName : available.length === 1 ? Object.entries(catalogues).find(([, items]) => items === available[0])?.[0] || storedBusinessName : storedBusinessName, products };
+  }
+  return null;
 };
 const terminalPayment = (body: Record<string, unknown>, terminal: Terminal, products: Product[]) => {
   const requested = Array.isArray(body.products) ? body.products : [];
@@ -79,24 +93,10 @@ export async function POST(request: Request) {
     if (!terminalId) return Response.json({ error: "Не вказано термінал" }, { status: 400 });
     for (const row of found.rows) {
       const store = row.products_by_business || {};
-      for (const [storedBusinessName, terminals] of Object.entries(store.terminalsByBusiness || {})) {
-        const terminal = Array.isArray(terminals) ? terminals.find((item) => item.id === terminalId && item.online) : undefined;
-        if (!terminal) continue;
-        // A business can be renamed after its terminal has been paired.  The
-        // terminal ID stays the same, so prefer its current business name and
-        // then fall back to the stored key.  For legacy one-business stores
-        // this also safely recovers a catalogue saved under the new name.
-        const catalogues = store.productsByBusiness || {};
-        const direct = Array.isArray(catalogues[terminal.business]) ? catalogues[terminal.business] : [];
-        const stored = Array.isArray(catalogues[storedBusinessName]) ? catalogues[storedBusinessName] : [];
-        const available = Object.values(catalogues).filter((items): items is Product[] => Array.isArray(items) && items.length > 0);
-        const source = direct.length ? direct : stored.length ? stored : available.length === 1 ? available[0] : [];
-        const products = source
-          .map(catalogueProduct)
-          .filter((item): item is NonNullable<typeof item> => Boolean(item))
-          .slice(0, 60);
-        return Response.json({ terminal: { id: terminal.id, name: terminal.name, business: terminal.business }, products }, { headers: { "Cache-Control": "no-store" } });
-      }
+      const catalogue = findTerminalCatalogue(store, terminalId);
+      if (!catalogue) continue;
+      const products = catalogue.products.map(catalogueProduct).filter((item): item is NonNullable<typeof item> => Boolean(item)).slice(0, 60);
+      return Response.json({ terminal: { id: catalogue.terminal.id, name: catalogue.terminal.name, business: catalogue.terminal.business }, products, updatedAt: new Date().toISOString() }, { headers: { "Cache-Control": "no-store" } });
     }
     return Response.json({ error: "Термінал не знайдено або відключено" }, { status: 404 });
   }
@@ -107,9 +107,9 @@ export async function POST(request: Request) {
     const paymentId = clean(body.paymentId, 120);
     for (const row of found.rows) {
       const store = row.products_by_business || {};
-      for (const [businessName, terminals] of Object.entries(store.terminalsByBusiness || {})) {
-        const terminal = Array.isArray(terminals) ? terminals.find((item) => item.id === terminalId && item.online) : undefined;
-        if (!terminal) continue;
+      const catalogue = findTerminalCatalogue(store, terminalId);
+      if (!catalogue) continue;
+      const { terminal, businessName, products } = catalogue;
         const links = { ...(store.linksByBusiness || {}) };
         if (action === "payment-status") {
           const payment = (links[businessName] || []).find((item) => item.id === paymentId && item.terminalId === terminal.id);
@@ -117,14 +117,13 @@ export async function POST(request: Request) {
           const expired = payment.status === "Активне" && new Date(payment.expiresAt).getTime() <= Date.now();
           return Response.json({ payment: { id: payment.id, status: expired ? "Прострочено" : payment.status } }, { headers: { "Cache-Control": "no-store" } });
         }
-        const payment = terminalPayment(body, terminal, Array.isArray(store.productsByBusiness?.[businessName]) ? store.productsByBusiness[businessName] : []);
+        const payment = terminalPayment(body, terminal, products);
         if (!payment) return Response.json({ error: "Оберіть товари одного активу" }, { status: 400 });
         links[businessName] = [payment, ...(links[businessName] || [])];
         const saved = await persist(found.connection, row.account, { ...store, linksByBusiness: links });
         if (!saved.ok) return Response.json({ error: "Не вдалося створити платіж" }, { status: 503 });
         const base = (process.env.NEZERIYA_PAY_PUBLIC_URL || new URL(request.url).origin).replace(/\/$/, "");
         return Response.json({ payment: { id: payment.id, status: payment.status, expiresAt: payment.expiresAt, amount: payment.amount, currency: payment.currency, paymentUrl: base + "/pay/" + payment.id } }, { status: 201 });
-      }
     }
     return Response.json({ error: "Термінал не знайдено або відключено" }, { status: 404 });
   }
