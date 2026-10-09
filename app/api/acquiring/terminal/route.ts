@@ -5,7 +5,7 @@ type ReceiptLine = { name: string; quantity: number; price: string; currency: "U
 type TerminalPayment = { id: string; createdAt: string; expiresAt: string; title: string; amount: string; currency: "USDT" | "GRAM"; assets: Array<"USDT" | "GRAM">; products: ReceiptLine[]; note: string; message: string; oneTime: boolean; status: "Активне" | "Оплачено" | "Прострочено"; source?: "Термінал"; terminalId?: string; terminalName?: string };
 type Store = { productsByBusiness?: Record<string, Product[]>; terminalsByBusiness?: Record<string, Terminal[]>; terminalPairings?: Record<string, Ticket>; linksByBusiness?: Record<string, TerminalPayment[]> };
 type Row = { account: string; products_by_business: Store };
-type TerminalCatalogue = { terminal: Terminal; businessName: string; products: Product[] };
+type TerminalCatalogue = { terminal: Terminal; businessName: string; products: Product[]; account: string; store: Store };
 
 const TEN_MINUTES = 10 * 60 * 1000;
 const config = () => { const url = process.env.NEXT_PUBLIC_SUPABASE_URL; const key = process.env.SUPABASE_SERVICE_ROLE_KEY; return url && key ? { url, key } : null; };
@@ -33,18 +33,36 @@ const catalogueForBusiness = (catalogues: Record<string, Product[]>, ...names: s
   }
   return null;
 };
-const findTerminalCatalogue = (store: Store, terminalId: string): TerminalCatalogue | null => {
-  for (const [storedBusinessName, terminals] of Object.entries(store.terminalsByBusiness || {})) {
-    const terminal = Array.isArray(terminals) ? terminals.find((item) => item.id === terminalId && item.online) : undefined;
-    if (!terminal) continue;
-    const catalogues = store.productsByBusiness || {};
-    const matched = catalogueForBusiness(catalogues, terminal.business, storedBusinessName);
-    const direct = matched?.products || [];
-    const available = Object.values(catalogues).filter((items): items is Product[] => Array.isArray(items) && items.length > 0);
-    const products = direct.length ? direct : available.length === 1 ? available[0] : [];
-    return { terminal, businessName: direct.length ? matched?.name || storedBusinessName : available.length === 1 ? Object.entries(catalogues).find(([, items]) => items === available[0])?.[0] || storedBusinessName : storedBusinessName, products };
+const findTerminalCatalogue = (rows: Row[], terminalId: string): TerminalCatalogue | null => {
+  let terminalMatch: TerminalCatalogue | null = null;
+  for (const row of rows) {
+    const store = row.products_by_business || {};
+    for (const [storedBusinessName, terminals] of Object.entries(store.terminalsByBusiness || {})) {
+      const terminal = Array.isArray(terminals) ? terminals.find((item) => item.id === terminalId && item.online) : undefined;
+      if (!terminal) continue;
+      const catalogues = store.productsByBusiness || {};
+      const matched = catalogueForBusiness(catalogues, terminal.business, storedBusinessName);
+      const direct = matched?.products || [];
+      const available = Object.values(catalogues).filter((items): items is Product[] => Array.isArray(items) && items.length > 0);
+      const products = direct.length ? direct : available.length === 1 ? available[0] : [];
+      terminalMatch = { terminal, businessName: direct.length ? matched?.name || storedBusinessName : available.length === 1 ? Object.entries(catalogues).find(([, items]) => items === available[0])?.[0] || storedBusinessName : storedBusinessName, products, account: row.account, store };
+      if (products.length) return terminalMatch;
+      break;
+    }
+    if (terminalMatch) break;
   }
-  return null;
+  if (!terminalMatch) return null;
+  // A cabinet may have been restored under a new account/session while the
+  // already paired terminal remains in the old row. Match only one non-empty
+  // catalogue with the same normalized business name, so a terminal never
+  // receives another business's products.
+  const candidates = rows.flatMap((row) => {
+    const store = row.products_by_business || {};
+    const match = catalogueForBusiness(store.productsByBusiness || {}, terminalMatch.terminal.business, terminalMatch.businessName);
+    return match?.products.length ? [{ account: row.account, store, businessName: match.name, products: match.products }] : [];
+  });
+  if (candidates.length === 1) return { ...terminalMatch, ...candidates[0] };
+  return terminalMatch;
 };
 const terminalPayment = (body: Record<string, unknown>, terminal: Terminal, products: Product[]) => {
   const requested = Array.isArray(body.products) ? body.products : [];
@@ -103,10 +121,8 @@ export async function POST(request: Request) {
     if (!serviceAllowed(request)) return Response.json({ error: "Недійсний службовий запит" }, { status: 403 });
     const terminalId = clean(body.terminalId, 80);
     if (!terminalId) return Response.json({ error: "Не вказано термінал" }, { status: 400 });
-    for (const row of found.rows) {
-      const store = row.products_by_business || {};
-      const catalogue = findTerminalCatalogue(store, terminalId);
-      if (!catalogue) continue;
+    const catalogue = findTerminalCatalogue(found.rows, terminalId);
+    if (catalogue) {
       const products = catalogue.products.map(catalogueProduct).filter((item): item is NonNullable<typeof item> => Boolean(item)).slice(0, 60);
       return Response.json({ terminal: { id: catalogue.terminal.id, name: catalogue.terminal.name, business: catalogue.terminal.business }, products, updatedAt: new Date().toISOString() }, { headers: { "Cache-Control": "no-store" } });
     }
@@ -117,25 +133,23 @@ export async function POST(request: Request) {
     if (!serviceAllowed(request)) return Response.json({ error: "Недійсний службовий запит" }, { status: 403 });
     const terminalId = clean(body.terminalId, 80);
     const paymentId = clean(body.paymentId, 120);
-    for (const row of found.rows) {
-      const store = row.products_by_business || {};
-      const catalogue = findTerminalCatalogue(store, terminalId);
-      if (!catalogue) continue;
-      const { terminal, businessName, products } = catalogue;
-        const links = { ...(store.linksByBusiness || {}) };
-        if (action === "payment-status") {
-          const payment = (links[businessName] || []).find((item) => item.id === paymentId && item.terminalId === terminal.id);
-          if (!payment) return Response.json({ error: "Платіж не знайдено" }, { status: 404 });
-          const expired = payment.status === "Активне" && new Date(payment.expiresAt).getTime() <= Date.now();
-          return Response.json({ payment: { id: payment.id, status: expired ? "Прострочено" : payment.status } }, { headers: { "Cache-Control": "no-store" } });
-        }
-        const payment = terminalPayment(body, terminal, products);
-        if (!payment) return Response.json({ error: "Оберіть товари одного активу" }, { status: 400 });
-        links[businessName] = [payment, ...(links[businessName] || [])];
-        const saved = await persist(found.connection, row.account, { ...store, linksByBusiness: links });
-        if (!saved.ok) return Response.json({ error: "Не вдалося створити платіж" }, { status: 503 });
-        const base = (process.env.NEZERIYA_PAY_PUBLIC_URL || new URL(request.url).origin).replace(/\/$/, "");
-        return Response.json({ payment: { id: payment.id, status: payment.status, expiresAt: payment.expiresAt, amount: payment.amount, currency: payment.currency, paymentUrl: base + "/pay/" + payment.id } }, { status: 201 });
+    const catalogue = findTerminalCatalogue(found.rows, terminalId);
+    if (catalogue) {
+      const { terminal, businessName, products, store, account: catalogueAccount } = catalogue;
+      const links = { ...(store.linksByBusiness || {}) };
+      if (action === "payment-status") {
+        const payment = (links[businessName] || []).find((item) => item.id === paymentId && item.terminalId === terminal.id);
+        if (!payment) return Response.json({ error: "Платіж не знайдено" }, { status: 404 });
+        const expired = payment.status === "Активне" && new Date(payment.expiresAt).getTime() <= Date.now();
+        return Response.json({ payment: { id: payment.id, status: expired ? "Прострочено" : payment.status } }, { headers: { "Cache-Control": "no-store" } });
+      }
+      const payment = terminalPayment(body, terminal, products);
+      if (!payment) return Response.json({ error: "Оберіть товари одного активу" }, { status: 400 });
+      links[businessName] = [payment, ...(links[businessName] || [])];
+      const saved = await persist(found.connection, catalogueAccount, { ...store, linksByBusiness: links });
+      if (!saved.ok) return Response.json({ error: "Не вдалося створити платіж" }, { status: 503 });
+      const base = (process.env.NEZERIYA_PAY_PUBLIC_URL || new URL(request.url).origin).replace(/\/$/, "");
+      return Response.json({ payment: { id: payment.id, status: payment.status, expiresAt: payment.expiresAt, amount: payment.amount, currency: payment.currency, paymentUrl: base + "/pay/" + payment.id } }, { status: 201 });
     }
     return Response.json({ error: "Термінал не знайдено або відключено" }, { status: 404 });
   }
