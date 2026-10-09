@@ -1,0 +1,84 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&family=Onest:wght@400;500;600;700;800&family=Unbounded:wght@500;600;700;800&display=swap");
+
+/* Shared visual language for the public Nezeriya Pay pages. The cabinet keeps
+   its existing light interface and is intentionally outside this scope. */
+.np-marketing {
+  --np-bg: #050a1a;
+  --np-bg-2: #08122b;
+  --np-panel: #0c1838;
+  --np-panel-2: #112050;
+  --np-line: rgba(130, 160, 255, .16);
+  --np-fg: #eaf0ff;
+  --np-muted: #8e9ccc;
+  --np-accent: #3b7bff;
+  --np-accent-2: #8fb2ff;
+  --np-ok: #4de8c2;
+  --np-paper: #fff;
+  --np-paper-2: #f3f4f7;
+  --np-ink: #0d1220;
+  --np-ink-2: #5b6275;
+  --np-paper-line: #e4e6ec;
+  color: var(--np-fg);
+  background: var(--np-bg);
+  font-family: Onest, Arial, sans-serif;
+  overflow: clip;
+}
+
+.np-wrap { width: min(1180px, calc(100% - 40px)); margin-inline: auto; }
+.np-brand { font: 600 17px/1 Unbounded, Arial, sans-serif; letter-spacing: -.08em; color: var(--np-fg); text-decoration: none; white-space: nowrap; }
+.np-brand strong { color: var(--np-accent); font-weight: inherit; }
+.np-logo-mark { display: inline-grid; place-items: center; width: 34px; height: 34px; margin-right: 10px; border: 1px solid rgba(255,255,255,.18); border-radius: 10px; background: #020611; vertical-align: middle; }
+.np-logo-mark svg { width: 22px; height: 22px; }
+.np-nav { position: sticky; top: 0; z-index: 50; border-bottom: 1px solid var(--np-line); background: rgba(5, 10, 26, .86); backdrop-filter: blur(18px); }
+.np-nav-row { min-height: 72px; display: flex; align-items: center; gap: 30px; }
+.np-nav-links { display: flex; align-items: center; gap: 22px; margin-left: auto; }
+.np-nav-links a { position: relative; padding: 28px 0 25px; color: #aeb9dc; text-decoration: none; font-size: 13px; transition: color .2s ease; }
+.np-nav-links a::after { content: ""; position: absolute; right: 0; bottom: 17px; left: 0; height: 2px; transform: scaleX(0); transform-origin: left; background: var(--np-accent); transition: transform .22s ease; }
+.np-nav-links a:hover, .np-nav-links a[aria-current="page"] { color: var(--np-fg); }
+.np-nav-links a[aria-current="page"]::after { transform: scaleX(1); }
+.np-nav-actions { display: flex; align-items: center; gap: 10px; }
+.np-nav-actions button, .np-nav-toggle { font: 600 12px/1 Onest, Arial, sans-serif; cursor: pointer; }
+.np-login { border: 1px solid rgba(143,178,255,.25); border-radius: 999px; padding: 13px 17px; color: var(--np-fg); background: transparent; }
+.np-register { border: 1px solid transparent; border-radius: 999px; padding: 14px 19px; color: #fff; background: var(--np-accent); box-shadow: 0 12px 28px rgba(59,123,255,.26); }
+.np-nav-toggle { display: none; width: 40px; height: 40px; border: 1px solid var(--np-line); border-radius: 10px; color: var(--np-fg); background: transparent; }
+
+.np-footer { border-top: 1px solid var(--np-line); background: #040816; }
+.np-footer-row { display: flex; align-items: center; justify-content: space-between; gap: 22px; min-height: 132px; }
+.np-footer-copy { color: var(--np-muted); font-size: 13px; }
+.np-footer-link { color: var(--np-accent-2); font-size: 13px; text-decoration: none; }
+.np-scroll-progress { position: fixed; top: 0; left: 0; z-index: 100; width: var(--np-scroll, 0%); height: 2px; background: linear-gradient(90deg, var(--np-accent), var(--np-ok)); transform-origin: left; pointer-events: none; }
+
+.np-marketing.np-js [data-reveal] { opacity: 0; transform: translate3d(0, 22px, 0); transition: opacity .65s ease, transform .65s cubic-bezier(.2,.7,.2,1); }
+.np-marketing.np-js [data-reveal].is-visible { opacity: 1; transform: translate3d(0, 0, 0); }
+.np-marketing.np-js [data-reveal][data-delay="1"] { transition-delay: .1s; }
+.np-marketing.np-js [data-reveal][data-delay="2"] { transition-delay: .2s; }
+.np-marketing.np-js [data-reveal][data-delay="3"] { transition-delay: .3s; }
+
+@supports (view-transition-name: page) {
+  ::view-transition-old(root) { animation: .18s ease both np-fade-out; }
+  ::view-transition-new(root) { animation: .28s ease both np-fade-in; }
+}
+@keyframes np-fade-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes np-fade-out { to { opacity: 0; } }
+
+@media (max-width: 960px) {
+  .np-nav-row { gap: 16px; }
+  .np-nav-links { gap: 14px; }
+  .np-nav-links a { font-size: 12px; }
+}
+@media (max-width: 760px) {
+  .np-wrap { width: min(100% - 32px, 1180px); }
+  .np-nav-row { min-height: 64px; justify-content: space-between; }
+  .np-brand { font-size: 14px; }
+  .np-logo-mark { width: 30px; height: 30px; margin-right: 7px; }
+  .np-nav-toggle { display: grid; place-items: center; margin-left: auto; }
+  .np-nav-links { display: none; position: absolute; top: 64px; right: 16px; left: 16px; flex-direction: column; align-items: stretch; gap: 0; padding: 8px 18px; border: 1px solid var(--np-line); border-radius: 16px; background: #09122b; box-shadow: 0 18px 50px rgba(0,0,0,.35); }
+  .np-nav.open .np-nav-links { display: flex; }
+  .np-nav-links a { padding: 15px 0; }
+  .np-nav-links a::after { bottom: 8px; }
+  .np-nav-actions { display: none; }
+  .np-footer-row { min-height: 0; padding: 34px 0; align-items: flex-start; flex-direction: column; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
