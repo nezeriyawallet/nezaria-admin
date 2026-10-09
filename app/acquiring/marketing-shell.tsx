@@ -43,8 +43,18 @@ export function MarketingMotion() {
     const root = document.querySelector<HTMLElement>(".np-marketing");
     if (!root) return;
     root.classList.add("np-js");
+    const revealElements = Array.from(root.querySelectorAll<HTMLElement>("[data-reveal]"));
+
+    // Some embedded browsers (and privacy-hardened WebViews) do not expose
+    // IntersectionObserver. Never let a decorative animation hide the page in
+    // that case: the content must remain usable without this browser API.
+    if (!("IntersectionObserver" in window)) {
+      revealElements.forEach((element) => element.classList.add("is-visible"));
+      return () => root.classList.remove("np-js");
+    }
+
     const reveal = new IntersectionObserver((entries) => entries.forEach((entry) => { if (entry.isIntersecting) { entry.target.classList.add("is-visible"); reveal.unobserve(entry.target); } }), { threshold: .15 });
-    root.querySelectorAll("[data-reveal]").forEach((element) => reveal.observe(element));
+    revealElements.forEach((element) => reveal.observe(element));
     const updateProgress = () => root.style.setProperty("--np-scroll", `${Math.min(100, (window.scrollY / Math.max(1, document.documentElement.scrollHeight - window.innerHeight)) * 100)}%`);
     updateProgress();
     window.addEventListener("scroll", updateProgress, { passive: true });
