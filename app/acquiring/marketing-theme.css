@@ -24,8 +24,8 @@
   overflow: clip;
 }
 
-.np-wrap { width: min(1180px, calc(100% - 40px)); margin-inline: auto; }
-.np-brand { font: 600 17px/1 Unbounded, Arial, sans-serif; letter-spacing: -.08em; color: var(--np-fg); text-decoration: none; white-space: nowrap; }
+.np-wrap { width: min(1280px, calc(100% - 48px)); margin-inline: auto; }
+.np-brand { font: 600 17px/1 Unbounded, Arial, sans-serif; letter-spacing: .01em; color: var(--np-fg); text-decoration: none; white-space: nowrap; }
 .np-brand strong { color: var(--np-accent); font-weight: inherit; }
 .np-logo-mark { display: inline-grid; place-items: center; width: 34px; height: 34px; margin-right: 10px; border: 1px solid rgba(255,255,255,.18); border-radius: 10px; background: #020611; vertical-align: middle; }
 .np-logo-mark svg { width: 22px; height: 22px; }
