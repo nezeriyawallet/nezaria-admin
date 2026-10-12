@@ -9,7 +9,7 @@ export const marketingLinks = [
   ["how", "Як це працює", "/acquiring/how"],
   ["cabinet", "Кабінет", "/acquiring/cabinet"],
   ["about", "Про нас", "/acquiring/about"],
-  ["security", "Безпека", "/acquiring/security"],
+  ["business", "Бізнесам", "/acquiring/business"],
   ["developers", "Розробникам", "/acquiring/developers"],
   ["pricing", "Тариф", "/acquiring/pricing"],
   ["faq", "FAQ", "/acquiring/faq"],
