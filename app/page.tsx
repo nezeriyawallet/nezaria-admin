@@ -303,8 +303,9 @@ export default function Home() {
       if (!response.ok) throw new Error(body.error || "Metrics unavailable");
       setWalletMetrics(body.metrics || {});
       setMetricsError("");
-    } catch {
-      setMetricsError("Статистика тимчасово недоступна");
+    } catch (error) {
+      const reason = error instanceof Error && error.message !== "Metrics unavailable" && error.message !== "Failed to fetch" ? `: ${error.message}` : "";
+      setMetricsError(`Статистика тимчасово недоступна${reason}`);
     }
   };
 

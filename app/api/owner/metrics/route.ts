@@ -27,11 +27,23 @@ export async function GET(request: Request) {
   // The owner session is held by the browser for 24 hours. On server restarts the
   // stored verification may be unavailable briefly, but the authenticated Google
   // user still has to present that session before wallet metrics are returned.
-  if (!user || (!verifiedOwner && !ownerSession)) return Response.json({ error: "Forbidden" }, { status: 403 });
+  if (!user) return Response.json({ error: "Сесія Google завершилась — вийди й увійди знову." }, { status: 403 });
+  if (!verifiedOwner && !ownerSession) return Response.json({ error: "Немає сесії власника — увійди з кодом доступу ще раз." }, { status: 403 });
 
-  const baseUrl = process.env.WALLET_API_BASE_URL?.replace(/\/$/, "");
-  const apiKey = process.env.WALLET_ADMIN_API_KEY;
-  if (!baseUrl || !apiKey) return Response.json({ error: "Wallet API is not configured" }, { status: 503 });
+  // Same default wallet address as the acquiring routes use.
+  const baseUrl = (process.env.WALLET_API_BASE_URL?.trim() || process.env.NEZERIYA_WALLET_API_URL?.trim() || "https://bot-5k6u.onrender.com").replace(/\/+$/, "");
+  const apiKey = process.env.WALLET_ADMIN_API_KEY?.trim();
+  if (!apiKey) return Response.json({ error: "На Render не заданий WALLET_ADMIN_API_KEY для дашборду." }, { status: 503 });
+
+  // Fail loudly when the wallet rejects the key instead of showing empty numbers.
+  try {
+    const probe = await fetch(`${baseUrl}/admin/api/users/count`, { headers: { "X-Admin-Key": apiKey, Accept: "application/json" }, cache: "no-store" });
+    if (probe.status === 401 || probe.status === 403) {
+      return Response.json({ error: "Гаманець не прийняв WALLET_ADMIN_API_KEY — ключ має збігатися з ключем адмін-API у сервісі bot." }, { status: 502 });
+    }
+  } catch {
+    return Response.json({ error: `Гаманець недоступний за адресою ${baseUrl}.` }, { status: 502 });
+  }
 
   const fresh = Date.now();
   const requestUrl = new URL(request.url);
