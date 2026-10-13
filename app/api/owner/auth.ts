@@ -65,7 +65,19 @@ function toBase64Url(bytes: Uint8Array) {
   return btoa(value).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
-async function verifyTotp(rawCandidate: string, secret: string) {
+export function generateTotpSecret() {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const bytes = crypto.getRandomValues(new Uint8Array(20));
+  let buffer = 0, bits = 0, output = "";
+  for (const byte of bytes) {
+    buffer = (buffer << 8) | byte; bits += 8;
+    while (bits >= 5) { output += alphabet[(buffer >>> (bits - 5)) & 31]; bits -= 5; }
+  }
+  if (bits > 0) output += alphabet[(buffer << (5 - bits)) & 31];
+  return output;
+}
+
+export async function verifyTotp(rawCandidate: string, secret: string) {
   const candidate = rawCandidate.replace(/\s/g, "");
   if (!/^\d{6}$/.test(candidate)) return false;
   const keyBytes = fromBase32(extractTotpSecret(secret));
