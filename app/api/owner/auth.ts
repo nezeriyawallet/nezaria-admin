@@ -65,12 +65,14 @@ function toBase64Url(bytes: Uint8Array) {
   return btoa(value).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
-async function verifyTotp(candidate: string, secret: string) {
+async function verifyTotp(rawCandidate: string, secret: string) {
+  const candidate = rawCandidate.replace(/\s/g, "");
   if (!/^\d{6}$/.test(candidate)) return false;
-  const keyBytes = fromBase32(secret);
+  const keyBytes = fromBase32(extractTotpSecret(secret));
   if (!keyBytes.length) return false;
   const counter = Math.floor(Date.now() / 1000 / 30);
-  return (await Promise.all([-1, 0, 1].map((offset) => createTotp(keyBytes, counter + offset))))
+  // Accept +/-60 seconds of clock drift between the phone and the server.
+  return (await Promise.all([-2, -1, 0, 1, 2].map((offset) => createTotp(keyBytes, counter + offset))))
     .some((value) => safeEqual(candidate, value));
 }
 
@@ -83,6 +85,15 @@ async function createTotp(secret: Uint8Array, counter: number) {
   const offset = digest[digest.length - 1] & 0x0f;
   const number = ((digest[offset] & 0x7f) << 24) | (digest[offset + 1] << 16) | (digest[offset + 2] << 8) | digest[offset + 3];
   return String(number % 1_000_000).padStart(6, "0");
+}
+
+/** Tolerates a pasted otpauth:// URI or a value wrapped in quotes. */
+function extractTotpSecret(value: string) {
+  const trimmed = value.trim().replace(/^["']|["']$/g, "");
+  if (trimmed.startsWith("otpauth://")) {
+    try { return new URL(trimmed).searchParams.get("secret") ?? ""; } catch { return ""; }
+  }
+  return trimmed;
 }
 
 function fromBase32(value: string) {
