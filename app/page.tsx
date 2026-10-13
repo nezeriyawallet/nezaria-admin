@@ -460,15 +460,21 @@ export default function Home() {
 
   const verifyOwnerCode = async (code: string, twoFactorCode = "") => {
     const token = window.sessionStorage.getItem("nezaria_access_token");
-    if (!token) return false;
+    if (!token) return "Сесія Google завершилась. Вийди й увійди знову.";
     const response = await fetch("/api/owner/verify", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ code, twoFactorCode }),
     });
-    if (!response.ok) return false;
+    if (!response.ok) {
+      const failure = await response.json().catch(() => ({})) as { error?: string };
+      if (failure.error) return failure.error;
+      return response.status === 401
+        ? "Сервер не прийняв вхід: перевір ключі OWNER_ACCESS_CODE та Supabase на Render або увійди через Google знову."
+        : "Невірний код доступу власника.";
+    }
     const result = await response.json();
-    if (typeof result.ownerSession !== "string") return false;
+    if (typeof result.ownerSession !== "string") return "Сервер не повернув сесію. Спробуй ще раз.";
     window.sessionStorage.setItem("nezeriya_owner_session", result.ownerSession);
     window.sessionStorage.setItem("nezeriya_access_role", "owner");
     window.localStorage.setItem("nezeriya_owner_session", result.ownerSession);
@@ -1619,7 +1625,7 @@ function AuthScreen({ checking, onGoogleSignIn }: { checking: boolean; onGoogleS
   );
 }
 
-function RoleScreen({ name, onOwnerCode, onWorker, onMedia }: { name: string; onOwnerCode: (code: string, twoFactorCode?: string) => Promise<boolean>; onWorker: () => void; onMedia: () => void }) {
+function RoleScreen({ name, onOwnerCode, onWorker, onMedia }: { name: string; onOwnerCode: (code: string, twoFactorCode?: string) => Promise<true | string>; onWorker: () => void; onMedia: () => void }) {
   const [mode, setMode] = useState<"choose" | "owner">("choose");
   const [code, setCode] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
@@ -1675,9 +1681,9 @@ function RoleScreen({ name, onOwnerCode, onWorker, onMedia }: { name: string; on
     event.preventDefault();
     setLoading(true);
     setError("");
-    const valid = await onOwnerCode(code, twoFactorCode);
+    const result = await onOwnerCode(code, twoFactorCode);
     setLoading(false);
-    if (!valid) setError("Код не підходить. Спробуй ще раз.");
+    if (result !== true) setError(result);
   };
 
   return <main className="auth-page"><section className="auth-card role-card"><label className="language-select">🌐 <select value={language} onChange={(event) => changeLanguage(event.target.value as "uk" | "ru")} aria-label="Мова"><option value="uk">Українська</option><option value="ru">Русский</option></select></label><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>{mode === "choose" ? <><p className="eyebrow">{copy.workspace}</p><h1>{copy.greeting}, {name}.<br /><span>{copy.choose}</span></h1><p className="auth-copy">{copy.explanation}</p><div className="role-options"><button className="role-option" onClick={() => setMode("owner")}><b>◈</b><span><strong>{copy.owner}</strong><small>{copy.ownerDescription}</small></span><i>→</i></button><button className="role-option" onClick={onWorker}><b>◌</b><span><strong>{copy.worker}</strong><small>{copy.workerDescription}</small></span><i>→</i></button></div></> : <form onSubmit={submit}><button className="back-link" type="button" onClick={() => setMode("choose")}>{copy.back}</button><p className="eyebrow">{copy.ownerCheck}</p><h1>{copy.enter}<br /><span>{copy.accessCode}</span></h1><p className="auth-copy">{copy.codeDescription}</p><input className="owner-code" value={code} onChange={(event) => setCode(event.target.value)} placeholder={copy.codePlaceholder} autoFocus required /><button className="google-button mint-action" disabled={loading}>{loading ? copy.checking : copy.open}</button>{error && <p className="auth-error">{error}</p>}</form>}</section><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /></main>;
