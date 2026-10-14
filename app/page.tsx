@@ -719,7 +719,7 @@ export default function Home() {
   return (
     <main className="shell">
       <aside className="sidebar side2">
-        <div className="side2-brand"><span className="side2-logo">N</span><div><b>Nezeriya</b><small>Company</small></div></div>
+        <div className="side2-brand">NEZERIYA</div>
         <div className="side2-switch" role="group" aria-label="Режим"><button className={workspaceMode === "ceo" ? "selected" : ""} onClick={() => switchWorkspace("ceo")}>CEO</button><button className={workspaceMode === "admin" ? "selected" : ""} onClick={() => switchWorkspace("admin")}>Admin</button></div>
         <nav className="side2-nav" aria-label="Головна навігація">
           {(workspaceMode === "ceo" ? navGroups : [{ label: "Підтримка", items: ["Підтримка"] as NavItem[] }]).map((group) => <div className="side2-group" key={group.label}>
