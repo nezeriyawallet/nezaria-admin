@@ -872,25 +872,52 @@ function FinancePanel({ walletMetrics, selectedMonth, selectedTurnoverYear, onSe
   </section>;
 }
 
+const audIcons = {
+  users: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5" /><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8" /><path d="M18.5 14.8c1.6.8 2.6 2.6 3 5.2" /></>,
+  wallet: <><rect x="3" y="6" width="18" height="13" rx="2.5" /><path d="M16 12.5h2" /><path d="M3 10h18" /></>,
+  calendar: <><rect x="3.5" y="5" width="17" height="15" rx="2.5" /><path d="M3.5 10h17M8 3v4M16 3v4" /></>,
+  phone: <><rect x="6" y="2.5" width="12" height="19" rx="2.5" /><path d="M10.5 18h3" /></>,
+  clock: <><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2" /><path d="M9.5 2.5h5" /></>,
+};
+
+function AudIcon({ name, tone }: { name: keyof typeof audIcons; tone: "mint" | "blue" | "gold" | "violet" }) {
+  return <span className={`aud-icon aud-${tone}`}><svg viewBox="0 0 24 24" aria-hidden="true">{audIcons[name]}</svg></span>;
+}
+
+function audPercent(part: number, total: number) {
+  return total > 0 ? (part / total) * 100 : 0;
+}
+
+function audPercentLabel(value: number) {
+  return `${new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value)}%`;
+}
+
 function AudienceRevenueCards({ metrics, users }: { metrics: WalletMetrics | null; users: WalletUser[] }) {
-  const value = (key: string, unit: string) => {
+  const value = (key: string) => {
     const raw = metrics?.[key];
-    if (raw === null || raw === undefined || raw === "" || !Number.isFinite(Number(raw))) return "Немає даних";
-    return `${new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 4 }).format(Number(raw))} ${unit}`;
+    if (raw === null || raw === undefined || raw === "" || !Number.isFinite(Number(raw))) return null;
+    return new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 4 }).format(Number(raw));
+  };
+  const amount = (key: string, unit: string) => {
+    const formatted = value(key);
+    return formatted === null ? <span className="aud-missing">Немає даних</span> : <>{formatted} {unit === "★" ? <i className="aud-star">★</i> : unit}</>;
   };
   return <>
-    <section className="users-summary revenue-summary">
-      {(["ltv", "arpu"] as const).map((kind) => <article className="panel" key={kind}>
-        <p>{kind === "ltv" ? "LTV · накопичений" : "ARPU · за місяць"}</p>
-        <strong>{value(`${kind}CommissionUsdt`, "USDT")}</strong>
-        <span>{kind === "ltv" ? "Комісії на зареєстрованого користувача" : "Комісії на активного користувача · орієнтовно"}</span>
-        <dl className="revenue-components">
-          <div><dt>Платежі Stars</dt><dd>{value(`${kind}Stars`, "★")}</dd></div>
-          <div><dt>Рулетка · ставки − NZR-призи</dt><dd>{value(`${kind}WheelNzr`, "NZR")}</dd></div>
-          <div><dt>Plinko · ставки − призи</dt><dd>{value(`${kind}PlinkoNzr`, "NZR")}</dd></div>
-        </dl>
-        <span>{kind === "ltv" ? `За весь доступний час · ${displayMetric(metrics?.revenueRegisteredUsers)} користувачів` : `${metrics?.revenueMonth || "Поточний місяць"} · ${displayMetric(metrics?.revenueActiveUsers)} активних користувачів`}</span>
-      </article>)}
+    <section className="aud-grid aud-grid-bottom">
+      {(["ltv", "arpu"] as const).map((kind) => {
+        const total = value(`${kind}CommissionUsdt`);
+        return <article className="aud-card" key={kind}>
+          <div className="aud-row"><p className="aud-label">{kind === "ltv" ? "LTV" : "ARPU"}</p><span className="aud-chip">{kind === "ltv" ? "накопичений" : "за місяць"}</span></div>
+          <div className="aud-stat">{total === null ? <span className="aud-num-l aud-missing">Немає даних</span> : <><span className="aud-num-l">{total}</span><span className="aud-unit">USDT</span></>}</div>
+          <span className="aud-hint">{kind === "ltv" ? "Комісії на зареєстрованого користувача" : "Комісії на активного користувача · орієнтовно"}</span>
+          <dl className="aud-rows">
+            <div><dt>Платежі Stars</dt><dd>{amount(`${kind}Stars`, "★")}</dd></div>
+            <div><dt>Рулетка <small>· ставки − NZR-призи</small></dt><dd>{amount(`${kind}WheelNzr`, "NZR")}</dd></div>
+            <div><dt>Plinko <small>· ставки − призи</small></dt><dd>{amount(`${kind}PlinkoNzr`, "NZR")}</dd></div>
+          </dl>
+          <span className="aud-foot">{kind === "ltv" ? `За весь доступний час · ${displayMetric(metrics?.revenueRegisteredUsers)} користувачів` : `${metrics?.revenueMonth || "Поточний місяць"} · ${displayMetric(metrics?.revenueActiveUsers)} активних користувачів`}</span>
+        </article>;
+      })}
       <CountryStats users={users} />
     </section>
     <p className="subtle revenue-note">Кожна складова — на одну людину, незалежно від кількості гаманців. LTV показує накопичений дохід, а не прогноз. Активність ARPU: відкриття гаманця, операції або ігри за місяць. Комісія ARPU оцінена за успішними операціями та поточним тарифом. Stars і NZR не додаються до USDT; це окремі одиниці. Це дохід до витрат, а не чистий прибуток. Ігри — за збереженим журналом{metrics?.revenueGamesSince ? ` з ${formatOnlinePeakDate(String(metrics.revenueGamesSince))}` : ""}; призи в USDT та негрошові призи в NZR не оцінюються.</p>
@@ -908,19 +935,81 @@ function CountryStats({ users }: { users: WalletUser[] }) {
     map.set(item.country.code, { ...item.country, count: (existing?.count || 0) + 1 });
     return map;
   }, new Map<string, { code: string; flag: string; name: string; count: number }>()).values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "uk"));
-  return <article className="panel country-summary"><p>Географія реєстрацій</p><strong>{confirmed.length}</strong><span>Підтверджено номерів</span>{countries.length ? <div className="country-list">{countries.map((country) => <span key={country.code}><b>{country.flag} {country.name}</b><strong>{country.count}</strong></span>)}</div> : <p className="users-empty">Країни з’являться після підтвердження контакту.</p>}</article>;
+  return <article className="aud-card">
+    <p className="aud-label">Географія реєстрацій</p>
+    <div className="aud-stat"><span className="aud-num-l">{confirmed.length}</span><span className="aud-hint">підтверджені номери</span></div>
+    {countries.length ? <ul className="aud-geo">{countries.map((country) => {
+      const share = audPercent(country.count, confirmed.length);
+      return <li key={country.code}>
+        <div className="aud-geo-top"><span><span className="aud-cc">{country.code}</span>{country.name}</span><b>{country.count} <span>· {Math.round(share)}%</span></b></div>
+        <div className="aud-track"><div className="aud-fill" style={{ width: `${Math.max(share, 1.5)}%` }} /></div>
+      </li>;
+    })}</ul> : <p className="users-empty">Країни з’являться після підтвердження контакту.</p>}
+  </article>;
 }
 
 function UsersPanel({ walletMetrics, users, refreshing, onRefresh }: { walletMetrics: WalletMetrics | null; users: WalletUser[]; refreshing: boolean; onRefresh: () => void }) {
+  const totalUsers = metricNumber(walletMetrics?.users);
+  const premiumUsers = metricNumber(walletMetrics?.premiumUsers);
+  const standardUsers = Math.max(0, totalUsers - premiumUsers);
+  const premiumShare = audPercent(premiumUsers, totalUsers);
+  const activeUsers = metricNumber(walletMetrics?.revenueActiveUsers);
+  const activeShare = audPercent(activeUsers, totalUsers);
   const registered = walletMetrics ? displayMetric(walletMetrics.users) : "—";
-  const premium = walletMetrics ? displayMetric(walletMetrics.premiumUsers) : "—";
-  const standard = walletMetrics ? displayMetric(Math.max(0, metricNumber(walletMetrics.users) - metricNumber(walletMetrics.premiumUsers))) : "—";
   const highestNrzBalance = walletMetrics?.maxNzrBalance;
   const usersByNrzBalance = [...users].sort((first, second) => Number(second.nzrPoints) - Number(first.nzrPoints));
   const analyticsWindow = walletMetrics ? displayMetric(walletMetrics.analyticsWindowDays ?? 30) : "30";
-  return <section className="users-page">
-    <section className="heading-row"><div><p className="eyebrow">КОРИСТУВАЧІ</p><h1>Аудиторія <span>Nezeriya Wallet</span></h1><p className="subtle">Актуальні дані з адміністративного API гаманця.</p></div><div className="heading-actions"><button className="outline-button" type="button" onClick={onRefresh} disabled={refreshing}>{refreshing ? "Оновлення..." : "↻ Оновити"}</button><span className="live"><i /> LIVE</span></div></section>
-    <section className="users-summary"><article className="panel users-primary"><p>Зареєстровано користувачів</p><strong>{registered}</strong><span>Усього за весь час</span></article><article className="panel"><p>Premium-користувачі</p><strong>{premium}</strong><span>Актуальний статус Telegram Premium</span></article><article className="panel"><p>Звичайні користувачі</p><strong>{standard}</strong><span>Без активного Telegram Premium</span></article><article className="panel"><p>Найбільший баланс NZR</p><strong>{highestNrzBalance === null || highestNrzBalance === undefined ? "—" : `${displayMetric(highestNrzBalance)} NZR`}</strong><span>Максимальний баланс серед усіх гаманців</span></article><article className="panel"><p>Середній вік акаунтів</p><strong>{formatAccountAge(walletMetrics?.averageWalletAgeDays)}</strong><span>Активні за останні {analyticsWindow} днів</span></article><article className="panel"><p>Сесій на користувача</p><strong>{walletMetrics ? displayMetric(walletMetrics.sessionsPerUser) : "—"}</strong><span>Середня кількість відкриттів Mini App</span></article><article className="panel"><p>Тривалість сесії</p><strong>{formatSessionDuration(walletMetrics?.averageSessionDurationSeconds)}</strong><span>Середній час у Mini App</span></article></section>
+  const kpis = [
+    { icon: "wallet" as const, tone: "gold" as const, label: "Найбільший баланс", value: highestNrzBalance === null || highestNrzBalance === undefined ? "—" : displayMetric(highestNrzBalance), unit: "NZR", hint: "Максимум серед усіх гаманців" },
+    { icon: "calendar" as const, tone: "blue" as const, label: "Середній вік акаунтів", value: formatAccountAge(walletMetrics?.averageWalletAgeDays), unit: "", hint: `Активні за останні ${analyticsWindow} днів` },
+    { icon: "phone" as const, tone: "violet" as const, label: "Сесій на користувача", value: walletMetrics ? displayMetric(walletMetrics.sessionsPerUser) : "—", unit: "відкриттів", hint: "Відкриття Mini App" },
+    { icon: "clock" as const, tone: "mint" as const, label: "Тривалість сесії", value: formatSessionDuration(walletMetrics?.averageSessionDurationSeconds), unit: "", hint: "Середній час у Mini App" },
+  ];
+  return <section className="users-page aud">
+    <section className="aud-head">
+      <div><p className="aud-crumbs">Аналітика <span>/</span> Користувачі</p><h1>Аудиторія <span>Nezeriya Wallet</span></h1><p className="aud-hint">Актуальні дані з адміністративного API гаманця</p></div>
+      <button className={`aud-live${refreshing ? " loading" : ""}`} type="button" onClick={onRefresh} disabled={refreshing} title="Оновити зараз"><i />{refreshing ? "Оновлення…" : "Live · оновити"}</button>
+    </section>
+
+    <section className="aud-grid aud-grid-top">
+      <article className="aud-card aud-hero">
+        <div className="aud-hero-main">
+          <p className="aud-label"><AudIcon name="users" tone="mint" />Зареєстровано користувачів</p>
+          <strong className="aud-num-xl">{registered}</strong>
+          <span className="aud-hint">усього за весь час</span>
+          <div className="aud-legend">
+            <div><p><i className="aud-dot-blue" />Telegram Premium</p><b>{walletMetrics ? displayMetric(premiumUsers) : "—"}</b><span>{walletMetrics ? audPercentLabel(premiumShare) : ""}</span></div>
+            <div><p><i className="aud-dot-mint" />Звичайні</p><b>{walletMetrics ? displayMetric(standardUsers) : "—"}</b><span>{walletMetrics ? audPercentLabel(100 - premiumShare) : ""}</span></div>
+          </div>
+        </div>
+        <div className="aud-donut">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle className="aud-donut-track" cx="60" cy="60" r="50" />
+            {totalUsers > 0 && <circle className="aud-donut-regular" cx="60" cy="60" r="50" pathLength={100} />}
+            <circle className="aud-donut-premium" cx="60" cy="60" r="50" pathLength={100} style={{ strokeDasharray: `${premiumShare.toFixed(1)} ${(100 - premiumShare).toFixed(1)}` }} />
+          </svg>
+          <div><b>{walletMetrics ? audPercentLabel(premiumShare) : "—"}</b><span>Premium</span></div>
+        </div>
+      </article>
+
+      <article className="aud-card aud-active">
+        <div className="aud-row"><p className="aud-label">Активні за місяць</p><span className="aud-chip">{walletMetrics?.revenueMonth || "—"}</span></div>
+        <div className="aud-stat"><span className="aud-num-l">{walletMetrics ? displayMetric(activeUsers) : "—"}</span><span className="aud-hint">користувачів</span></div>
+        <div className="aud-progress">
+          <div><span className="aud-hint">Частка від усіх</span><b>{walletMetrics ? audPercentLabel(activeShare) : "—"}</b></div>
+          <div className="aud-track"><div className="aud-fill" style={{ width: `${walletMetrics ? Math.max(activeShare, 1.5) : 0}%` }} /></div>
+        </div>
+      </article>
+    </section>
+
+    <section className="aud-grid aud-grid-kpi">
+      {kpis.map((kpi) => <article className="aud-kpi" key={kpi.label}>
+        <p className="aud-label"><AudIcon name={kpi.icon} tone={kpi.tone} />{kpi.label}</p>
+        <div className="aud-stat"><span className="aud-num-m">{kpi.value}</span>{kpi.unit && kpi.value !== "—" && <span className="aud-unit">{kpi.unit}</span>}</div>
+        <span className="aud-hint">{kpi.hint}</span>
+      </article>)}
+    </section>
+
     <AudienceRevenueCards metrics={walletMetrics} users={users} />
     <article className="panel users-table-panel"><div className="panel-head"><div><p className="panel-label">РЕЄСТР ГАМАНЦІВ</p><h2>Гаманці користувачів та NZR поінти</h2></div><span>{users.length} гаманців показано</span></div><p className="subtle">Запрошені — унікальні люди по всіх гаманцях користувача. Для його кількох гаманців показник однаковий.</p>{users.length === 0 ? <p className="users-empty">Список гаманців завантажується з Nezeriya Wallet API.</p> : <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Telegram ID</th><th>Користувач</th><th>Країна номера</th><th>Wallet ID</th><th>NZR поінти ↓</th><th>Запрошені люди</th><th>Premium</th></tr></thead><tbody>{usersByNrzBalance.map((user, index) => { const country = countryLabel(user.phoneCountry); return <tr key={`${user.id}-${user.walletIds.join("-") || index}`}><td>{user.id}</td><td><strong>{user.username ? `@${user.username}` : user.name || "Без username"}</strong>{user.name && user.username && <small>{user.name}</small>}</td><td className="country-cell">{country ? <>{country.flag} {country.name}</> : <span className="country-missing">Не підтверджено</span>}</td><td>{user.walletIds.length ? user.walletIds.join(", ") : "—"}</td><td className="nzr-points">{displayMetric(user.nzrPoints)} NZR</td><td>{displayMetric(user.referralCount)}</td><td><span className={user.premium ? "premium-badge" : "standard-badge"}>{user.premium ? "Premium" : "Звичайний"}</span></td></tr>})}</tbody></table></div>}</article>
   </section>;
