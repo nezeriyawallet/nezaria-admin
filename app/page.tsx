@@ -51,12 +51,6 @@ const navIcons: Record<NavItem, ReactNode> = {
   "Медійка": <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m10 9.5 5 2.5-5 2.5v-5Z" /></>,
 };
 
-const metrics = [
-  { label: "Загальна комісія", value: "$84,291.40", change: "+12.8%", icon: "◈", tone: "mint" },
-  { label: "Комісія за липень", value: "$9,847.22", change: "+8.4%", icon: "↗", tone: "blue" },
-  { label: "Дохід Telegram Stars", value: "1,284,750", change: "+18.2%", icon: "★", tone: "violet" },
-  { label: "Активні користувачі", value: "8,426", change: "+6.1%", icon: "◉", tone: "orange" },
-];
 
 const team = [
   { name: "Олексій Коваль", initials: "ОК", role: "Senior Support", rating: "4.98", chats: 148, status: "В чаті" },
@@ -130,7 +124,6 @@ export default function Home() {
   const [walletMetrics, setWalletMetrics] = useState<WalletMetrics | null>(null);
   const [financeMonth, setFinanceMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [financeTurnoverYear, setFinanceTurnoverYear] = useState(() => new Date().getFullYear());
-  const [hoveredOnlinePeak, setHoveredOnlinePeak] = useState<DailyOnlinePeak | null>(null);
   const [walletUsers, setWalletUsers] = useState<WalletUser[]>([]);
   const [acquiringMetrics, setAcquiringMetrics] = useState<AcquiringMetrics | null>(null);
   const [acquiringBusinesses, setAcquiringBusinesses] = useState<AcquiringBusiness[]>([]);
@@ -454,17 +447,6 @@ export default function Home() {
   const fallbackPlinkoNet = wheelWinSummary.monthlyPlinkoSpentNzr - wheelWinSummary.monthlyPlinkoWonNzr;
   const fallbackFeature = fallbackWheelNet >= fallbackPlinkoNet ? "Рулетка" : "Plinko";
   const fallbackFeatureValue = Math.max(fallbackWheelNet, fallbackPlinkoNet);
-  const dashboardMetrics = walletMetrics ? [
-    { label: "Загальна комісія", value: displayMetric(walletMetrics.totalCommission, "$"), change: "live", icon: "◈", tone: "mint" },
-    { label: "Комісія за місяць", value: displayMetric(walletMetrics.monthlyCommission, "$"), change: "live", icon: "↗", tone: "blue" },
-    { label: "Дохід Telegram Stars", value: `${displayMetric(walletMetrics.monthlyStars)} NZR`, change: "live", icon: "★", tone: "violet" },
-    { label: "Зареєстровані користувачі", value: displayMetric(walletMetrics.users), change: "live", icon: "◉", tone: "orange" },
-    { label: "Найприбутковіша функція", value: `${walletMetrics.mostProfitableFeature || fallbackFeature}${walletMetrics.mostProfitableValueNzr === null || walletMetrics.mostProfitableValueNzr === undefined ? ` · ${displayMetric(fallbackFeatureValue)} NZR` : ` · ${displayMetric(walletMetrics.mostProfitableValueNzr)} NZR`}`, change: "live", icon: "₮", tone: "mint" },
-  ] : metrics;
-  const totalIncome = walletMetrics ? displayMetric(metricNumber(walletMetrics.totalCommission) + metricNumber(walletMetrics.nzrExchangeNetUsd), "$") : "—";
-  const walletOnline = walletMetrics ? displayMetric(walletMetrics.onlineUsers) : "—";
-  const dailyOnlinePeaks = walletMetrics?.dailyOnlinePeaks || [];
-  const maximumDailyOnline = Math.max(1, ...dailyOnlinePeaks.map((item) => metricNumber(item.peakOnline)));
 
   const signInWithGoogle = () => {
     if (!supabaseUrl) {
@@ -737,33 +719,117 @@ export default function Home() {
       <section className="content">
 
         <div className="dashboard">
-          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} refreshing={usersRefreshing} onRefresh={() => void refreshUsers(true)} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} summary={wheelWinSummary} refreshing={winsRefreshing} onRefresh={() => void loadWheelWins(true)} /> : active === "Магазин" ? <ShopPanel walletMetrics={walletMetrics} /> : active === "Бізнес" ? <BusinessPanel metrics={acquiringMetrics} businesses={acquiringBusinesses} refreshing={acquiringRefreshing} onRefresh={() => void loadAcquiringMetrics(true)} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} selectedMonth={financeMonth} selectedTurnoverYear={financeTurnoverYear} onSelectedMonthChange={setFinanceMonth} onSelectedTurnoverYearChange={setFinanceTurnoverYear} /> : <>
-          <section className="heading-row">
-            <div><p className="eyebrow">ОПЕРАЦІЙНА ПАНЕЛЬ</p></div>
-            <div className="header-controls"><NotificationBell role="owner" owner /><div className="segmented"><button className={period === "7 днів" ? "selected" : ""} onClick={() => setPeriod("7 днів")}>7 днів</button><button className={period === "30 днів" ? "selected" : ""} onClick={() => setPeriod("30 днів")}>30 днів</button><button className={period === "Рік" ? "selected" : ""} onClick={() => setPeriod("Рік")}>Рік</button></div><button className="sync" onClick={refresh}>↻ Синхронізувати</button></div>
-          </section>
-
-          <section className="metrics-grid">
-            {dashboardMetrics.map((metric) => <article className="metric-card" key={metric.label}><div className={`metric-icon ${metric.tone}`}>{metric.icon}</div><p>{metric.label}</p><div className="metric-value">{metric.value}</div><span className="increase">{metric.change === "live" ? "● LIVE" : <>↑ {metric.change} <em>до минулого періоду</em></>}</span></article>)}
-          </section>
-
-          {walletMetrics && <section className="wallet-detail-grid"><article className="panel wallet-detail-panel"><div className="panel-head"><div><p className="panel-label">ОПЕРАЦІЇ ГАМАНЦЯ</p><h2>Детальна статистика</h2></div><span className="live"><i /> LIVE</span></div><div className="wallet-detail-list"><span>Гаманців<strong>{displayMetric(walletMetrics.wallets)}</strong></span><span>Транзакцій<strong>{displayMetric(walletMetrics.transactions)}</strong></span><span>Невдалих транзакцій<strong>{displayMetric(walletMetrics.failedTransactions)}</strong></span><span>DeDust swap<strong>{displayMetric(walletMetrics.dedustSwaps)}</strong></span><span>Реферальний дохід<strong>{displayMetric(walletMetrics.referralTotal, "$")}</strong></span><span>Втрати рулетки<strong>{displayMetric(walletMetrics.wheelLoss, " NZR")}</strong></span></div></article><article className="panel wallet-detail-panel"><div className="panel-head"><div><p className="panel-label">NZR</p><h2>Активність токена</h2></div></div><div className="wallet-detail-list"><span>NZR транзакцій<strong>{displayMetric(walletMetrics.nzrTransactions)}</strong></span><span>Продажі NZR<strong>{displayMetric(walletMetrics.nzrSwapSell)}</strong></span><span>Купівлі NZR<strong>{displayMetric(walletMetrics.nzrSwapBuy)}</strong></span><span>Покупки NZR за Stars<strong>{displayMetric(walletMetrics.nzrStars)}</strong></span></div></article></section>}
-          {metricsError && <p className="metrics-error">{metricsError}</p>}
-
-          <section className="main-grid">
-            <article className="panel activity-panel activity-panel-wide"><div className="panel-head"><div><p className="panel-label">ЖИВА АКТИВНІСТЬ</p><h2>Зараз у гаманці</h2></div><span className="live"><i /> LIVE</span></div><div className="live-count">{walletOnline}<span> онлайн</span></div><p className="subtle">Максимум одночасно онлайн за кожен день.</p><div className="activity-bars" aria-label="Денні піки онлайн">{dailyOnlinePeaks.length ? dailyOnlinePeaks.map((item) => { const peak = metricNumber(item.peakOnline); const label = `${formatOnlinePeakDate(item.date)} — максимум ${peak} онлайн`; return <i key={item.date} title={label} aria-label={label} tabIndex={0} onMouseEnter={() => setHoveredOnlinePeak(item)} onMouseLeave={() => setHoveredOnlinePeak(null)} onFocus={() => setHoveredOnlinePeak(item)} onBlur={() => setHoveredOnlinePeak(null)} style={{ height: `${Math.max(4, Math.round(peak / maximumDailyOnline * 100))}%` }} />; }) : <span className="online-chart-empty">Дані з’являться після першої активної сесії.</span>}</div><div className="online-peak-tooltip" role="status">{hoveredOnlinePeak ? <><b>{formatOnlinePeakDate(hoveredOnlinePeak.date)}</b><span>Максимум: {displayMetric(hoveredOnlinePeak.peakOnline)} онлайн</span><small>Пікова кількість одночасно активних гаманців.</small></> : <span>Наведіть на стовпчик, щоб побачити статистику.</span>}</div><div className="legend"><span><i className="mint-dot" /> Денний максимум</span><span><i className="gray-dot" /> Дані зберігаються щодня</span></div></article>
-            <article className="panel earnings-panel earnings-panel-compact"><div className="panel-head"><div><p className="panel-label">ЗАРОБІТОК</p><h2>Загальна сума доходу</h2></div><button className="dots" aria-label="Додаткові дії">•••</button></div><div className="chart-summary"><strong>{totalIncome}</strong></div><p className="income-note">Комісії + Stars за курсом Fragment − успішні викупи NZR.</p><span className="earnings-period">За весь час</span></article>
-          </section>
-
-          <section className="lower-grid">
-            <article className="panel queue-panel"><div className="panel-head"><div><p className="panel-label">ПІДТРИМКА</p><h2>Черга звернень</h2></div><span className="queue-count">12</span></div><div className="queue-stat"><strong>03:42</strong><span>середній час відповіді</span></div><div className="queue-progress"><i /></div><div className="queue-info"><span>8 у роботі</span><span>4 очікують</span></div><button className="open-queue" onClick={() => { setActive("Підтримка"); setNotice("Чергу звернень відкрито"); }}>Відкрити звернення <b>→</b></button></article>
-          </section>
-          </>}
+          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} refreshing={usersRefreshing} onRefresh={() => void refreshUsers(true)} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} summary={wheelWinSummary} refreshing={winsRefreshing} onRefresh={() => void loadWheelWins(true)} /> : active === "Магазин" ? <ShopPanel walletMetrics={walletMetrics} /> : active === "Бізнес" ? <BusinessPanel metrics={acquiringMetrics} businesses={acquiringBusinesses} refreshing={acquiringRefreshing} onRefresh={() => void loadAcquiringMetrics(true)} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} selectedMonth={financeMonth} selectedTurnoverYear={financeTurnoverYear} onSelectedMonthChange={setFinanceMonth} onSelectedTurnoverYearChange={setFinanceTurnoverYear} /> : <OverviewPanel walletMetrics={walletMetrics} metricsError={metricsError} fallbackFeature={fallbackFeature} fallbackFeatureValue={fallbackFeatureValue} period={period} onPeriod={setPeriod} refreshing={usersRefreshing} onRefresh={refresh} onOpenSupport={() => { setActive("Підтримка"); setNotice("Чергу звернень відкрито"); }} />}
         </div>
       </section>
       {notice && <div className="toast">✓ {notice}</div>}
     </main>
   );
+}
+
+const ovIcons = {
+  box: <><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z" /><path d="m3 7 9 5 9-5M12 12v10" /></>,
+  arrow: <><path d="M7 17 17 7" /><path d="M8 7h9v9" /></>,
+  star: <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z" />,
+  users: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5" /><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8" /></>,
+  trophy: <><path d="M8 21h8M12 17v4" /><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z" /><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3" /></>,
+};
+
+function OverviewPanel({ walletMetrics, metricsError, fallbackFeature, fallbackFeatureValue, period, onPeriod, refreshing, onRefresh, onOpenSupport }: { walletMetrics: WalletMetrics | null; metricsError: string; fallbackFeature: string; fallbackFeatureValue: number; period: string; onPeriod: (period: string) => void; refreshing: boolean; onRefresh: () => void; onOpenSupport: () => void }) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const m = walletMetrics;
+  const featureValue = m?.mostProfitableValueNzr === null || m?.mostProfitableValueNzr === undefined ? fallbackFeatureValue : m.mostProfitableValueNzr;
+  const kpis = [
+    { icon: "box" as const, tone: "mint", label: "Загальна комісія", value: m ? displayMetric(m.totalCommission, "$") : "—", unit: "" },
+    { icon: "arrow" as const, tone: "blue", label: "Комісія за місяць", value: m ? displayMetric(m.monthlyCommission, "$") : "—", unit: "" },
+    { icon: "star" as const, tone: "gold", label: "Дохід Telegram Stars", value: m ? displayMetric(m.monthlyStars) : "—", unit: "NZR" },
+    { icon: "users" as const, tone: "blue", label: "Зареєстровані користувачі", value: m ? displayMetric(m.users) : "—", unit: "" },
+    { icon: "trophy" as const, tone: "mint", label: "Найприбутковіша функція", value: m ? String(m.mostProfitableFeature || fallbackFeature) : "—", unit: m ? `${displayMetric(featureValue)} NZR` : "" },
+  ];
+  const walletRows: [string, string, boolean?][] = [
+    ["Гаманців", displayMetric(m?.wallets)], ["Транзакцій", displayMetric(m?.transactions)],
+    ["Невдалих транзакцій", displayMetric(m?.failedTransactions), true], ["DeDust swap", displayMetric(m?.dedustSwaps)],
+    ["Реферальний дохід", displayMetric(m?.referralTotal, "$")], ["Втрати рулетки", m ? `${displayMetric(m.wheelLoss)} NZR` : "—"],
+  ];
+  const nzrRows: [string, string][] = [
+    ["NZR транзакцій", displayMetric(m?.nzrTransactions)], ["Продажі NZR", displayMetric(m?.nzrSwapSell)],
+    ["Купівлі NZR", displayMetric(m?.nzrSwapBuy)], ["Покупки NZR за Stars", displayMetric(m?.nzrStars)],
+  ];
+  const totalIncome = m ? displayMetric(metricNumber(m.totalCommission) + metricNumber(m.nzrExchangeNetUsd), "$") : "—";
+  const peaks = m?.dailyOnlinePeaks || [];
+  const values = peaks.map((item) => metricNumber(item.peakOnline));
+  const max = Math.max(0, ...values);
+  const top = Math.max(2, Math.ceil(max / 2) * 2);
+  const average = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+  const step = Math.max(1, Math.ceil(peaks.length / 6));
+  const shortDate = (value: string) => { const [, month, day] = value.split("-"); return day && month ? `${day}.${month}` : value; };
+  const axis = peaks.flatMap((item, index) => index % step === 0 || index === peaks.length - 1 ? [index === peaks.length - 1 ? "Сьогодні" : shortDate(item.date)] : []);
+  const hoveredPeak = hovered === null ? null : peaks[hovered];
+  return <section className="ov">
+    <header className="ov-head">
+      <div><p className="ov-eyebrow">Операційна панель</p><h1>Огляд <span>Nezeriya Wallet</span></h1></div>
+      <div className="ov-actions">
+        <NotificationBell role="owner" owner />
+        <span className="ov-live"><i />Live</span>
+        <div className="ov-segment" role="group" aria-label="Період">{["7 днів", "30 днів", "Рік"].map((item) => <button key={item} className={period === item ? "selected" : ""} onClick={() => onPeriod(item)}>{item}</button>)}</div>
+        <button className={`ov-btn${refreshing ? " spin" : ""}`} onClick={onRefresh} disabled={refreshing}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8" /><path d="M4 3v5h5" /><path d="M4 13a8 8 0 0 0 14.6 4.5L20 16" /><path d="M20 21v-5h-5" /></svg>Синхронізувати</button>
+      </div>
+    </header>
+
+    {metricsError && <p className="metrics-error">{metricsError}</p>}
+
+    <section className="ov-kpis" aria-label="Ключові показники">
+      {kpis.map((kpi) => <article className="ov-kpi" key={kpi.label}>
+        <div className="ov-kpi-top"><span className={`ov-ic ov-${kpi.tone}`}><svg viewBox="0 0 24 24" aria-hidden="true">{ovIcons[kpi.icon]}</svg></span><span>{kpi.label}</span></div>
+        <div className="ov-kpi-value">{kpi.value}{kpi.unit && <small>{kpi.unit}</small>}</div>
+      </article>)}
+    </section>
+
+    <section className="ov-ops">
+      <article className="ov-card">
+        <p className="ov-eyebrow">Операції гаманця</p><h2>Детальна статистика</h2>
+        <dl className="ov-kv">{walletRows.map(([label, value, warn]) => <div key={label}><dt>{label}</dt><dd className={warn ? "warn" : ""}>{value}</dd></div>)}</dl>
+      </article>
+      <article className="ov-card">
+        <p className="ov-eyebrow">NZR</p><h2>Активність токена</h2>
+        <dl className="ov-kv">{nzrRows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+      </article>
+      <article className="ov-card ov-earn">
+        <div><p className="ov-eyebrow">Заробіток</p><h2>Загальна сума доходу</h2></div>
+        <strong>{totalIncome}</strong>
+        <p className="ov-note">Комісії + Stars за курсом Fragment − успішні викупи NZR</p>
+      </article>
+    </section>
+
+    <section className="ov-bottom">
+      <article className="ov-card ov-chart-card">
+        <div className="ov-card-head">
+          <div><p className="ov-eyebrow">Жива активність</p><h2>Зараз у гаманці</h2></div>
+          <div className="ov-online"><b>{m ? displayMetric(m.onlineUsers) : "—"}</b><span>онлайн зараз</span></div>
+        </div>
+        <div className="ov-chart-meta"><span>Пік одночасно онлайн за кожен день</span><span>Макс: <b>{displayMetric(max)}</b> · Середнє: <b>{average.toFixed(1).replace(".", ",")}</b></span></div>
+        <div className="ov-chart">
+          <div className="ov-grid">{[top, top / 2, 0].map((value) => <div key={value}><span>{displayMetric(value)}</span></div>)}</div>
+          {peaks.length ? <div className="ov-bars" onMouseLeave={() => setHovered(null)}>{peaks.map((item, index) => {
+            const label = `${formatOnlinePeakDate(item.date)} — максимум ${values[index]} онлайн`;
+            return <button type="button" key={item.date} className={`ov-bar${index === peaks.length - 1 ? " today" : ""}`} aria-label={label} onMouseEnter={() => setHovered(index)} onFocus={() => setHovered(index)} onBlur={() => setHovered(null)}><i style={{ height: `${Math.max(1.5, values[index] / top * 100)}%` }} /></button>;
+          })}</div> : <p className="ov-empty">Дані з’являться після першої активної сесії.</p>}
+          {hoveredPeak && hovered !== null && <div className="ov-tip" style={{ left: `calc(28px + (100% - 28px) * ${(hovered + .5) / peaks.length})` }}>{formatOnlinePeakDate(hoveredPeak.date)} · пік <b>{displayMetric(hoveredPeak.peakOnline)}</b> онлайн</div>}
+        </div>
+        <div className="ov-axis">{axis.map((label, index) => <span key={`${label}-${index}`}>{label}</span>)}</div>
+      </article>
+
+      <article className="ov-card ov-support">
+        <div className="ov-card-head"><div><p className="ov-eyebrow">Підтримка</p><h2>Черга звернень</h2></div><span className="ov-badge">12</span></div>
+        <div className="ov-support-mid"><strong>03:42</strong><span>середній час відповіді</span></div>
+        <div className="ov-support-bar">
+          <div className="ov-track"><i style={{ width: "66.7%" }} /></div>
+          <div><span><b>8</b> у роботі</span><span><b>4</b> очікують</span></div>
+        </div>
+        <button className="ov-btn ov-btn-block" onClick={onOpenSupport}>Відкрити звернення<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></button>
+      </article>
+    </section>
+  </section>;
 }
 
 function SupportAdminPanel({ onPresence }: { onPresence: (online: boolean, keepalive?: boolean) => Promise<void> }) {
