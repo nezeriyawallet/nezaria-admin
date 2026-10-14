@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 type NavItem = "Огляд" | "Користувачі" | "Виграші" | "Магазин" | "Бізнес" | "Фінанси" | "Підтримка" | "Команда" | "Працівники" | "Медійка";
 type AccessRole = "owner" | "worker" | "media" | null;
@@ -34,6 +34,22 @@ type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; 
 type SupportTicket = { id: string; client_name: string; client_username: string | null; status: "new" | "in_progress" | "awaiting_rating" | "closed"; assigned_to: string | null; rating: number | null; review: string | null; created_at: string; updated_at: string; messages: SupportMessage[] };
 
 const navigation: NavItem[] = ["Огляд", "Користувачі", "Виграші", "Магазин", "Бізнес", "Фінанси", "Команда", "Працівники", "Медійка"];
+const navGroups: { label: string; items: NavItem[] }[] = [
+  { label: "Аналітика", items: ["Огляд", "Користувачі", "Виграші", "Магазин", "Бізнес", "Фінанси"] },
+  { label: "Компанія", items: ["Команда", "Працівники", "Медійка"] },
+];
+const navIcons: Record<NavItem, ReactNode> = {
+  "Огляд": <><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></>,
+  "Користувачі": <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5" /><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8" /><path d="M18.5 14.8c1.6.8 2.6 2.6 3 5.2" /></>,
+  "Виграші": <><path d="M12 3v18" /><path d="M17 7.5c0-1.9-2.2-3-5-3s-5 1.2-5 3.3c0 4.7 10 2.2 10 7 0 2.1-2.2 3.4-5 3.4s-5-1.2-5-3.2" /></>,
+  "Магазин": <><path d="M4 8h16l-1.3 11.1a2 2 0 0 1-2 1.9H7.3a2 2 0 0 1-2-1.9L4 8Z" /><path d="M8.5 8V6.5a3.5 3.5 0 0 1 7 0V8" /></>,
+  "Бізнес": <><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8.5 7V5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2" /><path d="M3 12.5h18" /></>,
+  "Фінанси": <><path d="M3 20h18" /><path d="M6 16v-5M11 16V8M16 16v-3M20 16V5" /></>,
+  "Підтримка": <><path d="M4 12a8 8 0 0 1 16 0v5a2 2 0 0 1-2 2h-2v-6h4" /><path d="M4 13h4v6H6a2 2 0 0 1-2-2v-4Z" /></>,
+  "Команда": <><circle cx="12" cy="12" r="3" /><circle cx="5" cy="6" r="2" /><circle cx="19" cy="6" r="2" /><circle cx="5" cy="18" r="2" /><circle cx="19" cy="18" r="2" /></>,
+  "Працівники": <><rect x="4" y="3" width="16" height="18" rx="2" /><circle cx="12" cy="10" r="2.5" /><path d="M8 17c.6-1.8 2.1-3 4-3s3.4 1.2 4 3" /></>,
+  "Медійка": <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m10 9.5 5 2.5-5 2.5v-5Z" /></>,
+};
 
 const metrics = [
   { label: "Загальна комісія", value: "$84,291.40", change: "+12.8%", icon: "◈", tone: "mint" },
@@ -702,15 +718,18 @@ export default function Home() {
 
   return (
     <main className="shell">
-      <aside className="sidebar">
-        <div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div>
-        <div className="workspace-switcher"><button className={`workspace-choice ${workspaceMode === "ceo" ? "selected" : ""}`} onClick={() => switchWorkspace("ceo")}><span className="workspace-dot" />NEZERIYA CEO</button><button className={`workspace-choice ${workspaceMode === "admin" ? "selected" : ""}`} onClick={() => switchWorkspace("admin")}><span className="workspace-dot" />NEZERIYA ADMIN</button></div>
-        <nav aria-label="Головна навігація">
-          {(workspaceMode === "ceo" ? navigation : ["Підтримка"] as NavItem[]).map((item, index) => (
-            <button key={item} onClick={() => setActive(item)} className={`nav-item ${active === item ? "active" : ""}`}>
-              <span className="nav-icon">{["▦", "◎", "◌", "▣", "▰", "◍", "◫", "♟", "◈", "★"][index]}</span>{item}
-            </button>
-          ))}
+      <aside className="sidebar side2">
+        <div className="side2-brand"><span className="side2-logo">N</span><div><b>Nezeriya</b><small>Company</small></div></div>
+        <div className="side2-switch" role="group" aria-label="Режим"><button className={workspaceMode === "ceo" ? "selected" : ""} onClick={() => switchWorkspace("ceo")}>CEO</button><button className={workspaceMode === "admin" ? "selected" : ""} onClick={() => switchWorkspace("admin")}>Admin</button></div>
+        <nav className="side2-nav" aria-label="Головна навігація">
+          {(workspaceMode === "ceo" ? navGroups : [{ label: "Підтримка", items: ["Підтримка"] as NavItem[] }]).map((group) => <div className="side2-group" key={group.label}>
+            <p className="side2-label">{group.label}</p>
+            {group.items.map((item) => (
+              <button key={item} onClick={() => setActive(item)} className={`side2-item ${active === item ? "active" : ""}`}>
+                <svg viewBox="0 0 24 24" aria-hidden="true">{navIcons[item]}</svg>{item}
+              </button>
+            ))}
+          </div>)}
         </nav>
         <div className="sidebar-bottom"><AccountMenu name={viewerName} role="Власник" onSignOut={() => void signOut()} onNicknameChange={setViewerName} /></div>
       </aside>
