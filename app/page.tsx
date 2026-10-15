@@ -1191,7 +1191,12 @@ function FinancePanel({ walletMetrics, selectedMonth, onSelectedMonthChange, onS
   const fragRate = value("telegramStarsFragmentRateUsd");
   const buyRate = value("nzrBuybackRateUsd");
   const saleRate = value("nzrSaleRateUsd");
-  const selected: FinMonth | null = m ? {
+  // Right after a month is picked the metrics still describe the previous
+  // month until they reload; use them only when they match the selection and
+  // fall back to the year figures meanwhile.
+  const months = yearData?.year === year ? yearData.months : [];
+  const metricsMatch = Boolean(m && Number(m.selectedYear) === year && Number(m.selectedMonth) === monthIndex + 1);
+  const selected: FinMonth | null = metricsMatch ? {
     month: monthIndex + 1,
     stars: value("monthlyTelegramStarsReceived"),
     starsPayoutUsd: value("monthlyTelegramStarsFragmentRevenueUsd"),
@@ -1199,9 +1204,8 @@ function FinancePanel({ walletMetrics, selectedMonth, onSelectedMonthChange, onS
     nzrBuybackUsd: value("monthlyNzrBoughtFromUsers") * buyRate,
     feesUsd: value("monthlyCommission"),
     turnoverUsd: value("monthlyCompanyTurnoverUsd"),
-  } : null;
+  } : months.find((item) => item.month === monthIndex + 1) || null;
   const selectedCalc = selected ? finIncome(selected) : null;
-  const months = yearData?.year === year ? yearData.months : [];
   const previous = months.find((item) => item.month === monthIndex);
   const previousIncome = previous ? finIncome(previous).income : 0;
   const delta = selectedCalc && previous && previousIncome ? (selectedCalc.income - previousIncome) / Math.abs(previousIncome) * 100 : null;
@@ -1228,7 +1232,7 @@ function FinancePanel({ walletMetrics, selectedMonth, onSelectedMonthChange, onS
 
   const chartValues = Array.from({ length: 12 }, (_, index) => {
     const item = months.find((entry) => entry.month === index + 1);
-    if (index === monthIndex && selected) return metric === "turnover" ? selected.turnoverUsd : finIncome(selected).income;
+    if (index === monthIndex && selected && metricsMatch) return metric === "turnover" ? selected.turnoverUsd : finIncome(selected).income;
     return item ? (metric === "turnover" ? item.turnoverUsd : finIncome(item).income) : null;
   });
   const chartMax = Math.max(0, ...chartValues.map((item) => item ?? 0)) * 1.12 || 1;
