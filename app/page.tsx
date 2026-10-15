@@ -1133,25 +1133,235 @@ function BusinessPanel({ metrics, businesses, refreshing, onRefresh, onRemove }:
   </section>;
 }
 
-function FinancePanel({ walletMetrics, selectedMonth, selectedTurnoverYear, onSelectedMonthChange, onSelectedTurnoverYearChange }: { walletMetrics: WalletMetrics | null; selectedMonth: string; selectedTurnoverYear: number; onSelectedMonthChange: (month: string) => void; onSelectedTurnoverYearChange: (year: number) => void }) {
-  const value = (key: string, prefix = "") => walletMetrics ? displayMetric(walletMetrics[key], prefix) : "—";
-  const rate = (key: string) => walletMetrics ? `$${metricNumber(walletMetrics[key]).toFixed(4)}` : "—";
-  const exchangeNetUsd = walletMetrics ? metricNumber(walletMetrics.nzrExchangeNetUsd) : 0;
-  const totalIncome = walletMetrics ? metricNumber(walletMetrics.totalCommission) + exchangeNetUsd : null;
-  const monthlyExchangeNetUsd = walletMetrics ? metricNumber(walletMetrics.monthlyNzrExchangeNetUsd) : 0;
-  const monthlyCommissionUsd = walletMetrics ? metricNumber(walletMetrics.monthlyCommission) : 0;
-  const monthlyTotalIncome = walletMetrics ? monthlyCommissionUsd + monthlyExchangeNetUsd : null;
-  const companyTurnoverUsd = walletMetrics ? metricNumber(walletMetrics.companyTurnoverUsd) : 0;
-  const monthlyCompanyTurnoverUsd = walletMetrics ? metricNumber(walletMetrics.monthlyCompanyTurnoverUsd) : 0;
-  const yearlyCompanyTurnoverUsd = walletMetrics ? metricNumber(walletMetrics.yearlyCompanyTurnoverUsd) : 0;
-  const monthlyStars = walletMetrics ? metricNumber(walletMetrics.monthlyTelegramStarsReceived) : 0;
-  const monthlyStarsRevenue = walletMetrics ? metricNumber(walletMetrics.monthlyTelegramStarsFragmentRevenueUsd) : 0;
-  const selectedMonthName = selectedMonth ? new Intl.DateTimeFormat("uk-UA", { month: "long", year: "numeric" }).format(new Date(`${selectedMonth}-01T12:00:00`)) : "обраний місяць";
-  return <section className="finance-page">
-    <section className="heading-row"><div><p className="eyebrow">ФІНАНСИ</p><h1>Фінансова <span>аналітика</span></h1><p className="subtle">Дані синхронізуються з Nezeriya Wallet API.</p></div><div className="heading-actions finance-heading-actions"><label className="month-picker" htmlFor="finance-month"><span>Перевірити місяць</span><input id="finance-month" type="month" value={selectedMonth} max={new Date().toISOString().slice(0, 7)} onChange={(event) => onSelectedMonthChange(event.target.value)} /></label><label className="month-picker" htmlFor="finance-turnover-year"><span>Перевірити рік</span><select id="finance-turnover-year" value={selectedTurnoverYear} onChange={(event) => onSelectedTurnoverYearChange(Number(event.target.value))}>{Array.from({ length: Math.max(1, new Date().getFullYear() - 2020 + 1) }, (_, index) => new Date().getFullYear() - index).map((year) => <option key={year} value={year}>{year} р.</option>)}</select></label><span className="live"><i /> LIVE</span></div></section>
-    <section className="finance-highlight"><article className="panel"><p>Загальна сума доходу</p><strong>{totalIncome === null ? "—" : displayMetric(totalIncome, "$")}</strong><span>За весь час · комісії + Fragment-виплата Stars + обмін NZR</span></article><article className="panel finance-turnover"><p>Загальний оборот компанії</p><strong>{walletMetrics ? displayMetric(companyTurnoverUsd, "$") : "—"}</strong><span>За весь час · Stars, продаж NZR і виплати за викуп</span></article><article className="panel"><p>Річний оборот</p><strong>{walletMetrics ? displayMetric(yearlyCompanyTurnoverUsd, "$") : "—"}</strong><span>{selectedTurnoverYear} р. · усі грошові потоки обміну</span></article><article className="panel"><p>Оборот за місяць</p><strong>{walletMetrics ? displayMetric(monthlyCompanyTurnoverUsd, "$") : "—"}</strong><span>{selectedMonthName} · усі грошові потоки обміну</span></article><article className="panel"><p>Чистий прибуток за місяць</p><strong>{walletMetrics ? displayMetric(monthlyExchangeNetUsd, "$") : "—"}</strong><span>{selectedMonthName} · Stars і продаж NZR мінус викуп NZR</span></article><article className="panel"><p>Загальний дохід за місяць</p><strong>{monthlyTotalIncome === null ? "—" : displayMetric(monthlyTotalIncome, "$")}</strong><span>{selectedMonthName} · чистий прибуток + комісії</span></article></section>
-    <section className="finance-grid"><article className="panel finance-card"><p className="panel-label">TELEGRAM STARS · FRAGMENT</p><h2>Дохід зі Stars</h2><strong>{walletMetrics ? `${displayMetric(monthlyStars)} Stars` : "—"}</strong><div><span>Очікувана виплата за обраний місяць</span><b>{walletMetrics ? displayMetric(monthlyStarsRevenue, "$") : "—"}</b></div><small>{selectedMonthName}. Курс виплати: 1 Star = {rate("telegramStarsFragmentRateUsd")}. Дохід доступний після періоду утримання Telegram.</small></article><article className="panel finance-card"><p className="panel-label">ОБМІН NZR</p><h2>Чистий результат обміну</h2><strong>{walletMetrics ? displayMetric(monthlyExchangeNetUsd, "$") : "—"}</strong><div><span>Stars → Fragment за місяць</span><b>{walletMetrics ? displayMetric(monthlyStarsRevenue, "$") : "—"}</b></div><div><span>Викуплено у користувачів</span><b>{walletMetrics ? displayMetric(walletMetrics.monthlyNzrBoughtFromUsers, " NZR") : "—"}</b></div><small>Враховано продаж NZR і успішні викупи за обраний місяць. Викуп: {rate("nzrBuybackRateUsd")} / NZR.</small></article><article className="panel finance-card"><p className="panel-label">СПРЕД NZR</p><h2>Маржа Stars → викуп NZR</h2><strong>{value("nzrBuybackSpreadUsd", "$")}</strong><div><span>Викуплено у користувачів</span><b>{value("nzrBoughtFromUsers", " NZR")}</b></div><small>Загальна маржа за весь час: різниця між виплатою Fragment за Star і курсом викупу NZR.</small></article><article className="panel finance-card"><p className="panel-label">РЕФЕРАЛИ</p><h2>Реферальний дохід</h2><strong>{value("referralTotal", "$")}</strong><div><span>Операцій DeDust</span><b>{value("dedustSwaps")}</b></div><small>Показники партнерської активності за весь час.</small></article><article className="panel finance-card"><p className="panel-label">РУЛЕТКА</p><h2>Втрати рулетки</h2><strong>{value("wheelLoss", " NZR")}</strong><div><span>Невдалих транзакцій</span><b>{value("failedTransactions")}</b></div><small>Контроль ризикових операцій за весь час.</small></article></section>
-    <article className="panel nzr-finance-panel"><div className="panel-head"><div><p className="panel-label">NZR</p><h2>Операції токена</h2></div></div><div className="nzr-finance-list"><span>Транзакцій NZR<strong>{value("nzrTransactions")}</strong></span><span>Продажі NZR<strong>{value("nzrSwapSell")}</strong></span><span>Купівлі NZR<strong>{value("nzrSwapBuy")}</strong></span><span>Покупки NZR за Stars<strong>{value("nzrStars")}</strong></span></div></article>
+type FinMonth = { month: number; stars: number; starsPayoutUsd: number; nzrSalesUsd: number; nzrBuybackUsd: number; feesUsd: number; turnoverUsd: number };
+const finMonths = ["Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень", "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень"];
+const finShort = ["Січ", "Лют", "Бер", "Кві", "Тра", "Чер", "Лип", "Сер", "Вер", "Жов", "Лис", "Гру"];
+const finPercent = new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 1 });
+const finCount = new Intl.NumberFormat("uk-UA");
+
+function finUsd(value: number, digits = 2) {
+  return `$${new Intl.NumberFormat("uk-UA", { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value || 0)}`;
+}
+
+function finIncome(month: FinMonth) {
+  const net = month.starsPayoutUsd + month.nzrSalesUsd - month.nzrBuybackUsd;
+  return { net, income: net + month.feesUsd };
+}
+
+function FinancePanel({ walletMetrics, selectedMonth, onSelectedMonthChange, onSelectedTurnoverYearChange }: { walletMetrics: WalletMetrics | null; selectedMonth: string; selectedTurnoverYear: number; onSelectedMonthChange: (month: string) => void; onSelectedTurnoverYearChange: (year: number) => void }) {
+  const today = new Date();
+  const [yearParam, monthParam] = selectedMonth.split("-").map(Number);
+  const year = Number.isInteger(yearParam) ? yearParam : today.getFullYear();
+  const monthIndex = Number.isInteger(monthParam) ? monthParam - 1 : today.getMonth();
+  const [metric, setMetric] = useState<"turnover" | "income">("turnover");
+  const [yearData, setYearData] = useState<{ year: number; months: FinMonth[] } | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const m = walletMetrics;
+  const [seen, setSeen] = useState(() => ({ metrics: m, at: now }));
+  if (seen.metrics !== m) setSeen({ metrics: m, at: now });
+
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => {
+    let active = true;
+    const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
+    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session") || window.localStorage.getItem("nezeriya_owner_session");
+    if (!token || !ownerSession) return;
+    void fetch(`/api/owner/finance/year?year=${year}`, { cache: "no-store", headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } })
+      .then((response) => response.ok ? response.json() : null)
+      .then((body) => { if (active && body && Array.isArray(body.months)) setYearData({ year, months: body.months }); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [year]);
+
+  const go = (nextYear: number, nextMonth: number) => {
+    let y = nextYear, mo = nextMonth;
+    if (mo < 0) { y -= 1; mo = 11; }
+    if (mo > 11) { y += 1; mo = 0; }
+    if (y > today.getFullYear() || (y === today.getFullYear() && mo > today.getMonth())) return;
+    onSelectedMonthChange(`${y}-${String(mo + 1).padStart(2, "0")}`);
+    onSelectedTurnoverYearChange(y);
+  };
+  const years = Array.from({ length: Math.max(1, today.getFullYear() - 2020 + 1) }, (_, index) => today.getFullYear() - index);
+  const isFuture = (y: number, mo: number) => y === today.getFullYear() && mo > today.getMonth();
+
+  const value = (key: string) => metricNumber(m?.[key]);
+  const income = value("totalCommission") + value("nzrExchangeNetUsd");
+  const turnover = value("companyTurnoverUsd");
+  const yearTurnover = value("yearlyCompanyTurnoverUsd");
+  const fragRate = value("telegramStarsFragmentRateUsd");
+  const buyRate = value("nzrBuybackRateUsd");
+  const saleRate = value("nzrSaleRateUsd");
+  const selected: FinMonth | null = m ? {
+    month: monthIndex + 1,
+    stars: value("monthlyTelegramStarsReceived"),
+    starsPayoutUsd: value("monthlyTelegramStarsFragmentRevenueUsd"),
+    nzrSalesUsd: value("monthlyNzrSoldToUsers") * saleRate,
+    nzrBuybackUsd: value("monthlyNzrBoughtFromUsers") * buyRate,
+    feesUsd: value("monthlyCommission"),
+    turnoverUsd: value("monthlyCompanyTurnoverUsd"),
+  } : null;
+  const selectedCalc = selected ? finIncome(selected) : null;
+  const months = yearData?.year === year ? yearData.months : [];
+  const previous = months.find((item) => item.month === monthIndex);
+  const previousIncome = previous ? finIncome(previous).income : 0;
+  const delta = selectedCalc && previous && previousIncome ? (selectedCalc.income - previousIncome) / Math.abs(previousIncome) * 100 : null;
+  const onHold = year === today.getFullYear() && monthIndex === today.getMonth();
+
+  const steps = selected && selectedCalc ? [
+    { label: "Stars → Fragment", value: selected.starsPayoutUsd, type: "in" },
+    { label: "Продаж NZR", value: selected.nzrSalesUsd, type: "in" },
+    { label: "Викуп NZR", value: -selected.nzrBuybackUsd, type: "out" },
+    { label: "Чистий прибуток", value: selectedCalc.net, type: "sum" },
+    { label: "Комісії", value: selected.feesUsd, type: "in" },
+    { label: "Загальний дохід", value: selectedCalc.income, type: "sum" },
+  ] : [];
+  let running = 0, top = 0, bottom = 0;
+  const bars = steps.map((step) => {
+    const from = step.type === "sum" ? 0 : running;
+    const to = step.type === "sum" ? step.value : running + step.value;
+    running = to;
+    top = Math.max(top, from, to); bottom = Math.min(bottom, from, to);
+    return { ...step, from, to };
+  });
+  const span = (top - bottom || 1) * 1.12;
+  const pos = (amount: number) => (amount - bottom) / span * 100;
+
+  const chartValues = Array.from({ length: 12 }, (_, index) => {
+    const item = months.find((entry) => entry.month === index + 1);
+    if (index === monthIndex && selected) return metric === "turnover" ? selected.turnoverUsd : finIncome(selected).income;
+    return item ? (metric === "turnover" ? item.turnoverUsd : finIncome(item).income) : null;
+  });
+  const chartMax = Math.max(0, ...chartValues.map((item) => item ?? 0)) * 1.12 || 1;
+
+  const perNzr = fragRate - buyRate;
+  const spreadTotal = value("nzrBuybackSpreadUsd");
+  const spreadQty = perNzr > 0 ? Math.round(spreadTotal / perNzr) : 0;
+  const rateMax = Math.max(fragRate, buyRate) || 1;
+  const flows: [string, number, string][] = [["Продажі", value("nzrSwapSell"), "var(--fin-in)"], ["Покупки за Stars", value("nzrStars"), "var(--aud-gold)"], ["Купівлі", value("nzrSwapBuy"), "var(--fin-sum)"]];
+  const flowTotal = flows.reduce((sum, [, amount]) => sum + amount, 0) || 1;
+  const seconds = Math.max(0, Math.round((now - seen.at) / 1000));
+
+  return <section className="fin aud">
+    <header className="aud-head">
+      <div><p className="aud-crumbs reg-eyebrow">Фінанси</p><h1>Фінансова <span>аналітика</span></h1><p className="aud-hint">Дані синхронізуються з Nezeriya Wallet API</p></div>
+      <div className="fin-head-actions">
+        <span className="aud-live fin-live"><i />{m ? (seconds < 5 ? "Live · щойно" : `Live · ${seconds} с тому`) : "Завантаження…"}</span>
+        <div className="fin-period">
+          <button className="reg-pg" aria-label="Попередній місяць" disabled={year <= 2020 && monthIndex === 0} onClick={() => go(year, monthIndex - 1)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg></button>
+          <div className="reg-select fin-select"><select aria-label="Місяць" value={monthIndex} onChange={(event) => go(year, Number(event.target.value))}>{finMonths.map((name, index) => <option key={name} value={index} disabled={isFuture(year, index)}>{name}</option>)}</select><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></div>
+          <div className="reg-select fin-select"><select aria-label="Рік" value={year} onChange={(event) => { const nextYear = Number(event.target.value); go(nextYear, isFuture(nextYear, monthIndex) ? today.getMonth() : monthIndex); }}>{years.map((item) => <option key={item} value={item}>{item} р.</option>)}</select><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></div>
+          <button className="reg-pg" aria-label="Наступний місяць" disabled={isFuture(year, monthIndex + 1) || (year === today.getFullYear() && monthIndex >= today.getMonth())} onClick={() => go(year, monthIndex + 1)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></button>
+        </div>
+      </div>
+    </header>
+
+    <section className="fin-all" aria-label="За весь час">
+      <div className="fin-all-item main"><span className="fin-lbl">Загальний дохід <i>за весь час</i></span><b className="fin-big win-accent">{m ? finUsd(income) : "—"}</b><span className="fin-sub">Комісії + виплата Fragment за Stars + обмін NZR</span></div>
+      <div className="fin-all-item"><span className="fin-lbl">Оборот компанії <i>за весь час</i></span><b className="fin-big">{m ? finUsd(turnover) : "—"}</b><span className="fin-sub">Stars, продаж NZR і виплати за викуп</span></div>
+      <div className="fin-all-item"><span className="fin-lbl">Оборот <i>за {year} р.</i></span><b className="fin-big">{m ? finUsd(yearTurnover) : "—"}</b><span className="fin-sub">{m && turnover ? `${finPercent.format(yearTurnover / turnover * 100)}% від обороту за весь час` : ""}</span></div>
+      <div className="fin-all-item"><span className="fin-lbl">Маржа доходу <i>за весь час</i></span><b className="fin-big">{m && turnover ? `${finPercent.format(income / turnover * 100)}%` : "—"}</b><span className="fin-sub">Дохід ÷ оборот</span></div>
+    </section>
+
+    <section className="fin-month">
+      <article className="aud-card fin-wf-card">
+        <div className="aud-row fin-wf-head">
+          <div><p className="aud-crumbs reg-eyebrow">{finMonths[monthIndex]} {year} р.</p><h2>З чого складається дохід</h2></div>
+          <div className="fin-total"><span>Загальний дохід за місяць</span><b>{selectedCalc ? finUsd(selectedCalc.income) : "—"}</b>{delta !== null && <em className={delta >= 0 ? "up" : "down"}>{delta >= 0 ? "▲" : "▼"} {finPercent.format(Math.abs(delta))}% до попереднього місяця</em>}</div>
+        </div>
+        <div className="fin-wf" role="img" aria-label={bars.map((bar) => `${bar.label} ${finUsd(bar.value)}`).join(", ")}>
+          {bars.length ? bars.map((bar, index) => {
+            const low = pos(Math.min(bar.from, bar.to)), high = pos(Math.max(bar.from, bar.to));
+            const zero = Math.abs(bar.value) < 0.005;
+            const sign = bar.type === "sum" ? (bar.value < 0 ? "−" : "") : bar.type === "out" || bar.value < 0 ? "−" : "+";
+            return <div className="fin-wf-col" key={bar.label}>
+              <div className="fin-wf-track">
+                <div className={`fin-wf-bar ${zero ? "zero" : bar.type}`} style={{ bottom: `${low}%`, height: `${high - low}%` }} />
+                <div className="fin-wf-val" style={{ bottom: `${high}%` }}>{sign}{finUsd(Math.abs(bar.value))}</div>
+                {index < bars.length - 1 && <div className="fin-wf-link" style={{ bottom: `${pos(bar.to)}%` }} />}
+              </div>
+              <div className="fin-wf-lbl">{bar.label}<b>{sign}{finUsd(Math.abs(bar.value))}</b></div>
+            </div>;
+          }) : <p className="aud-hint fin-empty">Немає даних за цей місяць</p>}
+        </div>
+        <div className="fin-legend"><span><i className="in" />Надходження</span><span><i className="out" />Витрати</span><span><i className="sum" />Підсумок</span></div>
+        <div className="fin-mini">
+          <div><span>Оборот за місяць</span><b>{selected ? finUsd(selected.turnoverUsd) : "—"}</b></div>
+          <div><span>Чистий прибуток</span><b>{selectedCalc ? finUsd(selectedCalc.net) : "—"}</b></div>
+          <div><span>Комісії</span><b>{selected ? finUsd(selected.feesUsd) : "—"}</b></div>
+        </div>
+      </article>
+
+      <article className="aud-card fin-year">
+        <div className="aud-row">
+          <div><p className="aud-crumbs reg-eyebrow">Динаміка</p><h2>{metric === "turnover" ? "Оборот" : "Дохід"} по місяцях · {year}</h2></div>
+          <div className="side2-switch win-mini" role="group" aria-label="Показник"><button className={metric === "turnover" ? "selected" : ""} onClick={() => setMetric("turnover")}>Оборот</button><button className={metric === "income" ? "selected" : ""} onClick={() => setMetric("income")}>Дохід</button></div>
+        </div>
+        <div className="fin-ybars">{chartValues.map((amount, index) => {
+          const future = isFuture(year, index);
+          const height = amount === null ? 0 : Math.max(0, amount) / chartMax * 100;
+          return <button key={finShort[index]} className={`fin-yb${amount !== null ? " has" : ""}${index === monthIndex ? " sel" : ""}${future ? " future" : ""}`} disabled={future} aria-label={`${finMonths[index]}: ${amount === null ? "немає даних" : finUsd(amount)}`} onClick={() => go(year, index)}>
+            <span className="fin-yb-track"><i style={{ height: `${height}%` }} />{amount ? <span className="fin-yb-val" style={{ bottom: `calc(${height}% + 4px)` }}>{finUsd(amount, 0)}</span> : null}</span>
+            <span className="fin-yb-m">{finShort[index]}</span>
+          </button>;
+        })}</div>
+        <p className="aud-hint win-small">{months.length || year !== today.getFullYear() || monthIndex === 0 ? "Клік по стовпчику — перейти до місяця." : "Завантажуємо дані по місяцях…"}</p>
+      </article>
+    </section>
+
+    <section className="fin-cards">
+      <article className="aud-card fin-card">
+        <div className="fin-card-head"><span className="aud-icon aud-gold"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z" /></svg></span>
+          <div><p className="aud-crumbs reg-eyebrow">Telegram Stars · Fragment</p><h3>Дохід зі Stars</h3></div>
+          {onHold && <span className="fin-hold">Утримання Telegram</span>}</div>
+        <div className="fin-conv">
+          <div><b>{selected ? finCount.format(selected.stars) : "—"}</b><span>Stars</span></div>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+          <div><b className="win-accent">{selected ? finUsd(selected.starsPayoutUsd) : "—"}</b><span>очікувана виплата</span></div>
+        </div>
+        <dl className="fin-kv">
+          <div><dt>Курс виплати</dt><dd>1 Star = {m ? finUsd(fragRate, 4) : "—"}</dd></div>
+          <div><dt>Статус</dt><dd className="muted">Дохід доступний після періоду утримання Telegram</dd></div>
+        </dl>
+      </article>
+
+      <article className="aud-card fin-card">
+        <div className="fin-card-head"><span className="aud-icon aud-blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3" /></svg></span>
+          <div><p className="aud-crumbs reg-eyebrow">Спред NZR</p><h3>Маржа Stars → викуп NZR</h3></div></div>
+        <div className="fin-spread">
+          <div className="fin-sp-row"><span>Виплата Fragment за Star</span><b>{m ? finUsd(fragRate, 4) : "—"}</b></div>
+          <div className="fin-sp-bar"><i className="frag" style={{ width: `${fragRate / rateMax * 100}%` }} /></div>
+          <div className="fin-sp-row"><span>Курс викупу NZR</span><b>{m ? finUsd(buyRate, 4) : "—"}</b></div>
+          <div className="fin-sp-bar"><i className="buy" style={{ width: `${buyRate / rateMax * 100}%` }} /><em style={{ left: `${buyRate / rateMax * 100}%`, width: `${Math.max(perNzr, 0) / rateMax * 100}%` }} /></div>
+        </div>
+        <div className="fin-formula"><span>{m ? `${finUsd(perNzr, 4)} / NZR` : "—"}</span><span>×</span><span>{m ? `${finCount.format(spreadQty)} NZR` : "—"}</span><span>=</span><b className="win-accent">{m ? finUsd(spreadTotal) : "—"}</b></div>
+        <p className="aud-hint win-small">Загальна маржа за весь час: різниця між виплатою Fragment за Star і курсом викупу NZR, помножена на викуплені NZR.</p>
+      </article>
+
+      <article className="aud-card fin-card">
+        <div className="fin-card-head"><span className="aud-icon fin-red"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 20h20L12 3Z" /><path d="M12 10v4M12 17h.01" /></svg></span>
+          <div><p className="aud-crumbs reg-eyebrow">Ризики й партнери</p><h3>Контроль за весь час</h3></div></div>
+        <div className="fin-risk">
+          <div className="warn"><span>Втрати рулетки</span><b>{m ? `${finCount.format(value("wheelLoss"))} NZR` : "—"}</b></div>
+          <div className="warn"><span>Невдалих транзакцій</span><b>{m ? finCount.format(value("failedTransactions")) : "—"}</b></div>
+          <div><span>Реферальний дохід</span><b>{m ? finUsd(value("referralTotal"), 0) : "—"}</b></div>
+          <div><span>Операцій DeDust</span><b>{m ? finCount.format(value("dedustSwaps")) : "—"}</b></div>
+        </div>
+      </article>
+    </section>
+
+    <section className="aud-card fin-nzr" aria-labelledby="finNzrTitle">
+      <div className="aud-row"><div><p className="aud-crumbs reg-eyebrow">NZR</p><h2 id="finNzrTitle">Операції токена</h2></div><span className="aud-hint">за весь час</span></div>
+      <div className="fin-nzr-grid">
+        <div><span>Транзакцій NZR</span><b>{m ? finCount.format(value("nzrTransactions")) : "—"}</b></div>
+        <div><span>Продажі NZR</span><b>{m ? finCount.format(value("nzrSwapSell")) : "—"}</b></div>
+        <div><span>Купівлі NZR</span><b>{m ? finCount.format(value("nzrSwapBuy")) : "—"}</b></div>
+        <div><span>Покупки NZR за Stars</span><b>{m ? finCount.format(value("nzrStars")) : "—"}</b></div>
+      </div>
+      <div className="fin-flow">
+        <div className="fin-flow-bar">{flows.map(([label, amount, color]) => amount > 0 && <i key={label} style={{ flexGrow: amount, background: color }} />)}</div>
+        <div className="fin-flow-leg">{flows.map(([label, amount, color]) => <span key={label}><i style={{ background: color }} />{label}<b>{finPercent.format(amount / flowTotal * 100)}%</b></span>)}</div>
+      </div>
+    </section>
   </section>;
 }
 
