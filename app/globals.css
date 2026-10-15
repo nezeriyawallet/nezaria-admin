@@ -4699,3 +4699,19 @@ html[data-theme="light"] .side2-item.active svg { color:#12755f; }
   .win-table td { padding:9px 0; }
   .win-table tr.win-new td { animation:none; }
 }
+
+/* Wins · four games */
+.win { --win-spins:#F5C451; --win-double:#B794F6; }
+.win-split-bar i.roulette, .win-split-leg i.roulette { background:var(--win-roulette); }
+.win-split-bar i.plinko, .win-split-leg i.plinko { background:var(--win-plinko); }
+.win-split-bar i.spins, .win-split-leg i.spins { background:var(--win-spins); }
+.win-split-bar i.double, .win-split-leg i.double { background:var(--win-double); }
+.win-split-leg { flex-wrap:wrap; justify-content:flex-start; gap:4px 14px; }
+.win-game.spins { background:#231E12; color:var(--win-spins); }
+.win-game.double { background:#1E1829; color:var(--win-double); }
+.win-double { display:inline-flex; align-items:center; gap:6px; font:600 13px var(--font-geist-mono), ui-monospace, monospace; color:var(--aud-muted); }
+.win-double i { width:12px; height:12px; border-radius:50%; background:var(--aud-chip); box-shadow:inset 0 0 0 1px rgba(255,255,255,.15); }
+.win-double i.red { background:#E5484D; }
+.win-double i.black { background:#1A1D23; }
+.win-double i.green { background:#3DDC97; }
+.win-double span { color:var(--aud-text-2); font-family:var(--font-onest), var(--font-geist-sans), system-ui, sans-serif; font-size:13px; }

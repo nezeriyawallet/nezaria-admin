@@ -19,19 +19,21 @@ function plinkoStake(value: unknown) {
 function buildMonthlyTotals(items: GameResult[]) {
   const now = new Date();
   const monthStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
-  let wheelWon = 0, plinkoWon = 0, wheelCollected = 0, plinkoCollected = 0;
+  let wheelWon = 0, plinkoWon = 0, spinsWon = 0, doubleWon = 0, wheelCollected = 0, plinkoCollected = 0, spinsCollected = 0, doubleCollected = 0;
   for (const item of items) {
     const createdAt = Date.parse(item.createdAt ?? "");
     if (!Number.isFinite(createdAt) || createdAt < monthStart) continue;
     const dropped = String(item.dropped ?? "");
     const prize = nzrAmount(item.reward);
-    if (/plinko/i.test(dropped)) { plinkoWon += prize; plinkoCollected += plinkoStake(dropped); continue; }
+    if (/^plinko/i.test(dropped)) { plinkoWon += prize; plinkoCollected += plinkoStake(dropped); continue; }
+    if (/^spins/i.test(dropped)) { spinsWon += prize; spinsCollected += plinkoStake(dropped); continue; }
+    if (/^double/i.test(dropped)) { doubleWon += prize; doubleCollected += plinkoStake(dropped); continue; }
     const wheel = Number(item.wheel);
     if (wheel === 1 || wheel === 2) { wheelWon += prize; wheelCollected += wheel === 1 ? 10 : 30; }
   }
-  const monthlyWonNzr = wheelWon + plinkoWon;
-  const monthlyCollectedNzr = wheelCollected + plinkoCollected;
-  return { monthlyWonNzr, monthlyCollectedNzr, monthlyNetEarningsNzr: monthlyCollectedNzr - monthlyWonNzr, monthlyWheelWonNzr: wheelWon, monthlyPlinkoWonNzr: plinkoWon, monthlyWheelSpentNzr: wheelCollected, monthlyPlinkoSpentNzr: plinkoCollected };
+  const monthlyWonNzr = wheelWon + plinkoWon + spinsWon + doubleWon;
+  const monthlyCollectedNzr = wheelCollected + plinkoCollected + spinsCollected + doubleCollected;
+  return { monthlyWonNzr, monthlyCollectedNzr, monthlyNetEarningsNzr: monthlyCollectedNzr - monthlyWonNzr, monthlyWheelWonNzr: wheelWon, monthlyPlinkoWonNzr: plinkoWon, monthlyWheelSpentNzr: wheelCollected, monthlyPlinkoSpentNzr: plinkoCollected, monthlySpinsWonNzr: spinsWon, monthlySpinsSpentNzr: spinsCollected, monthlyDoubleWonNzr: doubleWon, monthlyDoubleSpentNzr: doubleCollected };
 }
 
 export async function GET(request: Request) {
@@ -73,12 +75,19 @@ export async function GET(request: Request) {
       monthlyPlinkoWonNzr: numberFrom(firstPage.monthlyPlinkoWonNzr) ?? 0,
       monthlyWheelSpentNzr: numberFrom(firstPage.monthlyWheelCollectedNzr) ?? numberFrom(firstPage.monthlyWheelSpentNzr) ?? 0,
       monthlyPlinkoSpentNzr: numberFrom(firstPage.monthlyPlinkoCollectedNzr) ?? numberFrom(firstPage.monthlyPlinkoSpentNzr) ?? 0,
+      // Wallet versions before Spins and Double were reported send no such fields.
+      monthlySpinsWonNzr: numberFrom(firstPage.monthlySpinsWonNzr) ?? calculated.monthlySpinsWonNzr,
+      monthlySpinsSpentNzr: numberFrom(firstPage.monthlySpinsSpentNzr) ?? calculated.monthlySpinsSpentNzr,
+      monthlyDoubleWonNzr: numberFrom(firstPage.monthlyDoubleWonNzr) ?? calculated.monthlyDoubleWonNzr,
+      monthlyDoubleSpentNzr: numberFrom(firstPage.monthlyDoubleSpentNzr) ?? calculated.monthlyDoubleSpentNzr,
     } : calculated;
     return Response.json({ ...firstPage, items: allItems, totalElements: allItems.length, totalPages: 1,
       monthlyWonNzr: source.monthlyWonNzr ?? 0, monthlyCollectedNzr: source.monthlyCollectedNzr ?? 0,
       monthlyNetEarningsNzr: source.monthlyNetEarningsNzr ?? source.monthlyLostNzr ?? 0, monthlyLostNzr: source.monthlyNetEarningsNzr ?? source.monthlyLostNzr ?? 0,
       monthlyWheelWonNzr: source.monthlyWheelWonNzr ?? 0, monthlyPlinkoWonNzr: source.monthlyPlinkoWonNzr ?? 0,
-      monthlyWheelSpentNzr: source.monthlyWheelSpentNzr ?? 0, monthlyPlinkoSpentNzr: source.monthlyPlinkoSpentNzr ?? 0 }, {
+      monthlyWheelSpentNzr: source.monthlyWheelSpentNzr ?? 0, monthlyPlinkoSpentNzr: source.monthlyPlinkoSpentNzr ?? 0,
+      monthlySpinsWonNzr: source.monthlySpinsWonNzr ?? 0, monthlySpinsSpentNzr: source.monthlySpinsSpentNzr ?? 0,
+      monthlyDoubleWonNzr: source.monthlyDoubleWonNzr ?? 0, monthlyDoubleSpentNzr: source.monthlyDoubleSpentNzr ?? 0 }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", Pragma: "no-cache" },
     });
   } catch {

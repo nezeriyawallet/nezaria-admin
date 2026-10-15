@@ -28,8 +28,8 @@ type WalletMetrics = Record<string, string | number | null> & { dailyOnlinePeaks
 type WalletUser = { id: number; username: string; name: string; premium: boolean; nzrPoints: number; walletIds: number[]; referralCount?: number; phoneCountry?: string };
 type AcquiringBusiness = { account: string; name: string; type: string; ownership: string; assets: string[]; updatedAt: string | null };
 type AcquiringMetrics = { businesses: number; merchants: number; products: number; payments: number; paymentLinks: number; payouts: number };
-type WheelWin = { id: number; username: string; name: string; walletId: number; wheel: number; dropped: string; reward: string; createdAt: string };
-type WheelWinSummary = { monthlyWonNzr: number; monthlyLostNzr: number; monthlyCollectedNzr: number; monthlyNetEarningsNzr: number; monthlyWheelSpentNzr: number; monthlyPlinkoSpentNzr: number; monthlyWheelWonNzr: number; monthlyPlinkoWonNzr: number };
+type WheelWin = { id: number; username: string; name: string; walletId: number; wheel: number; dropped: string; reward: string; createdAt: string; game?: string };
+type WheelWinSummary = { monthlyWonNzr: number; monthlyLostNzr: number; monthlyCollectedNzr: number; monthlyNetEarningsNzr: number; monthlyWheelSpentNzr: number; monthlyPlinkoSpentNzr: number; monthlyWheelWonNzr: number; monthlyPlinkoWonNzr: number; monthlySpinsSpentNzr: number; monthlySpinsWonNzr: number; monthlyDoubleSpentNzr: number; monthlyDoubleWonNzr: number };
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
 type SupportTicket = { id: string; client_name: string; client_username: string | null; status: "new" | "in_progress" | "awaiting_rating" | "closed"; assigned_to: string | null; rating: number | null; review: string | null; created_at: string; updated_at: string; messages: SupportMessage[] };
 
@@ -129,7 +129,7 @@ export default function Home() {
   const [acquiringBusinesses, setAcquiringBusinesses] = useState<AcquiringBusiness[]>([]);
   const [acquiringRefreshing, setAcquiringRefreshing] = useState(false);
   const [wheelWins, setWheelWins] = useState<WheelWin[]>([]);
-  const [wheelWinSummary, setWheelWinSummary] = useState<WheelWinSummary>({ monthlyWonNzr: 0, monthlyLostNzr: 0, monthlyCollectedNzr: 0, monthlyNetEarningsNzr: 0, monthlyWheelSpentNzr: 0, monthlyPlinkoSpentNzr: 0, monthlyWheelWonNzr: 0, monthlyPlinkoWonNzr: 0 });
+  const [wheelWinSummary, setWheelWinSummary] = useState<WheelWinSummary>({ monthlyWonNzr: 0, monthlyLostNzr: 0, monthlyCollectedNzr: 0, monthlyNetEarningsNzr: 0, monthlyWheelSpentNzr: 0, monthlyPlinkoSpentNzr: 0, monthlyWheelWonNzr: 0, monthlyPlinkoWonNzr: 0, monthlySpinsSpentNzr: 0, monthlySpinsWonNzr: 0, monthlyDoubleSpentNzr: 0, monthlyDoubleWonNzr: 0 });
   const [winsRefreshing, setWinsRefreshing] = useState(false);
   const [usersRefreshing, setUsersRefreshing] = useState(false);
   const [metricsError, setMetricsError] = useState("");
@@ -351,7 +351,7 @@ export default function Home() {
       const monthlyNetEarningsNzr = body.monthlyNetEarningsNzr === undefined || body.monthlyNetEarningsNzr === null
         ? monthlyCollectedNzr - monthlyWonNzr
         : Number(body.monthlyNetEarningsNzr) || 0;
-      setWheelWinSummary({ monthlyWonNzr, monthlyLostNzr: monthlyNetEarningsNzr, monthlyCollectedNzr, monthlyNetEarningsNzr, monthlyWheelSpentNzr: monthlyWheelCollectedNzr, monthlyPlinkoSpentNzr: monthlyPlinkoCollectedNzr, monthlyWheelWonNzr: Number(body.monthlyWheelWonNzr ?? monthlyWonNzr) || 0, monthlyPlinkoWonNzr: Number(body.monthlyPlinkoWonNzr) || 0 });
+      setWheelWinSummary({ monthlyWonNzr, monthlyLostNzr: monthlyNetEarningsNzr, monthlyCollectedNzr, monthlyNetEarningsNzr, monthlyWheelSpentNzr: monthlyWheelCollectedNzr, monthlyPlinkoSpentNzr: monthlyPlinkoCollectedNzr, monthlyWheelWonNzr: Number(body.monthlyWheelWonNzr ?? monthlyWonNzr) || 0, monthlyPlinkoWonNzr: Number(body.monthlyPlinkoWonNzr) || 0, monthlySpinsSpentNzr: Number(body.monthlySpinsSpentNzr) || 0, monthlySpinsWonNzr: Number(body.monthlySpinsWonNzr) || 0, monthlyDoubleSpentNzr: Number(body.monthlyDoubleSpentNzr) || 0, monthlyDoubleWonNzr: Number(body.monthlyDoubleWonNzr) || 0 });
       if (showNotice) { setNotice("Дані виграшів оновлено"); window.setTimeout(() => setNotice(null), 2200); }
     } catch {
       if (showNotice) { setNotice("Не вдалося оновити дані. Спробуйте ще раз."); window.setTimeout(() => setNotice(null), 2600); }
@@ -1506,14 +1506,18 @@ function UsersPanel({ walletMetrics, users, refreshing, onRefresh }: { walletMet
   </section>;
 }
 
-type WinGame = "roulette" | "plinko";
-type WinRow = { key: string; ts: number; tgId: string; name: string; sub: string; walletId: string; game: WinGame; stake: number; payout: number; payoutLabel: string; outcome: string; mult: number | null; net: number };
+type WinGame = "roulette" | "plinko" | "spins" | "double";
+type WinRow = { key: string; ts: number; tgId: string; name: string; sub: string; walletId: string; game: WinGame; stake: number; payout: number; payoutLabel: string; outcome: string; picked: string; result: string; mult: number | null; net: number };
 type WinSort = "ts" | "user" | "game" | "stake" | "outcome" | "payout" | "net";
-const winGameLabel: Record<WinGame, string> = { roulette: "Рулетка", plinko: "Plinko" };
+const winGames: WinGame[] = ["roulette", "plinko", "spins", "double"];
+const winGameLabel: Record<WinGame, string> = { roulette: "Рулетка", plinko: "Plinko", spins: "Spins", double: "Double" };
 const winGameIcon: Record<WinGame, ReactNode> = {
   roulette: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" /><path d="M12 3v6M12 15v6M3 12h6M15 12h6" /></svg>,
   plinko: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.5" /><circle cx="8" cy="10" r="1.5" /><circle cx="16" cy="10" r="1.5" /><circle cx="5" cy="15" r="1.5" /><circle cx="12" cy="15" r="1.5" /><circle cx="19" cy="15" r="1.5" /><path d="M4 20h16" /></svg>,
+  spins: <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3" /><path d="M9 5v14M15 5v14" /><path d="M5.5 12h1M11.5 12h1M17.5 12h1" /></svg>,
+  double: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="6" /><circle cx="15" cy="12" r="6" /></svg>,
 };
+const winDoubleColor: Record<string, string> = { червоне: "red", чорне: "black", зелене: "green" };
 const winNumber = new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 2 });
 const winOne = new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 1 });
 
@@ -1535,18 +1539,22 @@ function winRelative(ts: number, now: number) {
   return new Date(ts).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-// Turns a wallet game record into a row: the wallet API sends Plinko as
-// "Plinko · ставка N NZR" and Roulette with the wheel number (wheel 1 costs
-// 10 NZR, wheel 2 costs 30 NZR); old USDT prizes have no known stake.
+// Turns a wallet game record into a row. Plinko, Spins and Double come as
+// "<Game> · ставка N NZR" (Double adds "· обраний → що випало"); Roulette
+// comes with the wheel number (wheel 1 costs 10 NZR, wheel 2 costs 30 NZR);
+// old USDT prizes have no known stake.
 function winRow(win: WheelWin): WinRow {
   const dropped = String(win.dropped || "");
   const reward = String(win.reward || "");
-  const plinko = /plinko/i.test(dropped);
-  const stake = plinko ? Number(dropped.match(/ставка\s*(\d+(?:[.,]\d+)?)/i)?.[1]?.replace(",", ".") || 0) : Number(win.wheel) === 1 ? 10 : Number(win.wheel) === 2 ? 30 : 0;
+  const label = String(win.game || dropped).toLowerCase();
+  const game: WinGame = label.startsWith("plinko") ? "plinko" : label.startsWith("spins") ? "spins" : label.startsWith("double") ? "double" : "roulette";
+  const roundGame = game !== "roulette";
+  const stake = roundGame ? Number(dropped.match(/ставка\s*(\d+(?:[.,]\d+)?)/i)?.[1]?.replace(",", ".") || 0) : Number(win.wheel) === 1 ? 10 : Number(win.wheel) === 2 ? 30 : 0;
   const nzr = winNzr(reward);
   // Only old USDT prizes have an unknown value; an empty spin pays 0 NZR.
   const unknownPrize = nzr === null && /usdt/i.test(reward);
   const payout = nzr ?? 0;
+  const colors = game === "double" ? dropped.split("·").at(-1)?.split("→").map((part) => part.trim()) || [] : [];
   // The wallet server runs in UTC and sends local date-times without a zone.
   const createdAt = String(win.createdAt || "");
   const ts = Date.parse(/(z|[+-]\d\d:?\d\d)$/i.test(createdAt) ? createdAt : `${createdAt}Z`) || 0;
@@ -1557,22 +1565,24 @@ function winRow(win: WheelWin): WinRow {
     name: win.username ? `@${win.username}` : win.name || "Без username",
     sub: win.username && win.name ? win.name : "",
     walletId: String(win.walletId ?? ""),
-    game: plinko ? "plinko" : "roulette",
+    game,
     stake,
     payout,
     payoutLabel: unknownPrize ? reward : `${winNumber.format(payout)} NZR`,
-    outcome: plinko ? "" : dropped || "—",
-    mult: plinko && stake ? payout / stake : null,
+    outcome: roundGame ? "" : dropped || "—",
+    picked: colors.length === 2 ? colors[0] : "",
+    result: colors.length === 2 ? colors[1] : "",
+    mult: (game === "plinko" || game === "spins") && stake ? payout / stake : null,
     net: unknownPrize ? 0 : payout - stake,
   };
 }
 
-function WinsSplit({ roulette, plinko, signed = false, bar = true }: { roulette: number; plinko: number; signed?: boolean; bar?: boolean }) {
-  const total = roulette + plinko || 1;
+function WinsSplit({ values, signed = false, bar = true }: { values: Record<WinGame, number>; signed?: boolean; bar?: boolean }) {
+  const total = winGames.reduce((sum, game) => sum + Math.max(0, values[game]), 0) || 1;
   const format = (value: number) => signed ? winSigned(value) : winNumber.format(value);
   return <div className="win-split">
-    {bar && <div className="win-split-bar"><i style={{ width: `${Math.max(0, roulette) / total * 100}%`, background: "var(--win-roulette)" }} /><i style={{ flex: 1, background: "var(--win-plinko)" }} /></div>}
-    <div className="win-split-leg"><span><i className="r" />Рулетка <b>{format(roulette)}</b></span><span><i className="p" />Plinko <b>{format(plinko)}</b></span></div>
+    {bar && <div className="win-split-bar">{winGames.map((game) => values[game] > 0 && <i key={game} className={game} style={{ width: `${values[game] / total * 100}%` }} />)}</div>}
+    <div className="win-split-leg">{winGames.map((game) => <span key={game}><i className={game} />{winGameLabel[game]} <b>{format(values[game])}</b></span>)}</div>
   </div>;
 }
 
@@ -1628,8 +1638,10 @@ function WinsPanel({ wins, summary, refreshing, onRefresh, onSilentRefresh }: { 
   const won = summary.monthlyWonNzr;
   const collected = summary.monthlyCollectedNzr;
   const rtp = collected ? won / collected * 100 : 0;
-  const wheelRtp = summary.monthlyWheelSpentNzr ? summary.monthlyWheelWonNzr / summary.monthlyWheelSpentNzr * 100 : 0;
-  const plinkoRtp = summary.monthlyPlinkoSpentNzr ? summary.monthlyPlinkoWonNzr / summary.monthlyPlinkoSpentNzr * 100 : 0;
+  const wonByGame: Record<WinGame, number> = { roulette: summary.monthlyWheelWonNzr, plinko: summary.monthlyPlinkoWonNzr, spins: summary.monthlySpinsWonNzr, double: summary.monthlyDoubleWonNzr };
+  const spentByGame: Record<WinGame, number> = { roulette: summary.monthlyWheelSpentNzr, plinko: summary.monthlyPlinkoSpentNzr, spins: summary.monthlySpinsSpentNzr, double: summary.monthlyDoubleSpentNzr };
+  const netByGame = Object.fromEntries(winGames.map((item) => [item, spentByGame[item] - wonByGame[item]])) as Record<WinGame, number>;
+  const rtpText = winGames.filter((item) => spentByGame[item]).map((item) => `${winGameLabel[item]} ${winOne.format(wonByGame[item] / spentByGame[item] * 100)}%`).join(", ");
 
   const needle = query.trim().replace(/^@/, "").toLowerCase();
   const direction = sort.dir === "asc" ? 1 : -1;
@@ -1679,7 +1691,7 @@ function WinsPanel({ wins, summary, refreshing, onRefresh, onSilentRefresh }: { 
 
   return <section className="win aud">
     <header className="aud-head">
-      <div><p className="aud-crumbs reg-eyebrow">Рулетка і Plinko</p><h1>Виграші <span>користувачів</span></h1><p className="aud-hint">Реєстр призів, отриманих в іграх Nezeriya Wallet</p></div>
+      <div><p className="aud-crumbs reg-eyebrow">Рулетка, Plinko, Spins і Double</p><h1>Виграші <span>користувачів</span></h1><p className="aud-hint">Реєстр призів, отриманих в іграх Nezeriya Wallet</p></div>
       <button className={`aud-live${refreshing ? " loading" : ""}`} type="button" onClick={onRefresh} disabled={refreshing} title="Оновити зараз"><i />{refreshing ? "Оновлення…" : seconds < 5 ? "Live · щойно" : `Live · ${seconds} с тому`}</button>
     </header>
 
@@ -1687,23 +1699,23 @@ function WinsPanel({ wins, summary, refreshing, onRefresh, onSilentRefresh }: { 
       <article className="aud-card win-kpi">
         <div className="aud-row"><p className="aud-label">Виплачено виграшів</p><span className="aud-chip">за місяць</span></div>
         <div className="aud-stat"><span className="aud-num-l">{winNumber.format(won)}</span><span className="aud-unit">NZR</span></div>
-        <WinsSplit roulette={summary.monthlyWheelWonNzr} plinko={summary.monthlyPlinkoWonNzr} />
+        <WinsSplit values={wonByGame} />
       </article>
       <article className="aud-card win-kpi">
         <div className="aud-row"><p className="aud-label">Зібрано ставок</p><span className="aud-chip">за місяць</span></div>
         <div className="aud-stat"><span className="aud-num-l">{winNumber.format(collected)}</span><span className="aud-unit">NZR</span></div>
-        <WinsSplit roulette={summary.monthlyWheelSpentNzr} plinko={summary.monthlyPlinkoSpentNzr} />
+        <WinsSplit values={spentByGame} />
       </article>
       <article className="aud-card win-kpi win-net-card">
         <div className="aud-row"><p className="aud-label">Чистий заробіток</p><span className="aud-chip">ставки − виграші</span></div>
         <div className="aud-stat"><span className="aud-num-l win-accent">{winNumber.format(summary.monthlyNetEarningsNzr)}</span><span className="aud-unit">NZR</span></div>
-        <WinsSplit roulette={summary.monthlyWheelSpentNzr - summary.monthlyWheelWonNzr} plinko={summary.monthlyPlinkoSpentNzr - summary.monthlyPlinkoWonNzr} signed bar={false} />
+        <WinsSplit values={netByGame} signed bar={false} />
       </article>
       <article className="aud-card win-kpi">
         <div className="aud-row"><p className="aud-label">Повернення гравцям</p><span className="aud-chip">RTP</span></div>
         <div className="aud-stat"><span className="aud-num-l">{winOne.format(rtp)}</span><span className="aud-unit">%</span></div>
         <div className="win-rtp"><i style={{ width: `${Math.min(rtp, 100)}%` }} /></div>
-        <span className="aud-hint win-small">Маржа {winOne.format(100 - rtp)}% · рулетка {winOne.format(wheelRtp)}%, Plinko {winOne.format(plinkoRtp)}%</span>
+        <span className="aud-hint win-small">Маржа {winOne.format(100 - rtp)}%{rtpText ? ` · ${rtpText}` : ""}</span>
       </article>
     </section>
 
@@ -1720,7 +1732,7 @@ function WinsPanel({ wins, summary, refreshing, onRefresh, onSilentRefresh }: { 
             <input ref={searchRef} type="search" value={query} placeholder="Пошук: @username, Telegram ID, Wallet ID" autoComplete="off" onChange={(event) => { setQuery(event.target.value); setPage(1); }} onKeyDown={(event) => { if (event.key === "Escape") { setQuery(""); setPage(1); } }} />
             <kbd>/</kbd>
           </label>
-          <div className="side2-switch reg-segment" role="group" aria-label="Гра">{([["all", "Усі ігри"], ["roulette", "Рулетка"], ["plinko", "Plinko"]] as const).map(([value, label]) => <button key={value} className={game === value ? "selected" : ""} onClick={() => { setGame(value); setPage(1); }}>{label}</button>)}</div>
+          <div className="side2-switch reg-segment" role="group" aria-label="Гра">{([["all", "Усі ігри"], ...winGames.map((item) => [item, winGameLabel[item]] as const)] as const).map(([value, label]) => <button key={value} className={game === value ? "selected" : ""} onClick={() => { setGame(value); setPage(1); }}>{label}</button>)}</div>
           <div className="side2-switch reg-segment" role="group" aria-label="Результат">{([["all", "Усі"], ["win", "У плюсі"], ["loss", "У мінусі"]] as const).map(([value, label]) => <button key={value} className={result === value ? "selected" : ""} onClick={() => { setResult(value); setPage(1); }}>{label}</button>)}</div>
           {filtersActive && <button className="reg-reset" onClick={reset}>Скинути</button>}
         </div>
@@ -1735,7 +1747,7 @@ function WinsPanel({ wins, summary, refreshing, onRefresh, onSilentRefresh }: { 
               <td data-l="Гравець"><button className="win-user" title="Показати лише ігри цього гравця" onClick={() => pickPlayer(row.tgId)}>{avatar(row, true)}<span><span className="reg-name">{row.name}</span><span className="reg-sub win-mono">{row.tgId}</span></span></button></td>
               <td data-l="Гра"><span className={`win-game ${row.game}`}>{winGameIcon[row.game]}{winGameLabel[row.game]}</span></td>
               <td data-l="Ставка" className="num"><span className="win-stake">{row.stake ? winNumber.format(row.stake) : "—"}</span></td>
-              <td data-l="Що випало">{row.mult !== null ? <span className={`win-mult${row.mult >= 2 ? " hot" : row.mult < 1 ? " cold" : ""}`}>×{winOne.format(row.mult)}</span> : <span className="win-outcome">{row.outcome}</span>}</td>
+              <td data-l="Що випало">{row.mult !== null ? <span className={`win-mult${row.mult >= 2 ? " hot" : row.mult < 1 ? " cold" : ""}`}>×{winOne.format(row.mult)}</span> : row.game === "double" ? <span className="win-double" title={`Обрано ${row.picked}, випало ${row.result}`}><i className={winDoubleColor[row.picked] || ""} />→<i className={winDoubleColor[row.result] || ""} /><span>{row.result}</span></span> : <span className="win-outcome">{row.outcome}</span>}</td>
               <td data-l="Отримав" className="num"><span className={`win-pay${row.payout ? "" : " zero"}`}>{row.payoutLabel}</span></td>
               <td data-l="Підсумок" className="num"><span className={`win-net ${row.net > 0 ? "pos" : row.net < 0 ? "neg" : "even"}`}>{winSigned(row.net)}</span></td>
             </tr>)}</tbody>
