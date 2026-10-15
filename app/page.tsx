@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 type NavItem = "Огляд" | "Користувачі" | "Виграші" | "Магазин" | "Бізнес" | "Фінанси" | "Підтримка" | "Команда" | "Працівники" | "Медійка";
 type AccessRole = "owner" | "worker" | "media" | null;
@@ -1005,7 +1005,7 @@ function AudienceRevenueCards({ metrics, users }: { metrics: WalletMetrics | nul
       })}
       <CountryStats users={users} />
     </section>
-    <p className="subtle revenue-note">Кожна складова — на одну людину, незалежно від кількості гаманців. LTV показує накопичений дохід, а не прогноз. Активність ARPU: відкриття гаманця, операції або ігри за місяць. Комісія ARPU оцінена за успішними операціями та поточним тарифом. Stars і NZR не додаються до USDT; це окремі одиниці. Це дохід до витрат, а не чистий прибуток. Ігри — за збереженим журналом{metrics?.revenueGamesSince ? ` з ${formatOnlinePeakDate(String(metrics.revenueGamesSince))}` : ""}; призи в USDT та негрошові призи в NZR не оцінюються.</p>
+    <LtvMethodology gamesSince={metrics?.revenueGamesSince} />
   </>;
 }
 
@@ -1033,6 +1033,215 @@ function CountryStats({ users }: { users: WalletUser[] }) {
   </article>;
 }
 
+type RegSort = "user" | "tgId" | "country" | "walletId" | "nzr" | "invited" | "premium";
+const regColors = ["#3DDC97", "#8AB4FF", "#F5C451", "#B794F6", "#FF9F7A", "#6ED3E0"];
+const regNumber = new Intl.NumberFormat("uk-UA");
+const regPercent = new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 1 });
+const regCopyIcon = <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></svg>;
+const regSortIcon = <svg className="reg-ar" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6" /></svg>;
+
+function regHash(value: string) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index++) hash = (hash * 31 + value.charCodeAt(index)) | 0;
+  return Math.abs(hash);
+}
+
+function RegHighlight({ text, query }: { text: string; query: string }) {
+  if (!query) return <>{text}</>;
+  const needle = query.replace(/^@/, "").toLowerCase();
+  if (!needle) return <>{text}</>;
+  const parts: ReactNode[] = [];
+  const lower = text.toLowerCase();
+  let from = 0;
+  for (let at = lower.indexOf(needle); at !== -1; at = lower.indexOf(needle, from)) {
+    if (at > from) parts.push(text.slice(from, at));
+    parts.push(<mark key={at}>{text.slice(at, at + needle.length)}</mark>);
+    from = at + needle.length;
+  }
+  parts.push(text.slice(from));
+  return <>{parts}</>;
+}
+
+function LtvMethodology({ gamesSince }: { gamesSince?: string | number | null }) {
+  return <details className="reg-method">
+    <summary>
+      <span className="reg-method-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg></span>
+      <span>Як рахуються LTV і ARPU</span>
+      <svg className="reg-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+    </summary>
+    <ul>
+      <li><b>Користувач</b> — одна людина, незалежно від кількості гаманців.</li>
+      <li><b>LTV</b> — накопичений дохід, а не прогноз.</li>
+      <li><b>Активний для ARPU</b> — відкрив гаманець, зробив операцію або грав протягом місяця.</li>
+      <li><b>Комісія ARPU</b> оцінена за успішними операціями й поточним тарифом.</li>
+      <li><b>Stars і NZR</b> не додаються до USDT — це окремі одиниці.</li>
+      <li><b>Це дохід до витрат</b>, а не чистий прибуток.</li>
+      <li><b>Ігри</b> — за збереженим журналом{gamesSince ? ` з ${formatOnlinePeakDate(String(gamesSince))}` : ""}; призи в USDT і негрошові призи в NZR не оцінюються.</li>
+    </ul>
+  </details>;
+}
+
+function WalletRegistry({ users }: { users: WalletUser[] }) {
+  const [query, setQuery] = useState("");
+  const [premium, setPremium] = useState<"all" | "premium" | "regular">("all");
+  const [country, setCountry] = useState("all");
+  const [invitedOnly, setInvitedOnly] = useState(false);
+  const [sort, setSort] = useState<{ key: RegSort; dir: "asc" | "desc" }>(() => {
+    try { const saved = JSON.parse(window.localStorage.getItem("nz-reg") || "{}"); if (saved.key) return { key: saved.key, dir: saved.dir === "asc" ? "asc" : "desc" }; } catch { /* storage unavailable */ }
+    return { key: "nzr", dir: "desc" };
+  });
+  const [size, setSize] = useState(() => {
+    try { const saved = JSON.parse(window.localStorage.getItem("nz-reg") || "{}"); if ([10, 25, 50, 100].includes(saved.size)) return saved.size as number; } catch { /* storage unavailable */ }
+    return 25;
+  });
+  const [page, setPage] = useState(1);
+  const [copied, setCopied] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    try { window.localStorage.setItem("nz-reg", JSON.stringify({ key: sort.key, dir: sort.dir, size })); } catch { /* storage unavailable */ }
+  }, [sort, size]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const tag = (document.activeElement?.tagName || "").toUpperCase();
+      if (event.key === "/" && tag !== "INPUT" && tag !== "SELECT" && tag !== "TEXTAREA") { event.preventDefault(); searchRef.current?.focus(); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  const rows = users.map((user) => ({
+    user,
+    key: `${user.id}-${user.walletIds.join("-")}`,
+    name: user.username ? `@${user.username}` : user.name || "Без username",
+    sub: user.username && user.name ? user.name : "",
+    walletId: user.walletIds.join(", "),
+    country: countryLabel(user.phoneCountry),
+    nzr: metricNumber(user.nzrPoints),
+    invited: metricNumber(user.referralCount),
+  }));
+  const people = [...new Map(rows.map((row) => [row.user.id, row])).values()];
+  const totalReferrals = people.reduce((sum, row) => sum + row.invited, 0);
+  const maxNzr = Math.max(1, ...rows.map((row) => row.nzr));
+  const maxInvited = Math.max(1, ...rows.map((row) => row.invited));
+  const stats: [string, number][] = [
+    ["Гаманців", rows.length],
+    ["З поінтами", rows.filter((row) => row.nzr > 0).length],
+    ["Усього NZR", rows.reduce((sum, row) => sum + row.nzr, 0)],
+    ["Premium", rows.filter((row) => row.user.premium).length],
+    ["З рефералами", people.filter((row) => row.invited > 0).length],
+    ["Рефералів", totalReferrals],
+  ];
+  const countryCounts = [...rows.reduce((map, row) => {
+    if (row.country) map.set(row.country.code, { label: row.country.name, count: (map.get(row.country.code)?.count || 0) + 1 });
+    return map;
+  }, new Map<string, { label: string; count: number }>()).entries()].sort((a, b) => b[1].count - a[1].count);
+  const unverified = rows.filter((row) => !row.country).length;
+
+  const needle = query.trim().replace(/^@/, "").toLowerCase();
+  const direction = sort.dir === "asc" ? 1 : -1;
+  const filtered = rows.filter((row) => {
+    if (premium === "premium" && !row.user.premium) return false;
+    if (premium === "regular" && row.user.premium) return false;
+    if (country === "none" && row.country) return false;
+    if (country !== "all" && country !== "none" && row.country?.code !== country) return false;
+    if (invitedOnly && !row.invited) return false;
+    if (needle && ![row.user.username, row.user.name, row.user.id, row.walletId].join(" ").toLowerCase().includes(needle)) return false;
+    return true;
+  }).sort((a, b) => {
+    const value = (row: typeof a): string | number => {
+      if (sort.key === "user") return row.name.replace(/^@/, "").toLowerCase();
+      if (sort.key === "country") return row.country ? row.country.name : "яяя";
+      if (sort.key === "premium") return row.user.premium ? 1 : 0;
+      if (sort.key === "tgId") return row.user.id;
+      if (sort.key === "walletId") return row.user.walletIds[0] || 0;
+      return row[sort.key];
+    };
+    const first = value(a), second = value(b);
+    if (first < second) return -direction;
+    if (first > second) return direction;
+    return b.nzr - a.nzr;
+  });
+  const pages = Math.max(1, Math.ceil(filtered.length / size));
+  const current = Math.min(page, pages);
+  const start = (current - 1) * size;
+  const slice = filtered.slice(start, start + size);
+  const pageList = [...new Set([1, pages, current - 1, current, current + 1].filter((item) => item >= 1 && item <= pages))].sort((a, b) => a - b);
+  const filtersActive = Boolean(query || premium !== "all" || country !== "all" || invitedOnly);
+
+  const changeSort = (key: RegSort) => {
+    setSort((previous) => previous.key === key ? { key, dir: previous.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "user" || key === "country" ? "asc" : "desc" });
+    setPage(1);
+  };
+  const copy = (value: string, id: string) => {
+    const done = () => { setCopied(id); window.setTimeout(() => setCopied((currentId) => currentId === id ? null : currentId), 1200); };
+    if (navigator.clipboard) void navigator.clipboard.writeText(value).then(done, done);
+    else done();
+  };
+  const reset = () => { setQuery(""); setPremium("all"); setCountry("all"); setInvitedOnly(false); setPage(1); };
+  const header: [RegSort, string, boolean?][] = [["user", "Користувач"], ["tgId", "Telegram ID"], ["country", "Країна номера"], ["walletId", "Wallet ID"], ["nzr", "NZR-поінти", true], ["invited", "Реферали", true], ["premium", "Статус"]];
+
+  return <section className="reg-card" aria-labelledby="regTitle">
+    <div className="reg-head">
+      <div>
+        <p className="aud-crumbs reg-eyebrow">Реєстр гаманців</p>
+        <h2 id="regTitle">Гаманці користувачів і NZR-поінти</h2>
+        <p className="aud-hint">«Реферали» — унікальні люди, запрошені по всіх гаманцях користувача; для кількох його гаманців показник однаковий. % — частка від усіх рефералів.</p>
+      </div>
+      <div className="reg-stats">{stats.map(([label, value]) => <div key={label}><span>{label}</span><b>{regNumber.format(value)}</b></div>)}</div>
+    </div>
+
+    <div className="reg-toolbar">
+      <label className="reg-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+        <input ref={searchRef} type="search" value={query} placeholder="Пошук: @username, Telegram ID, Wallet ID" autoComplete="off" onChange={(event) => { setQuery(event.target.value); setPage(1); }} onKeyDown={(event) => { if (event.key === "Escape") { setQuery(""); setPage(1); } }} />
+        <kbd>/</kbd>
+      </label>
+      <div className="side2-switch reg-segment" role="group" aria-label="Статус">{([["all", "Усі"], ["premium", "Premium"], ["regular", "Звичайні"]] as const).map(([value, label]) => <button key={value} className={premium === value ? "selected" : ""} onClick={() => { setPremium(value); setPage(1); }}>{label}</button>)}</div>
+      <div className="reg-select">
+        <select aria-label="Країна" value={country} onChange={(event) => { setCountry(event.target.value); setPage(1); }}>
+          <option value="all">Усі країни</option>
+          {countryCounts.map(([code, item]) => <option key={code} value={code}>{item.label} · {item.count}</option>)}
+          {unverified > 0 && <option value="none">Не підтверджено · {unverified}</option>}
+        </select>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+      </div>
+      <label className="reg-toggle"><input type="checkbox" checked={invitedOnly} onChange={(event) => { setInvitedOnly(event.target.checked); if (event.target.checked) setSort({ key: "invited", dir: "desc" }); setPage(1); }} /><span />З рефералами</label>
+      {filtersActive && <button className="reg-reset" onClick={reset}>Скинути</button>}
+    </div>
+
+    <div className="reg-box">
+      {users.length === 0 ? <p className="users-empty reg-empty-text">Список гаманців завантажується з Nezeriya Wallet API.</p> : <table className="reg-table">
+        <thead><tr>{header.map(([key, label, numeric]) => <th key={key} className={numeric ? "num" : ""} aria-sort={sort.key === key ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}><button type="button" onClick={() => changeSort(key)}>{label}{regSortIcon}</button></th>)}</tr></thead>
+        <tbody>{slice.map((row) => {
+          const initials = row.name.replace(/^@/, "").slice(0, 2).toUpperCase();
+          return <tr key={row.key}>
+            <td><div className="reg-user"><span className="reg-av" style={{ background: regColors[regHash(String(row.user.id)) % regColors.length] }}>{initials}</span><div><span className="reg-name"><RegHighlight text={row.name} query={query} /></span>{row.sub && <span className="reg-sub"><RegHighlight text={row.sub} query={query} /></span>}</div></div></td>
+            <td data-l="Telegram ID"><span className="reg-id"><RegHighlight text={String(row.user.id)} query={query} /><button className={`reg-cp${copied === `tg-${row.key}` ? " ok" : ""}`} aria-label="Копіювати Telegram ID" onClick={() => copy(String(row.user.id), `tg-${row.key}`)}>{copied === `tg-${row.key}` ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10" /></svg> : regCopyIcon}</button></span></td>
+            <td data-l="Країна">{row.country ? <span className="reg-cc"><i>{row.country.code}</i>{row.country.name}</span> : <span className="reg-unv">Не підтверджено</span>}</td>
+            <td data-l="Wallet ID">{row.walletId ? <span className="reg-id"><RegHighlight text={row.walletId} query={query} /><button className={`reg-cp${copied === `w-${row.key}` ? " ok" : ""}`} aria-label="Копіювати Wallet ID" onClick={() => copy(row.walletId, `w-${row.key}`)}>{copied === `w-${row.key}` ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10" /></svg> : regCopyIcon}</button></span> : "—"}</td>
+            <td data-l="NZR-поінти" className="num"><div className="reg-pts"><span className="reg-bar"><i style={{ width: `${(row.nzr / maxNzr * 100).toFixed(1)}%` }} /></span><b className={row.nzr ? "" : "zero"}>{regNumber.format(row.nzr)} NZR</b></div></td>
+            <td data-l="Реферали" className="num">{row.invited ? <div className="reg-pts ref"><span className="reg-bar"><i style={{ width: `${(row.invited / maxInvited * 100).toFixed(1)}%` }} /></span><b>{regNumber.format(row.invited)}</b><small>{regPercent.format(totalReferrals ? row.invited / totalReferrals * 100 : 0)}%</small></div> : <span className="reg-zero">0</span>}</td>
+            <td data-l="Статус">{row.user.premium ? <span className="reg-pill prem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z" /></svg>Premium</span> : <span className="reg-pill">Звичайний</span>}</td>
+          </tr>;
+        })}</tbody>
+      </table>}
+      {users.length > 0 && filtered.length === 0 && <div className="reg-nothing"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg><div><b>Нічого не знайдено</b><span>Змініть пошук або скиньте фільтри.</span></div></div>}
+    </div>
+
+    <div className="reg-foot">
+      <span className="aud-hint">{filtered.length ? `Показано ${regNumber.format(start + 1)}–${regNumber.format(start + slice.length)} з ${regNumber.format(filtered.length)}${filtered.length !== rows.length ? ` (усього ${regNumber.format(rows.length)})` : ""}` : "0 гаманців"}</span>
+      <div className="reg-pager">
+        <div className="reg-select small"><select aria-label="Рядків на сторінці" value={size} onChange={(event) => { setSize(Number(event.target.value)); setPage(1); }}>{[10, 25, 50, 100].map((item) => <option key={item} value={item}>{item}</option>)}</select><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></div>
+        <button className="reg-pg" aria-label="Попередня сторінка" disabled={current <= 1} onClick={() => setPage(current - 1)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg></button>
+        {pageList.map((item, index) => <span key={item} className="reg-pg-group">{index > 0 && item - pageList[index - 1] > 1 && <span className="reg-gap">…</span>}<button className={`reg-pg${item === current ? " active" : ""}`} aria-current={item === current ? "page" : undefined} onClick={() => setPage(item)}>{item}</button></span>)}
+        <button className="reg-pg" aria-label="Наступна сторінка" disabled={current >= pages} onClick={() => setPage(current + 1)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></button>
+      </div>
+    </div>
+  </section>;
+}
+
 function UsersPanel({ walletMetrics, users, refreshing, onRefresh }: { walletMetrics: WalletMetrics | null; users: WalletUser[]; refreshing: boolean; onRefresh: () => void }) {
   const totalUsers = metricNumber(walletMetrics?.users);
   const premiumUsers = metricNumber(walletMetrics?.premiumUsers);
@@ -1042,7 +1251,6 @@ function UsersPanel({ walletMetrics, users, refreshing, onRefresh }: { walletMet
   const activeShare = audPercent(activeUsers, totalUsers);
   const registered = walletMetrics ? displayMetric(walletMetrics.users) : "—";
   const highestNrzBalance = walletMetrics?.maxNzrBalance;
-  const usersByNrzBalance = [...users].sort((first, second) => Number(second.nzrPoints) - Number(first.nzrPoints));
   const analyticsWindow = walletMetrics ? displayMetric(walletMetrics.analyticsWindowDays ?? 30) : "30";
   const kpis = [
     { icon: "wallet" as const, tone: "gold" as const, label: "Найбільший баланс", value: highestNrzBalance === null || highestNrzBalance === undefined ? "—" : displayMetric(highestNrzBalance), unit: "NZR", hint: "Максимум серед усіх гаманців" },
@@ -1096,7 +1304,7 @@ function UsersPanel({ walletMetrics, users, refreshing, onRefresh }: { walletMet
     </section>
 
     <AudienceRevenueCards metrics={walletMetrics} users={users} />
-    <article className="panel users-table-panel"><div className="panel-head"><div><p className="panel-label">РЕЄСТР ГАМАНЦІВ</p><h2>Гаманці користувачів та NZR поінти</h2></div><span>{users.length} гаманців показано</span></div><p className="subtle">Запрошені — унікальні люди по всіх гаманцях користувача. Для його кількох гаманців показник однаковий.</p>{users.length === 0 ? <p className="users-empty">Список гаманців завантажується з Nezeriya Wallet API.</p> : <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Telegram ID</th><th>Користувач</th><th>Країна номера</th><th>Wallet ID</th><th>NZR поінти ↓</th><th>Запрошені люди</th><th>Premium</th></tr></thead><tbody>{usersByNrzBalance.map((user, index) => { const country = countryLabel(user.phoneCountry); return <tr key={`${user.id}-${user.walletIds.join("-") || index}`}><td>{user.id}</td><td><strong>{user.username ? `@${user.username}` : user.name || "Без username"}</strong>{user.name && user.username && <small>{user.name}</small>}</td><td className="country-cell">{country ? <>{country.flag} {country.name}</> : <span className="country-missing">Не підтверджено</span>}</td><td>{user.walletIds.length ? user.walletIds.join(", ") : "—"}</td><td className="nzr-points">{displayMetric(user.nzrPoints)} NZR</td><td>{displayMetric(user.referralCount)}</td><td><span className={user.premium ? "premium-badge" : "standard-badge"}>{user.premium ? "Premium" : "Звичайний"}</span></td></tr>})}</tbody></table></div>}</article>
+    <WalletRegistry users={users} />
   </section>;
 }
 
