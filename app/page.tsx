@@ -859,73 +859,260 @@ function SupportAdminPanel({ onPresence }: { onPresence: (online: boolean, keepa
   return <SupportDesk available={available} onAvailability={changeAvailability} />;
 }
 
+type SupStatus = SupportTicket["status"];
+const supStatusLabel: Record<SupStatus, string> = { new: "Нове", in_progress: "У роботі", awaiting_rating: "Оцінка", closed: "Закрито" };
+const supStatusOrder: Record<SupStatus, number> = { new: 0, in_progress: 1, awaiting_rating: 2, closed: 3 };
+const supTonAddress = /^(UQ|EQ|0:)[A-Za-z0-9_-]{40,64}$/;
+const supQuickReplies = [
+  { title: "Привітання", text: "Вітаємо вас у технічній підтримці Nezeriya Wallet. Опишіть, будь ласка, вашу проблему — ми допоможемо." },
+  { title: "Статус платежу", text: "Перевіряємо інформацію щодо платежу. Будь ласка, надішліть ID транзакції або скріншот операції." },
+  { title: "Telegram Stars", text: "Щоб перевірити поповнення Telegram Stars, надішліть, будь ласка, скріншот або номер операції." },
+  { title: "Технічна проблема", text: "Опишіть проблему детальніше та надішліть скріншот. Це допоможе нам швидше знайти рішення." },
+  { title: "Ще питання?", text: "Чи можу я ще чимось допомогти?" },
+];
+
+function supInitials(name: string) {
+  const letters = name.replace(/^@/, "").replace(/[^\p{L}\p{N}]/gu, "");
+  return (letters.slice(0, 2) || "?").toUpperCase();
+}
+
+function supDay(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const day = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diff = Math.round((today.getTime() - day.getTime()) / 86_400_000);
+  if (diff === 0) return "Сьогодні";
+  if (diff === 1) return "Вчора";
+  return date.toLocaleDateString("uk-UA", { day: "numeric", month: "long" });
+}
+
+function supTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
+}
+
+function supShortTime(value: string) {
+  const day = supDay(value);
+  if (day === "Сьогодні") return supTime(value);
+  if (day === "Вчора") return "вчора";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" });
+}
+
+function SupAvatar({ ticket, size = "" }: { ticket: SupportTicket; size?: "" | "lg" | "xl" }) {
+  return <span className={`sup-av ${size}`} data-st={ticket.status} style={{ background: regColors[regHash(ticket.id) % regColors.length] }}>{supInitials(ticket.client_name || ticket.client_username || "?")}</span>;
+}
+
 function SupportDesk({ available, onAvailability }: { available?: boolean; onAvailability?: () => void }) {
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [selectedId, setSelectedId] = useState("");
-  const [ticketSection, setTicketSection] = useState<"orders" | "chats">("orders");
+  const [tab, setTab] = useState<"all" | SupStatus>("all");
+  const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const faqTemplates = [
-    { title: "Вітання", text: "Вітаємо вас у технічній підтримці Nezeriya Wallet. Опишіть, будь ласка, вашу проблему — ми допоможемо." },
-    { title: "Статус платежу", text: "Перевіряємо інформацію щодо платежу. Будь ласка, надішліть ID транзакції або скріншот операції." },
-    { title: "Telegram Stars", text: "Щоб перевірити поповнення Telegram Stars, надішліть, будь ласка, скріншот або номер операції." },
-    { title: "Технічна проблема", text: "Опишіть проблему детальніше та надішліть скріншот. Це допоможе нам швидше знайти рішення." },
-  ];
-  const orders = tickets.filter((ticket) => ticket.status === "new");
-  const chats = tickets.filter((ticket) => ticket.status === "in_progress");
-  const visibleTickets = ticketSection === "orders" ? orders : chats;
-  const selected = visibleTickets.find((ticket) => ticket.id === selectedId) || visibleTickets[0];
-  const responseTimer = responseTimerState(selected, now);
+  const [confirmClose, setConfirmClose] = useState(false);
+  // On narrow screens the client card overlays the chat, so it starts closed.
+  const [showInfo, setShowInfo] = useState(() => typeof window === "undefined" || window.innerWidth > 1280);
+  const [statusMenu, setStatusMenu] = useState(false);
+  const [copied, setCopied] = useState("");
+  const messagesRef = useRef<HTMLDivElement>(null);
+
   const headers = () => {
     const token = window.sessionStorage.getItem("nezaria_access_token");
     const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
     return { Authorization: `Bearer ${token || ""}`, ...(ownerSession ? { "x-owner-session": ownerSession } : {}) };
   };
   const load = async (sync = true) => {
-    if (!loading) setSyncing(true);
     try {
       const response = await fetch(`/api/support/tickets${sync ? "?sync=1" : ""}`, { headers: headers() });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) setError(result.error || "Не вдалося завантажити звернення.");
       else {
-        const nextTickets = result.tickets || [];
+        const nextTickets: SupportTicket[] = result.tickets || [];
         setTickets(nextTickets);
         setError("");
-        setSelectedId((current) => current && nextTickets.some((ticket: SupportTicket) => ticket.id === current) ? current : (nextTickets[0]?.id || ""));
+        setSelectedId((current) => current && nextTickets.some((ticket) => ticket.id === current) ? current : "");
       }
-    } finally { setLoading(false); setSyncing(false); }
+    } finally { setLoading(false); }
   };
   useEffect(() => { void load(); const interval = window.setInterval(() => void load(), 5000); return () => window.clearInterval(interval); }, []);
   useEffect(() => { const interval = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(interval); }, []);
-  const action = async (actionName: "take" | "skip" | "send" | "close") => {
+  useEffect(() => {
+    if (!statusMenu) return;
+    const close = () => setStatusMenu(false);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [statusMenu]);
+
+  const counts = { all: tickets.length, new: 0, in_progress: 0, awaiting_rating: 0, closed: 0 };
+  tickets.forEach((ticket) => { counts[ticket.status] += 1; });
+  const needle = query.trim().toLowerCase();
+  const lastOf = (ticket: SupportTicket) => ticket.messages.at(-1);
+  const lastAt = (ticket: SupportTicket) => Date.parse(lastOf(ticket)?.sent_at || ticket.updated_at) || 0;
+  const list = tickets.filter((ticket) => {
+    if (tab !== "all" && ticket.status !== tab) return false;
+    if (!needle) return true;
+    return [ticket.client_name, ticket.client_username || "", ...ticket.messages.map((item) => item.body)].join(" ").toLowerCase().includes(needle);
+  }).sort((a, b) => supStatusOrder[a.status] - supStatusOrder[b.status] || lastAt(b) - lastAt(a));
+  const desktopDefault = typeof window !== "undefined" && window.innerWidth > 860 ? list[0] : undefined;
+  const selected = tickets.find((ticket) => ticket.id === selectedId) || (selectedId ? undefined : desktopDefault);
+  const responseTimer = responseTimerState(selected, now);
+  const messageCount = selected?.messages.length || 0;
+
+  useEffect(() => {
+    const box = messagesRef.current;
+    if (box) box.scrollTop = box.scrollHeight;
+  }, [selected?.id, messageCount]);
+
+  const open = (ticket: SupportTicket) => { setSelectedId(ticket.id); setConfirmClose(false); setMessage(""); if (window.innerWidth <= 1280) setShowInfo(false); };
+  const action = async (actionName: "take" | "send" | "close", text = message) => {
     if (!selected || busy) return;
-    if (actionName === "send" && !message.trim()) return;
+    if (actionName === "send" && !text.trim()) return;
     setBusy(true);
-    const response = await fetch("/api/support/tickets", { method: "POST", headers: { "Content-Type": "application/json", ...headers() }, body: JSON.stringify({ action: actionName, ticketId: selected.id, message }) });
+    const response = await fetch("/api/support/tickets", { method: "POST", headers: { "Content-Type": "application/json", ...headers() }, body: JSON.stringify({ action: actionName, ticketId: selected.id, message: text }) });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) setError(result.error || "Не вдалося виконати дію.");
     else {
-      setMessage("");
-      if (actionName === "skip") {
-        setTickets((current) => current.filter((ticket) => ticket.id !== selected.id));
-        setSelectedId((current) => current === selected.id ? "" : current);
-      } else {
-        if (actionName === "take") setTicketSection("chats");
-        await load(false);
-      }
+      setError("");
+      if (actionName === "send") setMessage("");
+      setSelectedId(selected.id);
+      await load(false);
     }
+    setConfirmClose(false);
     setBusy(false);
   };
-  const freshCount = orders.length;
-  const activeCount = chats.length;
-  return <section className="support-desk-page">
-    <section className="heading-row"><div><p className="eyebrow">NEZERIYA ADMIN</p><h1>Чати <span>підтримки</span></h1><p className="subtle">Нові повідомлення синхронізуються з акаунтом підтримки.</p></div>{onAvailability && <button className={`availability ${available ? "available" : "away"}`} onClick={onAvailability}><i />{available ? "Доступний" : "Не в мережі"}</button>}</section>
-    <section className="support-admin-summary"><article className="panel"><p>Нові звернення</p><strong>{freshCount}</strong><span>Очікують працівника</span></article><article className="panel"><p>У роботі</p><strong>{activeCount}</strong><span>Активних діалогів</span></article><article className="panel"><p>Усього чатів</p><strong>{tickets.length}</strong><span>Усі синхронізовані звернення</span></article></section>
-    {loading ? <article className="panel empty-applications">Синхронізуємо чати…</article> : error ? <article className="panel empty-applications">{error}</article> : <section className="support-desk"><aside className="ticket-list">{tickets.length === 0 ? <p>Нових звернень поки немає.</p> : tickets.map((ticket) => <button key={ticket.id} className={`ticket-item ${selected?.id === ticket.id ? "selected" : ""}`} onClick={() => setSelectedId(ticket.id)}><span className={`ticket-dot ${ticket.status}`} /><div><strong>{ticket.client_name}</strong><small>{ticket.messages.at(-1)?.body || "Нове звернення"}</small></div><em>{ticket.status === "new" ? "Нове" : ticket.status === "in_progress" ? "В роботі" : ticket.status === "awaiting_rating" ? "Оцінка" : "Закрито"}</em></button>)}</aside><article className="panel conversation">{selected ? <><div className="conversation-head"><div><h2>{selected.client_name}</h2><p>{selected.client_username ? `@${selected.client_username}` : "Telegram"}</p></div><div>{selected.status === "new" && <button className="take-ticket" disabled={busy} onClick={() => void action("take")}>Взяти в роботу</button>}{selected.status === "in_progress" && <button className="close-ticket" disabled={busy} onClick={() => void action("close")}>Закрити чат</button>}</div></div><div className="messages">{selected.messages.map((item) => <div className={`message ${item.sender_type}`} key={item.id}>{item.body}</div>)}</div>{selected.status === "in_progress" ? <form className="message-form" onSubmit={(event) => { event.preventDefault(); void action("send"); }}><input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Напишіть відповідь…" maxLength={4000} /><button disabled={busy}>Надіслати</button></form> : <p className="conversation-note">{selected.status === "new" ? "Візьміть чат у роботу, щоб відповісти клієнту." : selected.status === "awaiting_rating" ? "Клієнту надіслано запит на оцінку та відгук." : "Діалог завершено."}</p>}</> : <p>Виберіть звернення зліва.</p>}</article></section>}
+  const closeChat = () => {
+    if (!confirmClose) { setConfirmClose(true); window.setTimeout(() => setConfirmClose(false), 3000); return; }
+    void action("close");
+  };
+  const copy = (value: string) => {
+    const done = () => { setCopied(value); window.setTimeout(() => setCopied((current) => current === value ? "" : current), 1200); };
+    if (navigator.clipboard) void navigator.clipboard.writeText(value).then(done, done);
+    else done();
+  };
+
+  const thread: ReactNode[] = [];
+  if (selected) {
+    // Messages from the same side within five minutes form one group: the time
+    // is shown only under the last message of the group.
+    const sameGroup = (first: SupportMessage | undefined, second: SupportMessage | undefined) => Boolean(first && second && first.sender_type !== "system" && first.sender_type === second.sender_type && supDay(first.sent_at) === supDay(second.sent_at) && Date.parse(second.sent_at) - Date.parse(first.sent_at) < 5 * 60_000);
+    let previousDay = "";
+    selected.messages.forEach((item, index) => {
+      const previous = selected.messages[index - 1];
+      const day = supDay(item.sent_at);
+      const newDay = Boolean(day && day !== previousDay);
+      if (newDay) { thread.push(<div className="sup-day" key={`day-${item.id}`}>{day}</div>); previousDay = day; }
+      if (item.sender_type === "system") { thread.push(<div className="sup-sys" key={item.id}>{item.body}</div>); return; }
+      const startsGroup = !sameGroup(previous, item);
+      const continues = sameGroup(item, selected.messages[index + 1]);
+      const text = item.body.trim();
+      thread.push(<div className={`sup-m ${item.sender_type === "agent" ? "out" : "in"}${startsGroup && !newDay && previous?.sender_type !== "system" && previous ? " gap" : ""}${continues ? " cont" : ""}`} key={item.id}>
+        {supTonAddress.test(text)
+          ? <div className="sup-addr"><small>TON-адреса</small><div><code>{text}</code><button className={`sup-cp${copied === text ? " ok" : ""}`} aria-label="Копіювати адресу" onClick={() => copy(text)}>{regCopyIcon}</button></div></div>
+          : <div className="sup-bub">{item.body}</div>}
+        <span className="sup-meta">{item.sender_type === "agent" ? "Підтримка · " : ""}{supTime(item.sent_at)}</span>
+      </div>);
+    });
+  }
+
+  return <section className="sup">
+    <header className="sup-head">
+      <div><p className="ov-eyebrow">Nezeriya Admin</p><h1>Чати <span>підтримки</span></h1></div>
+      <div className="sup-stats" aria-label="Статистика">
+        <div><i className="sup-dot new" /><b>{counts.new}</b><span>нових</span></div>
+        <div><i className="sup-dot in_progress" /><b>{counts.in_progress}</b><span>у роботі</span></div>
+        <div><i className="sup-dot awaiting_rating" /><b>{counts.awaiting_rating}</b><span>на оцінці</span></div>
+        <div><b>{counts.all}</b><span>усього</span></div>
+      </div>
+      {onAvailability && <div className="sup-op">
+        <button className={`sup-op-btn${available ? "" : " off"}`} aria-haspopup="menu" aria-expanded={statusMenu} onClick={(event) => { event.stopPropagation(); setStatusMenu((current) => !current); }}>
+          <i />{available ? "Доступний" : "Не в мережі"}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+        </button>
+        {statusMenu && <div className="sup-op-menu" role="menu">
+          <button role="menuitem" onClick={() => { if (!available) onAvailability(); setStatusMenu(false); }}><i />Доступний<small>отримую нові чати</small></button>
+          <button role="menuitem" onClick={() => { if (available) onAvailability(); setStatusMenu(false); }}><i className="off" />Не в мережі<small>чати не призначаються</small></button>
+        </div>}
+      </div>}
+    </header>
+
+    {error && <p className="sup-error">{error}</p>}
+
+    <div className={`sup-body${selected ? " show-thread" : ""}${selected && showInfo ? "" : " no-info"}`}>
+      <section className="sup-pane sup-list-pane" aria-label="Список чатів">
+        <div className="sup-list-top">
+          <label className="reg-search sup-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+            <input type="search" value={query} placeholder="Пошук чату або повідомлення" autoComplete="off" onChange={(event) => setQuery(event.target.value)} />
+          </label>
+          <div className="sup-tabs" role="tablist">{([["all", "Усі"], ["new", "Нові"], ["in_progress", "У роботі"], ["awaiting_rating", "Оцінка"]] as const).map(([value, label]) => <button key={value} role="tab" aria-selected={tab === value} className={tab === value ? "active" : ""} onClick={() => setTab(value)}>{label}<i>{counts[value]}</i></button>)}</div>
+        </div>
+        {loading ? <p className="sup-list-empty">Синхронізуємо чати…</p> : list.length === 0 ? <p className="sup-list-empty">{tickets.length ? "Нічого не знайдено" : "Нових звернень поки немає"}</p> : <ul className="sup-list">{list.map((ticket) => {
+          const last = lastOf(ticket);
+          return <li key={ticket.id}><button className={`sup-item${selected?.id === ticket.id ? " active" : ""}`} onClick={() => open(ticket)}>
+            <SupAvatar ticket={ticket} />
+            <span className="sup-item-name">{ticket.client_name || "Без імені"}</span>
+            <span className="sup-item-time">{supShortTime(last?.sent_at || ticket.updated_at)}</span>
+            <span className="sup-item-last">{last?.sender_type === "agent" && <b>Ви: </b>}{last?.body || "Нове звернення"}</span>
+            <span className={`sup-pill ${ticket.status} small`}>{supStatusLabel[ticket.status]}</span>
+          </button></li>;
+        })}</ul>}
+      </section>
+
+      <section className="sup-pane sup-thread-pane" aria-label="Діалог">
+        {!selected ? <div className="sup-thread-empty">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z" /></svg>
+          <b>Оберіть чат зліва</b>
+          <span>Нові звернення позначені жовтою крапкою</span>
+        </div> : <>
+          <div className="sup-th-head">
+            <button className="sup-icon-btn sup-back" aria-label="До списку чатів" onClick={() => setSelectedId("")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg></button>
+            <SupAvatar ticket={selected} size="lg" />
+            <div className="sup-who"><b>{selected.client_name || "Без імені"}</b><span>{selected.client_username ? `@${selected.client_username}` : "Telegram"}</span></div>
+            <span className={`sup-pill ${selected.status}`}>{supStatusLabel[selected.status]}</span>
+            {responseTimer && <span className={`sup-timer${responseTimer.overdue ? " overdue" : ""}`}>{responseTimer.overdue ? "Прострочено" : "Відповісти за"} {responseTimer.value}</span>}
+            <div className="sup-th-actions">
+              {selected.status === "new" && <button className="sup-primary" disabled={busy} onClick={() => void action("take")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg>Взяти в роботу</button>}
+              {selected.status === "in_progress" && <button className={`sup-ghost${confirmClose ? " confirm" : ""}`} disabled={busy} onClick={closeChat}><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3" /><path d="m9 12 2 2 4-4" /></svg>{confirmClose ? "Точно закрити?" : "Закрити діалог"}</button>}
+              <button className="sup-icon-btn" aria-label="Інформація про клієнта" aria-pressed={showInfo} onClick={() => setShowInfo((current) => !current)}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg></button>
+            </div>
+          </div>
+
+          <div className="sup-msgs" ref={messagesRef} aria-live="polite">{thread}</div>
+
+          <div className="sup-composer">
+            {selected.status === "in_progress" ? <>
+              <div className="sup-quick">{supQuickReplies.map((reply) => <button key={reply.title} type="button" onClick={() => setMessage((current) => (current.trim() ? `${current.trim()} ` : "") + reply.text)}>{reply.title}</button>)}</div>
+              <form className="sup-input" onSubmit={(event) => { event.preventDefault(); void action("send"); }}>
+                <textarea rows={1} value={message} maxLength={4000} placeholder="Напишіть відповідь…  Enter — надіслати, Shift+Enter — новий рядок" onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void action("send"); } }} />
+                <button className="sup-send" type="submit" aria-label="Надіслати" disabled={busy || !message.trim()}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12 20 4l-6 16-3-7-7-1Z" /></svg></button>
+              </form>
+            </> : <div className="sup-locked">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
+              <span>{selected.status === "new" ? "Візьміть чат у роботу, щоб відповісти клієнту" : selected.status === "awaiting_rating" ? `Діалог закрито · ${selected.rating ? `оцінка клієнта ${selected.rating} з 5` : "очікуємо оцінку клієнта"}` : "Діалог завершено"}</span>
+            </div>}
+          </div>
+        </>}
+      </section>
+
+      {selected && showInfo && <aside className="sup-pane sup-info" aria-label="Клієнт">
+        <button className="sup-icon-btn sup-info-close" aria-label="Закрити картку клієнта" onClick={() => setShowInfo(false)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
+        <div className="sup-info-top"><SupAvatar ticket={selected} size="xl" /><b>{selected.client_name || "Без імені"}</b><span>{selected.client_username ? `@${selected.client_username}` : "Telegram"}</span></div>
+        <dl className="sup-kv">
+          {selected.client_username && <div><dt>Username</dt><dd>@{selected.client_username}<button className={`sup-cp${copied === `@${selected.client_username}` ? " ok" : ""}`} aria-label="Копіювати username" onClick={() => copy(`@${selected.client_username}`)}>{regCopyIcon}</button></dd></div>}
+          <div><dt>Статус</dt><dd><span className={`sup-pill ${selected.status} small`}>{supStatusLabel[selected.status]}</span></dd></div>
+          <div><dt>Відкрито</dt><dd>{supDay(selected.created_at)}, {supTime(selected.created_at)}</dd></div>
+          <div><dt>Остання активність</dt><dd>{supDay(selected.updated_at)}, {supTime(selected.updated_at)}</dd></div>
+          <div><dt>Повідомлень</dt><dd>{selected.messages.length}</dd></div>
+          <div><dt>Оператор</dt><dd>{selected.assigned_to ? "Призначено" : "—"}</dd></div>
+        </dl>
+        {selected.status === "awaiting_rating" && <div className="sup-rating">{selected.rating ? <><span>Оцінка клієнта</span><span className="sup-stars">{"★".repeat(selected.rating)}<i>{"★".repeat(Math.max(0, 5 - selected.rating))}</i></span></> : <span>Очікуємо оцінку клієнта</span>}</div>}
+        {selected.review && <p className="sup-review">«{selected.review}»</p>}
+      </aside>}
+    </div>
   </section>;
 }
 
