@@ -388,15 +388,15 @@ export default function Home() {
     }
   };
 
+  // The business page asks for confirmation and offers undo before calling this.
   const removeAcquiringBusiness = async (business: AcquiringBusiness) => {
-    if (!window.confirm(`Прибрати бізнес «${business.name}» (акаунт ${business.account}) зі сховища еквайрингу? Його товари, оплати й посилання теж буде видалено. Цю дію не можна скасувати.`)) return;
     const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
     const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session") || window.localStorage.getItem("nezeriya_owner_session");
-    if (!token || !ownerSession) return;
+    if (!token || !ownerSession) return false;
     const response = await fetch("/api/owner/acquiring", { method: "DELETE", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "x-owner-session": ownerSession }, body: JSON.stringify({ account: business.account, name: business.name }) }).catch(() => null);
-    setNotice(response?.ok ? `Бізнес «${business.name}» прибрано` : "Не вдалося прибрати бізнес");
-    window.setTimeout(() => setNotice(null), 2600);
-    if (response?.ok) await loadAcquiringMetrics();
+    if (!response?.ok) { setNotice("Не вдалося прибрати бізнес, його повернуто до списку"); window.setTimeout(() => setNotice(null), 2600); }
+    else await loadAcquiringMetrics();
+    return Boolean(response?.ok);
   };
 
   const loadAcquiringMetrics = async (showNotice = false) => {
@@ -730,7 +730,7 @@ export default function Home() {
       <section className="content">
 
         <div className="dashboard">
-          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} refreshing={usersRefreshing} onRefresh={() => void refreshUsers(true)} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} summary={wheelWinSummary} refreshing={winsRefreshing} onRefresh={() => void loadWheelWins(true)} onSilentRefresh={() => void loadWheelWins()} /> : active === "Магазин" ? <ShopPanel walletMetrics={walletMetrics} /> : active === "Бізнес" ? <BusinessPanel metrics={acquiringMetrics} businesses={acquiringBusinesses} refreshing={acquiringRefreshing} onRefresh={() => void loadAcquiringMetrics(true)} onRemove={(business) => void removeAcquiringBusiness(business)} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} selectedMonth={financeMonth} selectedTurnoverYear={financeTurnoverYear} onSelectedMonthChange={setFinanceMonth} onSelectedTurnoverYearChange={setFinanceTurnoverYear} /> : <OverviewPanel walletMetrics={walletMetrics} metricsError={metricsError} fallbackFeature={fallbackFeature} fallbackFeatureValue={fallbackFeatureValue} period={period} onPeriod={setPeriod} refreshing={usersRefreshing} onRefresh={refresh} onOpenSupport={() => { setActive("Підтримка"); setNotice("Чергу звернень відкрито"); }} />}
+          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} refreshing={usersRefreshing} onRefresh={() => void refreshUsers(true)} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} summary={wheelWinSummary} refreshing={winsRefreshing} onRefresh={() => void loadWheelWins(true)} onSilentRefresh={() => void loadWheelWins()} /> : active === "Магазин" ? <ShopPanel walletMetrics={walletMetrics} /> : active === "Бізнес" ? <BusinessPanel metrics={acquiringMetrics} businesses={acquiringBusinesses} refreshing={acquiringRefreshing} onRefresh={() => void loadAcquiringMetrics(true)} onRemove={removeAcquiringBusiness} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} selectedMonth={financeMonth} selectedTurnoverYear={financeTurnoverYear} onSelectedMonthChange={setFinanceMonth} onSelectedTurnoverYearChange={setFinanceTurnoverYear} /> : <OverviewPanel walletMetrics={walletMetrics} metricsError={metricsError} fallbackFeature={fallbackFeature} fallbackFeatureValue={fallbackFeatureValue} period={period} onPeriod={setPeriod} refreshing={usersRefreshing} onRefresh={refresh} onOpenSupport={() => { setActive("Підтримка"); setNotice("Чергу звернень відкрито"); }} />}
         </div>
       </section>
       {notice && <div className="toast">✓ {notice}</div>}
@@ -1123,13 +1123,202 @@ function ShopPanel({ walletMetrics: _walletMetrics }: { walletMetrics: WalletMet
   </section>;
 }
 
-function BusinessPanel({ metrics, businesses, refreshing, onRefresh, onRemove }: { metrics: AcquiringMetrics | null; businesses: AcquiringBusiness[]; refreshing: boolean; onRefresh: () => void; onRemove: (business: AcquiringBusiness) => void }) {
-  const value = (key: keyof AcquiringMetrics) => metrics ? displayMetric(metrics[key]) : "—";
-  const date = (value: string | null) => value ? new Date(value).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
-  return <section className="users-page">
-    <section className="heading-row"><div><p className="eyebrow">ЕКВАЙРИНГ</p><h1>Бізнеси <span>Nezeriya Pay</span></h1><p className="subtle">Усі створені профілі бізнесів синхронізуються зі сховищем еквайрингу.</p></div><div className="heading-actions"><button className="outline-button" type="button" onClick={onRefresh} disabled={refreshing}>{refreshing ? "Оновлення..." : "↻ Оновити"}</button><span className="live"><i /> LIVE</span></div></section>
-    <section className="users-summary"><article className="panel users-primary"><p>Створено бізнесів</p><strong>{value("businesses")}</strong><span>Усі бізнес-профілі в еквайрингу</span></article><article className="panel"><p>Акаунти еквайрингу</p><strong>{value("merchants")}</strong><span>Унікальні власники бізнесів</span></article><article className="panel"><p>Товари</p><strong>{value("products")}</strong><span>Додано до каталогів бізнесів</span></article><article className="panel"><p>Оплати</p><strong>{value("payments")}</strong><span>Усі збережені платежі</span></article><article className="panel"><p>Платіжні посилання</p><strong>{value("paymentLinks")}</strong><span>Створено для приймання оплат</span></article><article className="panel"><p>Заявки на виплату</p><strong>{value("payouts")}</strong><span>Усі збережені виплати</span></article></section>
-    <article className="panel users-table-panel"><div className="panel-head"><div><p className="panel-label">РЕЄСТР ЕКВАЙРИНГУ</p><h2>Створені бізнеси</h2></div><span>{businesses.length} бізнесів показано</span></div>{businesses.length === 0 ? <p className="users-empty">Бізнесів у сховищі еквайрингу поки немає.</p> : <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Бізнес</th><th>Тип</th><th>Власність</th><th>Акаунт еквайрингу</th><th>Активи</th><th>Оновлено</th><th /></tr></thead><tbody>{businesses.map((business, index) => <tr key={`${business.account}-${business.name}-${index}`}><td><strong>{business.name}</strong></td><td>{business.type}</td><td>{business.ownership}</td><td>{business.account}</td><td className="nzr-points">{business.assets.length ? business.assets.join(", ") : "—"}</td><td>{date(business.updatedAt)}</td><td><button className="business-remove" type="button" onClick={() => onRemove(business)}>Прибрати</button></td></tr>)}</tbody></table></div>}</article>
+type BizSort = "name" | "type" | "ownership" | "account" | "updated";
+const bizIcons = {
+  biz: <><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8.5 7V5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2" /></>,
+  acct: <><circle cx="12" cy="8" r="4" /><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6" /></>,
+  prod: <><path d="M21 8 12 3 3 8v8l9 5 9-5V8Z" /><path d="m3 8 9 5 9-5M12 13v8" /></>,
+  link: <><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></>,
+  pay: <><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20M6 15h4" /></>,
+  out: <><path d="M12 3v12M7 10l5 5 5-5" /><path d="M4 21h16" /></>,
+  cafe: <><path d="M4 8h13v5a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6V8Z" /><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17M8 2v3M12 2v3" /></>,
+  trash: <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />,
+  dup: <><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M4 16V6a2 2 0 0 1 2-2h10" /></>,
+  warn: <><path d="M12 3 2 20h20L12 3Z" /><path d="M12 10v4M12 17h.01" /></>,
+};
+
+function BizIcon({ name }: { name: keyof typeof bizIcons }) {
+  return <svg viewBox="0 0 24 24" aria-hidden="true">{bizIcons[name]}</svg>;
+}
+
+function bizKey(business: AcquiringBusiness) {
+  return `${business.account}|${business.name}`;
+}
+
+function bizAgo(ts: number, now: number) {
+  const hours = Math.floor((now - ts) / 3_600_000);
+  if (hours < 1) return "щойно";
+  if (hours < 24) return `${hours} год тому`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? "вчора" : `${days} дн тому`;
+}
+
+function BusinessPanel({ metrics, businesses, refreshing, onRefresh, onRemove }: { metrics: AcquiringMetrics | null; businesses: AcquiringBusiness[]; refreshing: boolean; onRefresh: () => void; onRemove: (business: AcquiringBusiness) => Promise<boolean> }) {
+  const [query, setQuery] = useState("");
+  const [type, setType] = useState("all");
+  const [state, setState] = useState<"all" | "ready" | "attention">("all");
+  const [sort, setSort] = useState<{ key: BizSort; dir: "asc" | "desc" }>({ key: "updated", dir: "desc" });
+  const [pending, setPending] = useState<string | null>(null);
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
+  const [undo, setUndo] = useState<{ key: string; business: AcquiringBusiness } | null>(null);
+  const [copied, setCopied] = useState("");
+  const [now, setNow] = useState(() => Date.now());
+  const undoTimer = useRef<number | null>(null);
+  const pendingTimer = useRef<number | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [seen, setSeen] = useState(() => ({ businesses, at: now }));
+  if (seen.businesses !== businesses) setSeen({ businesses, at: now });
+
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const tag = (document.activeElement?.tagName || "").toUpperCase();
+      if (event.key === "/" && tag !== "INPUT" && tag !== "SELECT" && tag !== "TEXTAREA") { event.preventDefault(); searchRef.current?.focus(); }
+      if (event.key === "Escape") setPending(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  const list = businesses.filter((business) => !hidden.has(bizKey(business)));
+  const groups = new Map<string, number>();
+  list.forEach((business) => { const key = `${business.name}|${business.type}|${business.ownership}`.toLowerCase(); groups.set(key, (groups.get(key) || 0) + 1); });
+  const rows = list.map((business) => {
+    const duplicate = (groups.get(`${business.name}|${business.type}|${business.ownership}`.toLowerCase()) || 0) > 1;
+    const noAssets = !business.assets.length;
+    const updated = business.updatedAt ? Date.parse(business.updatedAt) : 0;
+    return { business, key: bizKey(business), duplicate, noAssets, attention: duplicate || noAssets, updated };
+  });
+  const types = [...rows.reduce((map, row) => map.set(row.business.type, (map.get(row.business.type) || 0) + 1), new Map<string, number>()).entries()];
+  const needle = query.trim().replace(/^@/, "").toLowerCase();
+  const direction = sort.dir === "asc" ? 1 : -1;
+  const visible = rows.filter((row) => {
+    if (type !== "all" && row.business.type !== type) return false;
+    if (state === "ready" && row.attention) return false;
+    if (state === "attention" && !row.attention) return false;
+    if (needle && !`${row.business.name} ${row.business.account}`.toLowerCase().replace(/@/g, "").includes(needle)) return false;
+    return true;
+  }).sort((a, b) => {
+    const first = sort.key === "updated" ? a.updated : String(a.business[sort.key] || "").toLowerCase();
+    const second = sort.key === "updated" ? b.updated : String(b.business[sort.key] || "").toLowerCase();
+    return first < second ? -direction : first > second ? direction : 0;
+  });
+  const ready = rows.filter((row) => !row.attention).length;
+
+  const totals = { businesses: list.length, accounts: new Set(list.map((business) => business.account)).size, products: metrics?.products ?? 0, links: metrics?.paymentLinks ?? 0, payments: metrics?.payments ?? 0, payouts: metrics?.payouts ?? 0 };
+  const steps: { label: string; hint: string; icon: keyof typeof bizIcons; value: number }[] = [
+    { label: "Створено бізнесів", hint: "Бізнес-профілі в еквайрингу", icon: "biz", value: totals.businesses },
+    { label: "Акаунти еквайрингу", hint: "Унікальні власники", icon: "acct", value: totals.accounts },
+    { label: "Товари", hint: "У каталогах бізнесів", icon: "prod", value: totals.products },
+    { label: "Платіжні посилання", hint: "Для приймання оплат", icon: "link", value: totals.links },
+    { label: "Оплати", hint: "Збережені платежі", icon: "pay", value: totals.payments },
+    { label: "Заявки на виплату", hint: "Збережені виплати", icon: "out", value: totals.payouts },
+  ];
+  const stepMax = Math.max(1, ...steps.map((step) => step.value));
+  const funnelNote = totals.businesses ? `Оплати отримали ${Math.min(totals.payments, totals.businesses)} з ${totals.businesses} бізнесів${totals.payouts ? "" : " · виплат ще не було"}` : "";
+
+  const changeSort = (key: BizSort) => setSort((previous) => previous.key === key ? { key, dir: previous.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "updated" ? "desc" : "asc" });
+  const copy = (value: string) => {
+    const done = () => { setCopied(value); window.setTimeout(() => setCopied((current) => current === value ? "" : current), 1200); };
+    if (navigator.clipboard) void navigator.clipboard.writeText(value).then(done, done);
+    else done();
+  };
+  const remove = (business: AcquiringBusiness) => {
+    const key = bizKey(business);
+    if (pending !== key) {
+      setPending(key);
+      if (pendingTimer.current) window.clearTimeout(pendingTimer.current);
+      pendingTimer.current = window.setTimeout(() => setPending((current) => current === key ? null : current), 3500);
+      return;
+    }
+    setPending(null);
+    // A removal still waiting for its undo window is carried out right away.
+    if (undo && undoTimer.current) { window.clearTimeout(undoTimer.current); commit(undo.key, undo.business); }
+    // Hide the row at once and give five seconds to undo before the store changes.
+    setHidden((current) => new Set(current).add(key));
+    setUndo({ key, business });
+    undoTimer.current = window.setTimeout(() => { setUndo(null); commit(key, business); }, 5000);
+  };
+  const commit = (key: string, business: AcquiringBusiness) => {
+    undoTimer.current = null;
+    void onRemove(business).then((ok) => {
+      if (!ok) setHidden((current) => { const next = new Set(current); next.delete(key); return next; });
+    });
+  };
+  const cancelRemove = () => {
+    if (!undo) return;
+    if (undoTimer.current) window.clearTimeout(undoTimer.current);
+    undoTimer.current = null;
+    setHidden((current) => { const next = new Set(current); next.delete(undo.key); return next; });
+    setUndo(null);
+  };
+  const header: [BizSort | null, string][] = [["name", "Бізнес"], ["type", "Тип"], ["ownership", "Власність"], ["account", "Акаунт еквайрингу"], [null, "Активи"], ["updated", "Оновлено"], [null, ""]];
+  const seconds = Math.max(0, Math.round((now - seen.at) / 1000));
+  const dateTime = (ts: number) => ts ? new Date(ts).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+
+  return <section className="biz-page aud">
+    <header className="aud-head">
+      <div><p className="aud-crumbs reg-eyebrow">Еквайринг</p><h1>Бізнеси <span>Nezeriya Pay</span></h1><p className="aud-hint">Профілі бізнесів синхронізуються зі сховищем еквайрингу</p></div>
+      <button className={`aud-live${refreshing ? " loading" : ""}`} type="button" onClick={onRefresh} disabled={refreshing} title="Оновити зараз"><i />{refreshing ? "Оновлення…" : seconds < 5 ? "Live · щойно" : `Live · ${seconds} с тому`}</button>
+    </header>
+
+    <section className="aud-card biz-funnel-card" aria-labelledby="bizFunnelTitle">
+      <div className="aud-row"><div><p className="aud-crumbs reg-eyebrow">Шлях бізнесу</p><h2 id="bizFunnelTitle">Від реєстрації до виплати</h2></div><span className="aud-hint">{funnelNote}</span></div>
+      <ol className="biz-funnel">{steps.map((step, index) => {
+        const next = steps[index + 1];
+        const conversion = next && step.value ? Math.round(next.value / step.value * 100) : null;
+        return <li key={step.label} className={`biz-step${index === 0 ? " first" : ""}${step.value === 0 ? " zero" : ""}${conversion !== null && conversion < 50 ? " drop" : ""}`}>
+          <span className="biz-step-ic"><BizIcon name={step.icon} /></span>
+          <span className="biz-step-lbl">{step.label}</span>
+          <b className="biz-step-val">{step.value}</b>
+          <span className="biz-step-hint">{step.hint}</span>
+          <span className="biz-step-lvl"><i style={{ width: `${step.value / stepMax * 100}%` }} /></span>
+          {conversion !== null && <span className="biz-step-conv" title="Перехід до наступного кроку">{conversion}%</span>}
+        </li>;
+      })}</ol>
+    </section>
+
+    <section className="reg-card" aria-labelledby="bizRegistryTitle">
+      <div className="reg-head">
+        <div><p className="aud-crumbs reg-eyebrow">Реєстр еквайрингу</p><h2 id="bizRegistryTitle">Створені бізнеси</h2></div>
+        <div className="reg-stats">{([["Бізнесів", list.length], ["Готові", ready], ["Потребують уваги", list.length - ready]] as const).map(([label, count]) => <div key={label}><span>{label}</span><b>{count}</b></div>)}</div>
+      </div>
+
+      <div className="reg-toolbar">
+        <label className="reg-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+          <input ref={searchRef} type="search" value={query} placeholder="Пошук: назва бізнесу або акаунт" autoComplete="off" onChange={(event) => setQuery(event.target.value)} />
+          <kbd>/</kbd>
+        </label>
+        <div className="side2-switch reg-segment" role="group" aria-label="Тип"><button className={type === "all" ? "selected" : ""} onClick={() => setType("all")}>Усі типи</button>{types.map(([name, count]) => <button key={name} className={type === name ? "selected" : ""} onClick={() => setType(name)}>{name} · {count}</button>)}</div>
+        <div className="side2-switch reg-segment" role="group" aria-label="Стан">{([["all", "Усі"], ["ready", "Готові"], ["attention", "Потребують уваги"]] as const).map(([value, label]) => <button key={value} className={state === value ? "selected" : ""} onClick={() => setState(value)}>{label}</button>)}</div>
+      </div>
+
+      <div className="biz-list" role="table">
+        <div className="biz-head" role="row">{header.map(([key, label], index) => key
+          ? <span key={label} role="columnheader" aria-sort={sort.key === key ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}><button type="button" onClick={() => changeSort(key)}>{label}{regSortIcon}</button></span>
+          : <span key={`col-${index}`} role="columnheader">{label}</span>)}</div>
+        {visible.map((row) => {
+          const { business } = row;
+          const initials = business.name.replace(/[^\p{L}\p{N} ]/gu, "").split(/\s+/).map((word) => word.charAt(0)).join("").slice(0, 2).toUpperCase() || "?";
+          const confirming = pending === row.key;
+          return <div className="biz-row" role="row" key={row.key}>
+            <div className="biz-name"><span className="biz-logo" style={{ background: regColors[regHash(business.name) % regColors.length] }}>{initials}</span><div><b>{business.name}</b>{(row.duplicate || row.noAssets) && <span className="biz-flags">{row.duplicate && <span className="biz-flag dup" title="Є інший бізнес з такою ж назвою, типом і власністю"><BizIcon name="dup" />Можливий дублікат</span>}{row.noAssets && <span className="biz-flag warn"><BizIcon name="warn" />Активи не налаштовані</span>}</span>}</div></div>
+            <div className="biz-meta">
+              <span><span className="biz-type"><BizIcon name={business.type === "Кафе" ? "cafe" : "biz"} />{business.type}</span></span>
+              <span className={`biz-own${business.ownership && business.ownership !== "—" ? "" : " none"}`}>{business.ownership || "—"}</span>
+              <span className="biz-acct"><span>{business.account}</span><button className={`reg-cp biz-cp${copied === business.account ? " ok" : ""}`} aria-label="Копіювати акаунт" onClick={() => copy(business.account)}>{regCopyIcon}</button></span>
+              <span className="biz-assets">{row.noAssets ? <span className="biz-none">—</span> : business.assets.map((asset) => { const kind = asset.toLowerCase() === "usdt" ? "usdt" : asset.toLowerCase() === "gram" ? "gram" : "other"; return <span key={asset} className={`biz-tok ${kind}`}><i>{kind === "usdt" ? "₮" : asset.charAt(0)}</i>{asset}</span>; })}</span>
+              <span className="biz-upd" title={dateTime(row.updated)}>{row.updated ? <><b>{dateTime(row.updated).split(", ")[0]}</b><span>{dateTime(row.updated).split(", ")[1]} · {bizAgo(row.updated, now)}</span></> : <b>—</b>}</span>
+            </div>
+            <div className="biz-actions"><button className={`biz-remove${confirming ? " confirm" : ""}`} onClick={() => remove(business)}><BizIcon name="trash" />{confirming ? "Точно прибрати?" : "Прибрати"}</button></div>
+          </div>;
+        })}
+        {visible.length === 0 && <div className="reg-nothing"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg><div><b>{businesses.length ? "Нічого не знайдено" : "Бізнесів у сховищі еквайрингу поки немає"}</b><span>{businesses.length ? "Змініть пошук або фільтр." : ""}</span></div></div>}
+      </div>
+    </section>
+
+    {undo && <div className="biz-undo" role="status">Бізнес «{undo.business.name}» прибрано<button onClick={cancelRemove}>Скасувати</button></div>}
   </section>;
 }
 
