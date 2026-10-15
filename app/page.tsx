@@ -730,7 +730,7 @@ export default function Home() {
       <section className="content">
 
         <div className="dashboard">
-          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} refreshing={usersRefreshing} onRefresh={() => void refreshUsers(true)} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} summary={wheelWinSummary} refreshing={winsRefreshing} onRefresh={() => void loadWheelWins(true)} /> : active === "Магазин" ? <ShopPanel walletMetrics={walletMetrics} /> : active === "Бізнес" ? <BusinessPanel metrics={acquiringMetrics} businesses={acquiringBusinesses} refreshing={acquiringRefreshing} onRefresh={() => void loadAcquiringMetrics(true)} onRemove={(business) => void removeAcquiringBusiness(business)} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} selectedMonth={financeMonth} selectedTurnoverYear={financeTurnoverYear} onSelectedMonthChange={setFinanceMonth} onSelectedTurnoverYearChange={setFinanceTurnoverYear} /> : <OverviewPanel walletMetrics={walletMetrics} metricsError={metricsError} fallbackFeature={fallbackFeature} fallbackFeatureValue={fallbackFeatureValue} period={period} onPeriod={setPeriod} refreshing={usersRefreshing} onRefresh={refresh} onOpenSupport={() => { setActive("Підтримка"); setNotice("Чергу звернень відкрито"); }} />}
+          {workspaceMode === "admin" ? <SupportAdminPanel onPresence={setSupportPresence} /> : active === "Медійка" ? <MediaOwnerPanel /> : active === "Команда" ? <ApplicationsPanel /> : active === "Працівники" ? <EmployeesPanel /> : active === "Користувачі" ? <UsersPanel walletMetrics={walletMetrics} users={walletUsers} refreshing={usersRefreshing} onRefresh={() => void refreshUsers(true)} /> : active === "Виграші" ? <WinsPanel wins={wheelWins} summary={wheelWinSummary} refreshing={winsRefreshing} onRefresh={() => void loadWheelWins(true)} onSilentRefresh={() => void loadWheelWins()} /> : active === "Магазин" ? <ShopPanel walletMetrics={walletMetrics} /> : active === "Бізнес" ? <BusinessPanel metrics={acquiringMetrics} businesses={acquiringBusinesses} refreshing={acquiringRefreshing} onRefresh={() => void loadAcquiringMetrics(true)} onRemove={(business) => void removeAcquiringBusiness(business)} /> : active === "Фінанси" ? <FinancePanel walletMetrics={walletMetrics} selectedMonth={financeMonth} selectedTurnoverYear={financeTurnoverYear} onSelectedMonthChange={setFinanceMonth} onSelectedTurnoverYearChange={setFinanceTurnoverYear} /> : <OverviewPanel walletMetrics={walletMetrics} metricsError={metricsError} fallbackFeature={fallbackFeature} fallbackFeatureValue={fallbackFeatureValue} period={period} onPeriod={setPeriod} refreshing={usersRefreshing} onRefresh={refresh} onOpenSupport={() => { setActive("Підтримка"); setNotice("Чергу звернень відкрито"); }} />}
         </div>
       </section>
       {notice && <div className="toast">✓ {notice}</div>}
@@ -1506,11 +1506,274 @@ function UsersPanel({ walletMetrics, users, refreshing, onRefresh }: { walletMet
   </section>;
 }
 
-function WinsPanel({ wins, summary, refreshing, onRefresh }: { wins: WheelWin[]; summary: WheelWinSummary; refreshing: boolean; onRefresh: () => void }) {
-  return <section className="users-page">
-    <section className="heading-row"><div><p className="eyebrow">РУЛЕТКА</p><h1>Виграші <span>користувачів</span></h1><p className="subtle">Реєстр призів, отриманих у рулетці Nezeriya Wallet.</p></div><div className="heading-actions"><button className="outline-button" type="button" onClick={onRefresh} disabled={refreshing}>{refreshing ? "Оновлення..." : "↻ Оновити"}</button><span className="live"><i /> LIVE</span></div></section>
-    <section className="users-summary"><article className="panel users-primary"><p>Виграли в іграх за місяць</p><strong>{displayMetric(summary.monthlyWonNzr)} NZR</strong><span>Рулетка: {displayMetric(summary.monthlyWheelWonNzr)} · Plinko: {displayMetric(summary.monthlyPlinkoWonNzr)}</span></article><article className="panel"><p>Зібрано ставок за місяць</p><strong>{displayMetric(summary.monthlyCollectedNzr)} NZR</strong><span>Рулетка: {displayMetric(summary.monthlyWheelSpentNzr)} · Plinko: {displayMetric(summary.monthlyPlinkoSpentNzr)}</span></article><article className="panel"><p>Чистий заробіток за місяць</p><strong>{displayMetric(summary.monthlyNetEarningsNzr)} NZR</strong><span>Зібрано ставок мінус виплачені виграші</span></article></section>
-    <article className="panel users-table-panel"><div className="panel-head"><div><p className="panel-label">ІСТОРІЯ ІГОР</p><h2>Останні результати рулетки та Plinko</h2></div><span>{wins.length} результатів показано</span></div>{wins.length === 0 ? <p className="users-empty">Результатів поки немає. Нові ігри з&apos;являться тут після завершення.</p> : <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Дата й час</th><th>Telegram ID</th><th>Користувач</th><th>Wallet ID</th><th>Що випало</th><th>Що отримав</th></tr></thead><tbody>{wins.map((win, index) => <tr key={`${win.id}-${win.walletId}-${index}`}><td>{new Date(win.createdAt).toLocaleString("uk-UA", { timeZone: "Europe/Kyiv", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}</td><td>{win.id}</td><td><strong>{win.username ? `@${win.username}` : win.name || "Без username"}</strong>{win.name && win.username && <small>{win.name}</small>}</td><td>{win.walletId}</td><td>{win.dropped}</td><td className="nzr-points">{win.reward}</td></tr>)}</tbody></table></div>}</article>
+type WinGame = "roulette" | "plinko";
+type WinRow = { key: string; ts: number; tgId: string; name: string; sub: string; walletId: string; game: WinGame; stake: number; payout: number; payoutLabel: string; outcome: string; mult: number | null; net: number };
+type WinSort = "ts" | "user" | "game" | "stake" | "outcome" | "payout" | "net";
+const winGameLabel: Record<WinGame, string> = { roulette: "Рулетка", plinko: "Plinko" };
+const winGameIcon: Record<WinGame, ReactNode> = {
+  roulette: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" /><path d="M12 3v6M12 15v6M3 12h6M15 12h6" /></svg>,
+  plinko: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.5" /><circle cx="8" cy="10" r="1.5" /><circle cx="16" cy="10" r="1.5" /><circle cx="5" cy="15" r="1.5" /><circle cx="12" cy="15" r="1.5" /><circle cx="19" cy="15" r="1.5" /><path d="M4 20h16" /></svg>,
+};
+const winNumber = new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 2 });
+const winOne = new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 1 });
+
+function winNzr(value: string) {
+  if (!value.toUpperCase().includes("NZR")) return null;
+  const found = value.replace(/\s/g, "").match(/-?\d+(?:[.,]\d+)?/);
+  return found ? Math.abs(Number(found[0].replace(",", "."))) : null;
+}
+
+function winSigned(value: number) {
+  return `${value > 0 ? "+" : value < 0 ? "−" : ""}${winNumber.format(Math.abs(value))}`;
+}
+
+function winRelative(ts: number, now: number) {
+  const seconds = Math.max(0, Math.round((now - ts) / 1000));
+  if (seconds < 60) return `${seconds} с тому`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} хв тому`;
+  if (seconds < 86_400) return `${Math.floor(seconds / 3600)} год тому`;
+  return new Date(ts).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+// Turns a wallet game record into a row: the wallet API sends Plinko as
+// "Plinko · ставка N NZR" and Roulette with the wheel number (wheel 1 costs
+// 10 NZR, wheel 2 costs 30 NZR); old USDT prizes have no known stake.
+function winRow(win: WheelWin): WinRow {
+  const dropped = String(win.dropped || "");
+  const reward = String(win.reward || "");
+  const plinko = /plinko/i.test(dropped);
+  const stake = plinko ? Number(dropped.match(/ставка\s*(\d+(?:[.,]\d+)?)/i)?.[1]?.replace(",", ".") || 0) : Number(win.wheel) === 1 ? 10 : Number(win.wheel) === 2 ? 30 : 0;
+  const nzr = winNzr(reward);
+  // Only old USDT prizes have an unknown value; an empty spin pays 0 NZR.
+  const unknownPrize = nzr === null && /usdt/i.test(reward);
+  const payout = nzr ?? 0;
+  // The wallet server runs in UTC and sends local date-times without a zone.
+  const createdAt = String(win.createdAt || "");
+  const ts = Date.parse(/(z|[+-]\d\d:?\d\d)$/i.test(createdAt) ? createdAt : `${createdAt}Z`) || 0;
+  return {
+    key: `${win.id}-${win.walletId}-${win.createdAt}-${dropped}-${reward}`,
+    ts,
+    tgId: String(win.id),
+    name: win.username ? `@${win.username}` : win.name || "Без username",
+    sub: win.username && win.name ? win.name : "",
+    walletId: String(win.walletId ?? ""),
+    game: plinko ? "plinko" : "roulette",
+    stake,
+    payout,
+    payoutLabel: unknownPrize ? reward : `${winNumber.format(payout)} NZR`,
+    outcome: plinko ? "" : dropped || "—",
+    mult: plinko && stake ? payout / stake : null,
+    net: unknownPrize ? 0 : payout - stake,
+  };
+}
+
+function WinsSplit({ roulette, plinko, signed = false, bar = true }: { roulette: number; plinko: number; signed?: boolean; bar?: boolean }) {
+  const total = roulette + plinko || 1;
+  const format = (value: number) => signed ? winSigned(value) : winNumber.format(value);
+  return <div className="win-split">
+    {bar && <div className="win-split-bar"><i style={{ width: `${Math.max(0, roulette) / total * 100}%`, background: "var(--win-roulette)" }} /><i style={{ flex: 1, background: "var(--win-plinko)" }} /></div>}
+    <div className="win-split-leg"><span><i className="r" />Рулетка <b>{format(roulette)}</b></span><span><i className="p" />Plinko <b>{format(plinko)}</b></span></div>
+  </div>;
+}
+
+function WinsPanel({ wins, summary, refreshing, onRefresh, onSilentRefresh }: { wins: WheelWin[]; summary: WheelWinSummary; refreshing: boolean; onRefresh: () => void; onSilentRefresh: () => void }) {
+  const [query, setQuery] = useState("");
+  const [game, setGame] = useState<"all" | WinGame>("all");
+  const [result, setResult] = useState<"all" | "win" | "loss">("all");
+  const [player, setPlayer] = useState<string | null>(null);
+  const [sort, setSort] = useState<{ key: WinSort; dir: "asc" | "desc" }>({ key: "ts", dir: "desc" });
+  const [size, setSize] = useState(() => {
+    try { const saved = JSON.parse(window.localStorage.getItem("nz-wins") || "{}"); if ([10, 25, 50, 100].includes(saved.size)) return saved.size as number; } catch { /* storage unavailable */ }
+    return 25;
+  });
+  const [page, setPage] = useState(1);
+  const [topBy, setTopBy] = useState<"payout" | "games">("payout");
+  const [now, setNow] = useState(() => Date.now());
+  const searchRef = useRef<HTMLInputElement>(null);
+  const historyRef = useRef<HTMLElement>(null);
+  const silentRefresh = useRef(onSilentRefresh);
+
+  // Identical records (same player, second and prize) get a counter, counted
+  // from the oldest game so keys stay the same when newer games arrive.
+  const rows = wins.map((win) => winRow(win));
+  const repeats = new Map<string, number>();
+  for (let index = rows.length - 1; index >= 0; index--) {
+    const count = repeats.get(rows[index].key) || 0;
+    repeats.set(rows[index].key, count + 1);
+    if (count) rows[index].key = `${rows[index].key}#${count}`;
+  }
+  const rowKeys = rows.map((row) => row.key).join("|");
+  // Games that arrived with the latest refresh are highlighted for a moment.
+  const [seen, setSeen] = useState(() => ({ keys: rowKeys, fresh: new Set<string>(), at: now }));
+  if (seen.keys !== rowKeys) {
+    const previous = new Set(seen.keys ? seen.keys.split("|") : []);
+    setSeen({ keys: rowKeys, fresh: seen.keys ? new Set(rows.map((row) => row.key).filter((key) => !previous.has(key))) : new Set(), at: now });
+  }
+  const fresh = seen.fresh;
+  const updatedAt = seen.at;
+
+  useEffect(() => { silentRefresh.current = onSilentRefresh; }, [onSilentRefresh]);
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => { const timer = window.setInterval(() => silentRefresh.current(), 30_000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => { try { window.localStorage.setItem("nz-wins", JSON.stringify({ size })); } catch { /* storage unavailable */ } }, [size]);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const tag = (document.activeElement?.tagName || "").toUpperCase();
+      if (event.key === "/" && tag !== "INPUT" && tag !== "SELECT" && tag !== "TEXTAREA") { event.preventDefault(); searchRef.current?.focus(); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  const won = summary.monthlyWonNzr;
+  const collected = summary.monthlyCollectedNzr;
+  const rtp = collected ? won / collected * 100 : 0;
+  const wheelRtp = summary.monthlyWheelSpentNzr ? summary.monthlyWheelWonNzr / summary.monthlyWheelSpentNzr * 100 : 0;
+  const plinkoRtp = summary.monthlyPlinkoSpentNzr ? summary.monthlyPlinkoWonNzr / summary.monthlyPlinkoSpentNzr * 100 : 0;
+
+  const needle = query.trim().replace(/^@/, "").toLowerCase();
+  const direction = sort.dir === "asc" ? 1 : -1;
+  const filtered = rows.filter((row) => {
+    if (game !== "all" && row.game !== game) return false;
+    if (result === "win" && row.net <= 0) return false;
+    if (result === "loss" && row.net >= 0) return false;
+    if (player && row.tgId !== player) return false;
+    if (needle && ![row.name, row.sub, row.tgId, row.walletId].join(" ").toLowerCase().includes(needle)) return false;
+    return true;
+  }).sort((a, b) => {
+    const value = (row: WinRow): string | number => sort.key === "user" ? row.name.replace(/^@/, "").toLowerCase() : sort.key === "outcome" ? (row.mult ?? row.payout) : row[sort.key];
+    const first = value(a), second = value(b);
+    return first < second ? -direction : first > second ? direction : b.ts - a.ts;
+  });
+  const pages = Math.max(1, Math.ceil(filtered.length / size));
+  const current = Math.min(page, pages);
+  const start = (current - 1) * size;
+  const slice = filtered.slice(start, start + size);
+  const pageList = [...new Set([1, pages, current - 1, current, current + 1].filter((item) => item >= 1 && item <= pages))].sort((a, b) => a - b);
+  const sumStake = filtered.reduce((sum, row) => sum + row.stake, 0);
+  const sumPayout = filtered.reduce((sum, row) => sum + row.payout, 0);
+  const filtersActive = Boolean(query || game !== "all" || result !== "all" || player);
+  const playerRow = player ? rows.find((row) => row.tgId === player) : undefined;
+
+  const topMap = new Map<string, { row: WinRow; payout: number; stake: number; games: number }>();
+  rows.forEach((row) => {
+    if (game !== "all" && row.game !== game) return;
+    const entry = topMap.get(row.tgId) || { row, payout: 0, stake: 0, games: 0 };
+    entry.payout += row.payout; entry.stake += row.stake; entry.games += 1;
+    topMap.set(row.tgId, entry);
+  });
+  const top = [...topMap.values()].sort((a, b) => b[topBy] - a[topBy]).slice(0, 8);
+  const topMax = top[0]?.[topBy] || 1;
+
+  const hours = Array.from({ length: 24 }, () => 0);
+  rows.forEach((row) => { if (row.ts) hours[new Date(row.ts).getHours()] += 1; });
+  const hoursMax = Math.max(1, ...hours);
+  const peakHour = hours.indexOf(Math.max(...hours));
+
+  const changeSort = (key: WinSort) => { setSort((previous) => previous.key === key ? { key, dir: previous.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "user" || key === "game" ? "asc" : "desc" }); setPage(1); };
+  const pickPlayer = (id: string) => { setPlayer((currentPlayer) => currentPlayer === id ? null : id); setPage(1); historyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  const reset = () => { setQuery(""); setGame("all"); setResult("all"); setPlayer(null); setPage(1); };
+  const avatar = (row: WinRow, small = false) => <span className={`reg-av${small ? " win-av-sm" : ""}`} style={{ background: regColors[regHash(row.tgId) % regColors.length] }}>{row.name.replace(/^@/, "").replace(/[^\p{L}\p{N}]/gu, "").slice(0, 2).toUpperCase() || "?"}</span>;
+  const header: [WinSort, string, boolean?][] = [["ts", "Час"], ["user", "Гравець"], ["game", "Гра"], ["stake", "Ставка", true], ["outcome", "Що випало"], ["payout", "Отримав", true], ["net", "Підсумок", true]];
+  const seconds = Math.max(0, Math.round((now - updatedAt) / 1000));
+
+  return <section className="win aud">
+    <header className="aud-head">
+      <div><p className="aud-crumbs reg-eyebrow">Рулетка і Plinko</p><h1>Виграші <span>користувачів</span></h1><p className="aud-hint">Реєстр призів, отриманих в іграх Nezeriya Wallet</p></div>
+      <button className={`aud-live${refreshing ? " loading" : ""}`} type="button" onClick={onRefresh} disabled={refreshing} title="Оновити зараз"><i />{refreshing ? "Оновлення…" : seconds < 5 ? "Live · щойно" : `Live · ${seconds} с тому`}</button>
+    </header>
+
+    <section className="win-kpis" aria-label="Підсумки місяця">
+      <article className="aud-card win-kpi">
+        <div className="aud-row"><p className="aud-label">Виплачено виграшів</p><span className="aud-chip">за місяць</span></div>
+        <div className="aud-stat"><span className="aud-num-l">{winNumber.format(won)}</span><span className="aud-unit">NZR</span></div>
+        <WinsSplit roulette={summary.monthlyWheelWonNzr} plinko={summary.monthlyPlinkoWonNzr} />
+      </article>
+      <article className="aud-card win-kpi">
+        <div className="aud-row"><p className="aud-label">Зібрано ставок</p><span className="aud-chip">за місяць</span></div>
+        <div className="aud-stat"><span className="aud-num-l">{winNumber.format(collected)}</span><span className="aud-unit">NZR</span></div>
+        <WinsSplit roulette={summary.monthlyWheelSpentNzr} plinko={summary.monthlyPlinkoSpentNzr} />
+      </article>
+      <article className="aud-card win-kpi win-net-card">
+        <div className="aud-row"><p className="aud-label">Чистий заробіток</p><span className="aud-chip">ставки − виграші</span></div>
+        <div className="aud-stat"><span className="aud-num-l win-accent">{winNumber.format(summary.monthlyNetEarningsNzr)}</span><span className="aud-unit">NZR</span></div>
+        <WinsSplit roulette={summary.monthlyWheelSpentNzr - summary.monthlyWheelWonNzr} plinko={summary.monthlyPlinkoSpentNzr - summary.monthlyPlinkoWonNzr} signed bar={false} />
+      </article>
+      <article className="aud-card win-kpi">
+        <div className="aud-row"><p className="aud-label">Повернення гравцям</p><span className="aud-chip">RTP</span></div>
+        <div className="aud-stat"><span className="aud-num-l">{winOne.format(rtp)}</span><span className="aud-unit">%</span></div>
+        <div className="win-rtp"><i style={{ width: `${Math.min(rtp, 100)}%` }} /></div>
+        <span className="aud-hint win-small">Маржа {winOne.format(100 - rtp)}% · рулетка {winOne.format(wheelRtp)}%, Plinko {winOne.format(plinkoRtp)}%</span>
+      </article>
+    </section>
+
+    <section className="win-grid">
+      <article className="reg-card win-history" ref={historyRef} aria-labelledby="winHistoryTitle">
+        <div className="reg-head win-head">
+          <div><p className="aud-crumbs reg-eyebrow">Історія ігор</p><h2 id="winHistoryTitle">Останні результати</h2></div>
+          <div className="reg-stats">{([["Ігор", winNumber.format(filtered.length)], ["Ставок", `${winNumber.format(sumStake)} NZR`], ["Виплачено", `${winNumber.format(sumPayout)} NZR`], ["Підсумок для нас", `${winSigned(sumStake - sumPayout)} NZR`]] as const).map(([label, value]) => <div key={label}><span>{label}</span><b>{value}</b></div>)}</div>
+        </div>
+
+        <div className="reg-toolbar">
+          <label className="reg-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+            <input ref={searchRef} type="search" value={query} placeholder="Пошук: @username, Telegram ID, Wallet ID" autoComplete="off" onChange={(event) => { setQuery(event.target.value); setPage(1); }} onKeyDown={(event) => { if (event.key === "Escape") { setQuery(""); setPage(1); } }} />
+            <kbd>/</kbd>
+          </label>
+          <div className="side2-switch reg-segment" role="group" aria-label="Гра">{([["all", "Усі ігри"], ["roulette", "Рулетка"], ["plinko", "Plinko"]] as const).map(([value, label]) => <button key={value} className={game === value ? "selected" : ""} onClick={() => { setGame(value); setPage(1); }}>{label}</button>)}</div>
+          <div className="side2-switch reg-segment" role="group" aria-label="Результат">{([["all", "Усі"], ["win", "У плюсі"], ["loss", "У мінусі"]] as const).map(([value, label]) => <button key={value} className={result === value ? "selected" : ""} onClick={() => { setResult(value); setPage(1); }}>{label}</button>)}</div>
+          {filtersActive && <button className="reg-reset" onClick={reset}>Скинути</button>}
+        </div>
+
+        {player && <div className="win-player-filter">Тільки гравець <b>{playerRow?.name || player}</b><button aria-label="Прибрати фільтр гравця" onClick={() => setPlayer(null)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg></button></div>}
+
+        <div className="reg-box win-box">
+          {rows.length === 0 ? <p className="users-empty reg-empty-text">Результатів поки немає. Нові ігри з&apos;являться тут після завершення.</p> : <table className="reg-table win-table">
+            <thead><tr>{header.map(([key, label, numeric]) => <th key={key} className={numeric ? "num" : ""} aria-sort={sort.key === key ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}><button type="button" onClick={() => changeSort(key)}>{label}{regSortIcon}</button></th>)}</tr></thead>
+            <tbody>{slice.map((row) => <tr key={row.key} className={fresh.has(row.key) ? "win-new" : ""}>
+              <td><div className="win-time" title={row.ts ? new Date(row.ts).toLocaleString("uk-UA") : ""}><b>{row.ts ? new Date(row.ts).toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—"}</b><span>{row.ts ? winRelative(row.ts, now) : ""}</span></div></td>
+              <td data-l="Гравець"><button className="win-user" title="Показати лише ігри цього гравця" onClick={() => pickPlayer(row.tgId)}>{avatar(row, true)}<span><span className="reg-name">{row.name}</span><span className="reg-sub win-mono">{row.tgId}</span></span></button></td>
+              <td data-l="Гра"><span className={`win-game ${row.game}`}>{winGameIcon[row.game]}{winGameLabel[row.game]}</span></td>
+              <td data-l="Ставка" className="num"><span className="win-stake">{row.stake ? winNumber.format(row.stake) : "—"}</span></td>
+              <td data-l="Що випало">{row.mult !== null ? <span className={`win-mult${row.mult >= 2 ? " hot" : row.mult < 1 ? " cold" : ""}`}>×{winOne.format(row.mult)}</span> : <span className="win-outcome">{row.outcome}</span>}</td>
+              <td data-l="Отримав" className="num"><span className={`win-pay${row.payout ? "" : " zero"}`}>{row.payoutLabel}</span></td>
+              <td data-l="Підсумок" className="num"><span className={`win-net ${row.net > 0 ? "pos" : row.net < 0 ? "neg" : "even"}`}>{winSigned(row.net)}</span></td>
+            </tr>)}</tbody>
+          </table>}
+          {rows.length > 0 && filtered.length === 0 && <div className="reg-nothing"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg><div><b>Нічого не знайдено</b><span>Змініть пошук або скиньте фільтри.</span></div></div>}
+        </div>
+
+        <div className="reg-foot">
+          <span className="aud-hint">{filtered.length ? `Показано ${winNumber.format(start + 1)}–${winNumber.format(start + slice.length)} з ${winNumber.format(filtered.length)}${filtered.length !== rows.length ? ` (усього ${winNumber.format(rows.length)})` : ""}` : "0 результатів"}</span>
+          <div className="reg-pager">
+            <div className="reg-select small"><select aria-label="Рядків на сторінці" value={size} onChange={(event) => { setSize(Number(event.target.value)); setPage(1); }}>{[10, 25, 50, 100].map((item) => <option key={item} value={item}>{item}</option>)}</select><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></div>
+            <button className="reg-pg" aria-label="Попередня сторінка" disabled={current <= 1} onClick={() => setPage(current - 1)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg></button>
+            {pageList.map((item, index) => <span key={item} className="reg-pg-group">{index > 0 && item - pageList[index - 1] > 1 && <span className="reg-gap">…</span>}<button className={`reg-pg${item === current ? " active" : ""}`} aria-current={item === current ? "page" : undefined} onClick={() => setPage(item)}>{item}</button></span>)}
+            <button className="reg-pg" aria-label="Наступна сторінка" disabled={current >= pages} onClick={() => setPage(current + 1)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></button>
+          </div>
+        </div>
+      </article>
+
+      <aside className="win-side">
+        <article className="aud-card win-top">
+          <div className="aud-row"><div><p className="aud-crumbs reg-eyebrow">Гравці</p><h2>Топ гравців</h2></div>
+            <div className="side2-switch win-mini" role="group" aria-label="Сортувати топ"><button className={topBy === "payout" ? "selected" : ""} onClick={() => setTopBy("payout")}>Виграші</button><button className={topBy === "games" ? "selected" : ""} onClick={() => setTopBy("games")}>Ігри</button></div>
+          </div>
+          {top.length ? <ol className="win-top-list">{top.map((entry, index) => <li key={entry.row.tgId}><button aria-pressed={player === entry.row.tgId} onClick={() => pickPlayer(entry.row.tgId)}>
+            <span className="win-rank">{index + 1}</span>{avatar(entry.row, true)}
+            <span className="win-top-mid"><b>{entry.row.name}</b><span className="win-top-bar"><i style={{ width: `${entry[topBy] / topMax * 100}%` }} /></span></span>
+            <span className="win-top-val"><b>{topBy === "payout" ? `${winNumber.format(entry.payout)} NZR` : `${winNumber.format(entry.games)} ігор`}</b><span>{topBy === "payout" ? `${winNumber.format(entry.games)} ігор` : `${winNumber.format(entry.payout)} NZR`} · {winSigned(entry.payout - entry.stake)}</span></span>
+          </button></li>)}</ol> : <p className="aud-hint">Немає даних</p>}
+          <p className="aud-hint win-small">Клік по гравцю — показати лише його ігри.</p>
+        </article>
+
+        <article className="aud-card win-hours-card">
+          <div><p className="aud-crumbs reg-eyebrow">Активність</p><h2>Ігри по годинах</h2></div>
+          <div className="win-hours">{hours.map((count, hour) => <span key={hour} className={hour === peakHour && count ? "peak" : ""} data-tip={`${String(hour).padStart(2, "0")}:00 · ${count} ігор`} aria-label={`${String(hour).padStart(2, "0")}:00 — ${count} ігор`}><i style={{ height: `${count / hoursMax * 100}%` }} /></span>)}</div>
+          <div className="win-hours-axis"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div>
+        </article>
+      </aside>
+    </section>
   </section>;
 }
 
