@@ -20,7 +20,7 @@ function headers(connection: Config, extra: HeadersInit = {}) {
   return { apikey: connection.key, Authorization: `Bearer ${connection.key}`, ...extra };
 }
 
-async function fetchStore(connection: Config, account: string): Promise<Store> {
+async function fetchStore(connection: Config, account: string): Promise<Store & { exists: boolean }> {
   const response = await fetch(`${connection.url}/rest/v1/acquiring_stores?account=eq.${encodeURIComponent(account)}&select=businesses,products_by_business&limit=1`, {
     headers: headers(connection), cache: "no-store",
   });
@@ -30,6 +30,9 @@ async function fetchStore(connection: Config, account: string): Promise<Store> {
   const saved = row?.products_by_business && typeof row.products_by_business === "object" ? row.products_by_business as Record<string, unknown> : {};
   const wrapped = saved.productsByBusiness && typeof saved.productsByBusiness === "object";
   return {
+    // A saved row with no businesses means the owner deleted them; the cabinet
+    // must not restore them from a stale browser cache.
+    exists: Boolean(row),
     businesses: Array.isArray(row?.businesses) ? row.businesses as Business[] : [],
     productsByBusiness: (wrapped ? saved.productsByBusiness : saved) as Record<string, Product[]>,
     paymentsByBusiness: wrapped && saved.paymentsByBusiness && typeof saved.paymentsByBusiness === "object" ? saved.paymentsByBusiness as Record<string, Payment[]> : {},

@@ -888,7 +888,7 @@ export default function AcquiringPage() {
     let migrated = false;
     const readStore = async () => {
       const response = await fetch(`/api/acquiring/store?account=${encodeURIComponent(account)}`, { cache: "no-store" });
-      return response.ok ? await response.json() as { businesses?: Business[]; productsByBusiness?: Record<string, Product[]>; paymentsByBusiness?: Record<string, Payment[]>; payoutsByBusiness?: Record<string, Payout[]>; linksByBusiness?: Record<string, PaymentLink[]>; payoutWallet?: string } : null;
+      return response.ok ? await response.json() as { exists?: boolean; businesses?: Business[]; productsByBusiness?: Record<string, Product[]>; paymentsByBusiness?: Record<string, Payment[]>; payoutsByBusiness?: Record<string, Payout[]>; linksByBusiness?: Record<string, PaymentLink[]>; payoutWallet?: string } : null;
     };
     const cacheStore = (state: { businesses: Business[]; productsByBusiness: Record<string, Product[]>; paymentsByBusiness: Record<string, Payment[]>; payoutsByBusiness: Record<string, Payout[]>; linksByBusiness: Record<string, PaymentLink[]>; payoutWallet: string }) => {
       localStorage.setItem("nezeriya_pay_businesses", JSON.stringify(state.businesses));
@@ -943,6 +943,13 @@ export default function AcquiringPage() {
           state = await restoreCachedCatalogue(state);
           if (await reconcileActiveLinks(state)) state = await readStore();
           if (active && state) applyStore(state);
+          return;
+        }
+        if (state.exists) {
+          // The account is already saved with no businesses: the owner deleted
+          // them. Clear the stale browser cache instead of restoring it.
+          setBusinesses([]);
+          cacheStore({ businesses: [], productsByBusiness: state.productsByBusiness || {}, paymentsByBusiness: state.paymentsByBusiness || {}, payoutsByBusiness: state.payoutsByBusiness || {}, linksByBusiness: state.linksByBusiness || {}, payoutWallet: state.payoutWallet || "" });
           return;
         }
         if (migrated) return;
