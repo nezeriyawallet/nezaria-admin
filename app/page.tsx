@@ -767,14 +767,49 @@ function OverviewPanel({ walletMetrics, metricsError, fallbackFeature, fallbackF
     ["Купівлі NZR", displayMetric(m?.nzrSwapBuy)], ["Покупки NZR за Stars", displayMetric(m?.nzrStars)],
   ];
   const totalIncome = m ? displayMetric(metricNumber(m.totalCommission) + metricNumber(m.nzrExchangeNetUsd), "$") : "—";
-  const peaks = m?.dailyOnlinePeaks || [];
+  // The chart shows every day of the selected year; until the year loads (or
+  // if the wallet API is older) it falls back to the last 30 days.
+  const thisYear = new Date().getFullYear();
+  const [peakYear, setPeakYear] = useState(thisYear);
+  const [yearPeaks, setYearPeaks] = useState<{ year: number; firstYear: number; peaks: DailyOnlinePeak[] } | null>(null);
+  useEffect(() => {
+    let active = true;
+    const load = () => {
+      const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token");
+      const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session") || window.localStorage.getItem("nezeriya_owner_session");
+      if (!token || !ownerSession) return;
+      void fetch(`/api/owner/online-peaks?year=${peakYear}`, { cache: "no-store", headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } })
+        .then((response) => response.ok ? response.json() : null)
+        .then((body) => { if (active && body && Array.isArray(body.peaks)) setYearPeaks({ year: Number(body.year), firstYear: Number(body.firstYear) || peakYear, peaks: body.peaks }); })
+        .catch(() => undefined);
+    };
+    load();
+    const timer = peakYear === thisYear ? window.setInterval(load, 60_000) : null;
+    return () => { active = false; if (timer) window.clearInterval(timer); };
+  }, [peakYear, thisYear]);
+  const shownYear = yearPeaks?.year === peakYear ? yearPeaks : null;
+  const yearMode = shownYear !== null;
+  const pad2 = (value: number) => String(value).padStart(2, "0");
+  const todayKey = (() => { const now = new Date(); return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`; })();
+  const peaks: (DailyOnlinePeak & { empty?: boolean; future?: boolean })[] = shownYear ? (() => {
+    const recorded = new Map(shownYear.peaks.map((item) => [item.date, item.peakOnline]));
+    const days = (peakYear % 4 === 0 && peakYear % 100 !== 0) || peakYear % 400 === 0 ? 366 : 365;
+    return Array.from({ length: days }, (_, index) => {
+      const date = new Date(Date.UTC(peakYear, 0, 1 + index));
+      const key = `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
+      return { date: key, peakOnline: recorded.get(key) ?? 0, empty: !recorded.has(key), future: key > todayKey };
+    });
+  })() : m?.dailyOnlinePeaks || [];
   const values = peaks.map((item) => metricNumber(item.peakOnline));
-  const max = Math.max(0, ...values);
+  const recordedValues = peaks.filter((item) => !item.empty && !item.future).map((item) => metricNumber(item.peakOnline));
+  const max = Math.max(0, ...recordedValues);
   const top = Math.max(2, Math.ceil(max / 2) * 2);
-  const average = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+  const average = recordedValues.length ? recordedValues.reduce((sum, value) => sum + value, 0) / recordedValues.length : 0;
   const step = Math.max(1, Math.ceil(peaks.length / 6));
   const shortDate = (value: string) => { const [, month, day] = value.split("-"); return day && month ? `${day}.${month}` : value; };
   const axis = peaks.flatMap((item, index) => index % step === 0 || index === peaks.length - 1 ? [index === peaks.length - 1 ? "Сьогодні" : shortDate(item.date)] : []);
+  const monthDays = Array.from({ length: 12 }, (_, month) => new Date(Date.UTC(peakYear, month + 1, 0)).getUTCDate());
+  const yearOptions = Array.from({ length: Math.max(1, thisYear - Math.min(yearPeaks?.firstYear ?? thisYear, thisYear) + 1) }, (_, index) => thisYear - index);
   const hoveredPeak = hovered === null ? null : peaks[hovered];
   return <section className="ov">
     <header className="ov-head">
@@ -818,16 +853,29 @@ function OverviewPanel({ walletMetrics, metricsError, fallbackFeature, fallbackF
           <div><p className="ov-eyebrow">Жива активність</p><h2>Зараз у гаманці</h2></div>
           <div className="ov-online"><b>{m ? displayMetric(m.onlineUsers) : "—"}</b><span>онлайн зараз</span></div>
         </div>
-        <div className="ov-chart-meta"><span>Пік одночасно онлайн за кожен день</span><span>Макс: <b>{displayMetric(max)}</b> · Середнє: <b>{average.toFixed(1).replace(".", ",")}</b></span></div>
+        <div className="ov-chart-meta">
+          <span>Пік одночасно онлайн за кожен день{yearMode ? ` · ${peakYear}` : ""}</span>
+          <span className="ov-chart-tools">
+            <span>Макс: <b>{displayMetric(max)}</b> · Середнє: <b>{average.toFixed(1).replace(".", ",")}</b></span>
+            <span className="ov-year">
+              <button type="button" aria-label="Попередній рік" disabled={peakYear <= Math.min(...yearOptions)} onClick={() => { setHovered(null); setPeakYear(peakYear - 1); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg></button>
+              <select aria-label="Рік" value={peakYear} onChange={(event) => { setHovered(null); setPeakYear(Number(event.target.value)); }}>{yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}</select>
+              <button type="button" aria-label="Наступний рік" disabled={peakYear >= thisYear} onClick={() => { setHovered(null); setPeakYear(peakYear + 1); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></button>
+            </span>
+          </span>
+        </div>
         <div className="ov-chart">
           <div className="ov-grid">{[top, top / 2, 0].map((value) => <div key={value}><span>{displayMetric(value)}</span></div>)}</div>
-          {peaks.length ? <div className="ov-bars" onMouseLeave={() => setHovered(null)}>{peaks.map((item, index) => {
-            const label = `${formatOnlinePeakDate(item.date)} — максимум ${values[index]} онлайн`;
-            return <button type="button" key={item.date} className={`ov-bar${index === peaks.length - 1 ? " today" : ""}`} aria-label={label} onMouseEnter={() => setHovered(index)} onFocus={() => setHovered(index)} onBlur={() => setHovered(null)}><i style={{ height: `${Math.max(1.5, values[index] / top * 100)}%` }} /></button>;
+          {peaks.length ? <div className={`ov-bars${yearMode ? " year" : ""}`} onMouseLeave={() => setHovered(null)}>{peaks.map((item, index) => {
+            const label = item.future ? `${formatOnlinePeakDate(item.date)} — ще не настав` : item.empty ? `${formatOnlinePeakDate(item.date)} — немає даних` : `${formatOnlinePeakDate(item.date)} — максимум ${values[index]} онлайн`;
+            const today = yearMode ? item.date === todayKey : index === peaks.length - 1;
+            return <button type="button" key={item.date} className={`ov-bar${today ? " today" : ""}${item.empty ? " empty" : ""}${item.future ? " future" : ""}`} aria-label={label} onMouseEnter={() => setHovered(index)} onFocus={() => setHovered(index)} onBlur={() => setHovered(null)}><i style={{ height: `${item.empty || item.future ? 1.5 : Math.max(1.5, values[index] / top * 100)}%` }} /></button>;
           })}</div> : <p className="ov-empty">Дані з’являться після першої активної сесії.</p>}
-          {hoveredPeak && hovered !== null && <div className="ov-tip" style={{ left: `calc(28px + (100% - 28px) * ${(hovered + .5) / peaks.length})` }}>{formatOnlinePeakDate(hoveredPeak.date)} · пік <b>{displayMetric(hoveredPeak.peakOnline)}</b> онлайн</div>}
+          {hoveredPeak && hovered !== null && <div className="ov-tip" style={{ left: `calc(28px + (100% - 28px) * ${(hovered + .5) / peaks.length})` }}>{formatOnlinePeakDate(hoveredPeak.date)} · {hoveredPeak.future ? "ще не настав" : hoveredPeak.empty ? "немає даних" : <>пік <b>{displayMetric(hoveredPeak.peakOnline)}</b> онлайн</>}</div>}
         </div>
-        <div className="ov-axis">{axis.map((label, index) => <span key={`${label}-${index}`}>{label}</span>)}</div>
+        {yearMode
+          ? <div className="ov-axis months" style={{ gridTemplateColumns: monthDays.map((days) => `${days}fr`).join(" ") }}>{["Січ", "Лют", "Бер", "Кві", "Тра", "Чер", "Лип", "Сер", "Вер", "Жов", "Лис", "Гру"].map((name) => <span key={name}>{name}</span>)}</div>
+          : <div className="ov-axis">{axis.map((label, index) => <span key={`${label}-${index}`}>{label}</span>)}</div>}
       </article>
 
       <article className="ov-card ov-support">

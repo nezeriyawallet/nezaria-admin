@@ -5195,3 +5195,21 @@ body.tm-modal-open { overflow:hidden; }
   .tm-grow { flex-basis:calc(100% - 60px); }
   .tm-toast { left:16px; right:16px; }
 }
+
+/* Overview · online peaks for a whole year */
+.ov-chart-tools { display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; }
+.ov-year { display:inline-flex; align-items:center; gap:2px; padding:3px; border-radius:10px; background:var(--ov-surface); border:1px solid var(--ov-line); }
+.ov-year button { width:28px; height:28px; padding:0; border:0; border-radius:8px; background:none; color:var(--ov-text-2); display:grid; place-items:center; }
+.ov-year button:hover:not(:disabled) { background:var(--ov-chip); color:#fff; }
+.ov-year button:disabled { opacity:.3; cursor:default; }
+.ov-year svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.ov-year select { appearance:none; height:28px; padding:0 8px; border:0; border-radius:8px; background:var(--ov-chip); color:#fff; font:600 12px var(--font-geist-mono), ui-monospace, monospace; cursor:pointer; }
+.ov-bars.year { gap:1px; }
+.ov-bars.year .ov-bar { min-width:0; }
+.ov-bars.year .ov-bar i { border-radius:2px 2px 0 0; }
+.ov-bar.empty i { background:rgba(255,255,255,.08); animation:none; }
+.ov-bar.future { cursor:default; }
+.ov-bar.future i { background:rgba(255,255,255,.03); animation:none; }
+.ov-axis.months { display:grid; justify-content:stretch; }
+.ov-axis.months span { padding-left:4px; border-left:1px solid var(--ov-line); }
+@media (max-width:1500px) { .ov-bars.year { gap:0; } .ov-bars.year .ov-bar i { border-radius:1px 1px 0 0; } }
