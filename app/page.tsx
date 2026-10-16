@@ -738,6 +738,7 @@ export default function Home() {
   );
 }
 
+const OV_DAY_WIDTH = 13; // px per day in the scrollable year chart (10px bar + 3px gap)
 const ovIcons = {
   box: <><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z" /><path d="m3 7 9 5 9-5M12 12v10" /></>,
   arrow: <><path d="M7 17 17 7" /><path d="M8 7h9v9" /></>,
@@ -811,6 +812,21 @@ function OverviewPanel({ walletMetrics, metricsError, fallbackFeature, fallbackF
   const monthDays = Array.from({ length: 12 }, (_, month) => new Date(Date.UTC(peakYear, month + 1, 0)).getUTCDate());
   const yearOptions = Array.from({ length: Math.max(1, thisYear - Math.min(yearPeaks?.firstYear ?? thisYear, thisYear) + 1) }, (_, index) => thisYear - index);
   const hoveredPeak = hovered === null ? null : peaks[hovered];
+  // Scroll the year strip to today (or the last recorded day) once per loaded year.
+  const peakScrollRef = useRef<HTMLDivElement>(null);
+  const scrolledYear = useRef<number | null>(null);
+  const focusIndex = yearMode ? (() => {
+    const todayIndex = peaks.findIndex((item) => item.date === todayKey);
+    if (todayIndex >= 0) return todayIndex;
+    const lastRecorded = peaks.map((item) => !item.empty).lastIndexOf(true);
+    return lastRecorded >= 0 ? lastRecorded : peaks.length - 1;
+  })() : -1;
+  useEffect(() => {
+    const box = peakScrollRef.current;
+    if (!yearMode || !box || scrolledYear.current === peakYear) return;
+    scrolledYear.current = peakYear;
+    box.scrollLeft = Math.max(0, (focusIndex + 1) * OV_DAY_WIDTH - box.clientWidth + 40);
+  }, [yearMode, peakYear, focusIndex]);
   return <section className="ov">
     <header className="ov-head">
       <div><p className="ov-eyebrow">Операційна панель</p><h1>Огляд <span>Nezeriya Wallet</span></h1></div>
@@ -864,18 +880,24 @@ function OverviewPanel({ walletMetrics, metricsError, fallbackFeature, fallbackF
             </span>
           </span>
         </div>
-        <div className="ov-chart">
+        <div className={`ov-chart${yearMode ? " scroll" : ""}`}>
           <div className="ov-grid">{[top, top / 2, 0].map((value) => <div key={value}><span>{displayMetric(value)}</span></div>)}</div>
-          {peaks.length ? <div className={`ov-bars${yearMode ? " year" : ""}`} onMouseLeave={() => setHovered(null)}>{peaks.map((item, index) => {
-            const label = item.future ? `${formatOnlinePeakDate(item.date)} — ще не настав` : item.empty ? `${formatOnlinePeakDate(item.date)} — немає даних` : `${formatOnlinePeakDate(item.date)} — максимум ${values[index]} онлайн`;
-            const today = yearMode ? item.date === todayKey : index === peaks.length - 1;
-            return <button type="button" key={item.date} className={`ov-bar${today ? " today" : ""}${item.empty ? " empty" : ""}${item.future ? " future" : ""}`} aria-label={label} onMouseEnter={() => setHovered(index)} onFocus={() => setHovered(index)} onBlur={() => setHovered(null)}><i style={{ height: `${item.empty || item.future ? 1.5 : Math.max(1.5, values[index] / top * 100)}%` }} /></button>;
-          })}</div> : <p className="ov-empty">Дані з’являться після першої активної сесії.</p>}
-          {hoveredPeak && hovered !== null && <div className="ov-tip" style={{ left: `calc(28px + (100% - 28px) * ${(hovered + .5) / peaks.length})` }}>{formatOnlinePeakDate(hoveredPeak.date)} · {hoveredPeak.future ? "ще не настав" : hoveredPeak.empty ? "немає даних" : <>пік <b>{displayMetric(hoveredPeak.peakOnline)}</b> онлайн</>}</div>}
+          {(() => {
+            const bars = peaks.length ? <div className={`ov-bars${yearMode ? " year" : ""}`} onMouseLeave={() => setHovered(null)}>{peaks.map((item, index) => {
+              const label = item.future ? `${formatOnlinePeakDate(item.date)} — ще не настав` : item.empty ? `${formatOnlinePeakDate(item.date)} — немає даних` : `${formatOnlinePeakDate(item.date)} — максимум ${values[index]} онлайн`;
+              const today = yearMode ? item.date === todayKey : index === peaks.length - 1;
+              return <button type="button" key={item.date} className={`ov-bar${today ? " today" : ""}${item.empty ? " empty" : ""}${item.future ? " future" : ""}`} aria-label={label} onMouseEnter={() => setHovered(index)} onFocus={() => setHovered(index)} onBlur={() => setHovered(null)}><i style={{ height: `${item.empty || item.future ? 1.5 : Math.max(1.5, values[index] / top * 100)}%` }} /></button>;
+            })}</div> : <p className="ov-empty">Дані з’являться після першої активної сесії.</p>;
+            const tipText = hoveredPeak && <>{formatOnlinePeakDate(hoveredPeak.date)} · {hoveredPeak.future ? "ще не настав" : hoveredPeak.empty ? "немає даних" : <>пік <b>{displayMetric(hoveredPeak.peakOnline)}</b> онлайн</>}</>;
+            if (!yearMode) return <>{bars}{hoveredPeak && hovered !== null && <div className="ov-tip" style={{ left: `calc(28px + (100% - 28px) * ${(hovered + .5) / peaks.length})` }}>{tipText}</div>}</>;
+            const width = peaks.length * OV_DAY_WIDTH;
+            return <div className="ov-scroll" ref={peakScrollRef}><div className="ov-scroll-in" style={{ width }}>
+              <div className="ov-plot">{bars}{hoveredPeak && hovered !== null && <div className="ov-tip" style={{ left: Math.min(width - 90, Math.max(90, (hovered + .5) * OV_DAY_WIDTH)) }}>{tipText}</div>}</div>
+              <div className="ov-axis months" style={{ gridTemplateColumns: monthDays.map((days) => `${days * OV_DAY_WIDTH}px`).join(" ") }}>{["Січ", "Лют", "Бер", "Кві", "Тра", "Чер", "Лип", "Сер", "Вер", "Жов", "Лис", "Гру"].map((name) => <span key={name}>{name}</span>)}</div>
+            </div></div>;
+          })()}
         </div>
-        {yearMode
-          ? <div className="ov-axis months" style={{ gridTemplateColumns: monthDays.map((days) => `${days}fr`).join(" ") }}>{["Січ", "Лют", "Бер", "Кві", "Тра", "Чер", "Лип", "Сер", "Вер", "Жов", "Лис", "Гру"].map((name) => <span key={name}>{name}</span>)}</div>
-          : <div className="ov-axis">{axis.map((label, index) => <span key={`${label}-${index}`}>{label}</span>)}</div>}
+        {!yearMode && <div className="ov-axis">{axis.map((label, index) => <span key={`${label}-${index}`}>{label}</span>)}</div>}
       </article>
 
       <article className="ov-card ov-support">

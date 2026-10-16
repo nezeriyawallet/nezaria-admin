@@ -5213,3 +5213,18 @@ body.tm-modal-open { overflow:hidden; }
 .ov-axis.months { display:grid; justify-content:stretch; }
 .ov-axis.months span { padding-left:4px; border-left:1px solid var(--ov-line); }
 @media (max-width:1500px) { .ov-bars.year { gap:0; } .ov-bars.year .ov-bar i { border-radius:1px 1px 0 0; } }
+
+/* Overview · year chart as a horizontal strip with a scroll slider */
+.ov-chart.scroll { height:auto; }
+.ov-chart.scroll .ov-grid { bottom:auto; height:300px; }
+.ov-scroll { margin-left:28px; overflow-x:auto; overflow-y:hidden; padding-bottom:10px; scrollbar-width:thin; scrollbar-color:rgba(61,220,151,.55) rgba(255,255,255,.05); }
+.ov-scroll::-webkit-scrollbar { height:8px; }
+.ov-scroll::-webkit-scrollbar-track { background:rgba(255,255,255,.05); border-radius:99px; }
+.ov-scroll::-webkit-scrollbar-thumb { background:rgba(61,220,151,.5); border-radius:99px; }
+.ov-scroll::-webkit-scrollbar-thumb:hover { background:rgba(61,220,151,.8); }
+.ov-scroll-in { position:relative; }
+.ov-plot { position:relative; height:300px; }
+.ov-plot .ov-bars.year { inset:0; gap:3px; }
+.ov-plot .ov-bars.year .ov-bar { flex:0 0 10px; min-width:10px; }
+.ov-plot .ov-bars.year .ov-bar i { border-radius:3px 3px 1px 1px; }
+.ov-scroll .ov-axis.months { padding-left:0; margin-top:10px; justify-content:start; }
