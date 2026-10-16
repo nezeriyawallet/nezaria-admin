@@ -2192,259 +2192,99 @@ function WinsPanel({ wins, summary, refreshing, onRefresh, onSilentRefresh }: { 
   </section>;
 }
 
-function EmployeesPanel() {
-  const [employees, setEmployees] = useState<EmployeeProfile[]>([]);
-  const [monthHours, setMonthHours] = useState<number[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [selected, setSelected] = useState<EmployeeProfile | null>(null);
-  const [terminating, setTerminating] = useState(false);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "online" | "offline" | "frozen">("all");
+// ---------- Shared bits for the Team, Staff and Media pages ----------
+const tmIcons = {
+  doc: <><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="12" r="2.5" /><path d="M14 10h4M14 14h3" /></>,
+  pin: <><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11Z" /><circle cx="12" cy="10" r="2.5" /></>,
+  tel: <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2" />,
+  cake: <path d="M4 21h16v-8H4zM4 16h16M12 13V9M12 6v.01" />,
+  file: <><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><path d="M14 3v6h6M9 14h6M9 17h4" /></>,
+  ok: <path d="m5 12 5 5 9-10" />,
+  no: <path d="M6 6l12 12M18 6 6 18" />,
+  pause: <path d="M10 8v8M14 8v8" />,
+  users: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5" /><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8" /></>,
+  chat: <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z" />,
+  star: <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z" />,
+  check: <><rect x="4" y="4" width="16" height="16" rx="3" /><path d="m9 12 2 2 4-4" /></>,
+  cash: <><rect x="2" y="6" width="20" height="13" rx="2" /><circle cx="12" cy="12.5" r="2.5" /></>,
+  image: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 15 5-5 4 4 3-3 6 6" /></>,
+  click: <><path d="M9 3v18M3 9l6-6 6 6" /><path d="M15 21V11l6 6" /></>,
+  clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+  upload: <><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 20h16" /></>,
+  empty: <><path d="M3 7h18v13H3z" /><path d="M3 7l3-4h12l3 4M9 12h6" /></>,
+  warn: <><path d="M12 3 2 20h20L12 3Z" /><path d="M12 10v4M12 17h.01" /></>,
+  close: <path d="M6 6l12 12M18 6 6 18" />,
+};
 
-  const loadEmployees = async () => {
-    const token = window.sessionStorage.getItem("nezaria_access_token");
-    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
-    if (!token || !ownerSession) { setError("Сесію власника не знайдено. Увійдіть знову як власник."); setLoading(false); return; }
-    setLoading(true);
-    const response = await fetch("/api/owner/employees", { headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession } });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) setError(result.error || "Не вдалося завантажити працівників.");
-    else { setEmployees(result.employees || []); setMonthHours(result.month_hours || []); }
-    setLoading(false);
-  };
-
-  useEffect(() => { void loadEmployees(); }, []);
-  useEffect(() => {
-    const summaryCards = document.querySelectorAll(".employees-summary .panel");
-    const total = employees.reduce((sum, employee) => sum + employee.closed_chats, 0);
-    const totalCard = summaryCards[3];
-    if (totalCard) totalCard.innerHTML = `<p>Закриті чати</p><strong>${total}</strong>`;
-    const summary = document.querySelector(".employees-summary");
-    summary?.querySelector(".payroll-summary")?.remove();
-    const payrollSummary = document.createElement("article");
-    payrollSummary.className = "panel payroll-summary";
-    const paid = employees.reduce((sum, employee) => sum + employee.payouts.filter((payout) => payout.status === "paid").reduce((value, payout) => value + Number(payout.amount), 0), 0);
-    const pending = employees.reduce((sum, employee) => sum + employee.payouts.filter((payout) => payout.status === "pending").reduce((value, payout) => value + Number(payout.amount), 0), 0);
-    payrollSummary.innerHTML = `<p>Зарплата команди</p><strong>${paid.toFixed(2)} USDT</strong><span>До сплати: ${pending.toFixed(2)} USDT</span>`;
-    summary?.appendChild(payrollSummary);
-    const info = document.querySelector(".employee-profile .employee-info");
-    if (!selected || !info) return () => payrollSummary.remove();
-    const previous = info.querySelector(".closed-chats-stat");
-    previous?.remove();
-    const stat = document.createElement("span");
-    stat.className = "closed-chats-stat";
-    stat.innerHTML = `Закриті чати<strong>${selected.closed_chats}</strong>`;
-    stat.style.cssText = "display:flex;flex-direction:column;gap:5px;padding:10px;border:1px solid #2c3a3b;border-radius:8px;color:#93a5a2;font-size:11px";
-    info.appendChild(stat);
-    const wallet = document.createElement("span");
-    wallet.className = "worker-wallet-stat";
-    wallet.innerHTML = `USDT гаманець (TON)<strong>${selected.ton_usdt_wallet || "Не вказано"}</strong>`;
-    wallet.style.cssText = "display:flex;flex-direction:column;gap:5px;padding:10px;border:1px solid #2c3a3b;border-radius:8px;color:#93a5a2;font-size:11px;overflow-wrap:anywhere";
-    info.appendChild(wallet);
-    const rating = selected.reviews.length ? selected.reviews.reduce((sum, review) => sum + review.rating, 0) / selected.reviews.length : 0;
-    const ratingCard = document.createElement("span");
-    ratingCard.className = "employee-rating-stat";
-    ratingCard.innerHTML = `Рейтинг<strong>${rating ? `${rating.toFixed(2)} <b>${"★".repeat(Math.round(rating))}${"☆".repeat(5 - Math.round(rating))}</b>` : "Ще немає оцінок"}</strong>`;
-    ratingCard.style.cssText = "display:flex;flex-direction:column;gap:5px;padding:10px;border:1px solid #2c3a3b;border-radius:8px;color:#93a5a2;font-size:11px";
-    info.appendChild(ratingCard);
-    const chart = document.createElement("section");
-    chart.className = "employee-hours-chart";
-    const values = selected.daily_activity || [];
-    const max = Math.max(1, ...values);
-    const formatChartDate = (index: number) => {
-      const date = new Date();
-      date.setDate(date.getDate() - (29 - index));
-      return new Intl.DateTimeFormat("uk-UA", { day: "numeric", month: "long", year: "numeric" }).format(date);
-    };
-    chart.innerHTML = `<p>Робочі години за кожен день · 30 днів</p><div>${values.map((value, day) => `<i data-tooltip="${formatChartDate(day)}: ${value} год." title="${formatChartDate(day)}: ${value} год." style="height:${Math.max(4, value / max * 100)}%"></i>`).join("")}</div><div class="work-chart-axis"><span>30 днів тому</span><span>Сьогодні</span></div><small>Наведіть на стовпчик, щоб побачити точну кількість годин.</small>`;
-    info.insertAdjacentElement("afterend", chart);
-    return () => { payrollSummary.remove(); stat.remove(); wallet.remove(); ratingCard.remove(); chart.remove(); };
-  }, [employees, selected]);
-  useEffect(() => {
-    const page = document.querySelector(".employees-page");
-    if (!page) return;
-    page.querySelector(".monthly-work-chart")?.remove();
-    const chart = document.createElement("article");
-    chart.className = "panel monthly-work-chart";
-    const max = Math.max(1, ...monthHours);
-    const formatChartDate = (index: number) => {
-      const date = new Date();
-      date.setDate(date.getDate() - (29 - index));
-      return new Intl.DateTimeFormat("uk-UA", { day: "numeric", month: "long", year: "numeric" }).format(date);
-    };
-    chart.innerHTML = `<p class="panel-label">РОБОЧИЙ ЧАС КОМАНДИ</p><h2>Середні робочі години на працівника · 30 днів</h2><div class="monthly-work-bars">${monthHours.map((value, index) => `<i data-tooltip="${formatChartDate(index)}: у середньому ${value} год." title="${formatChartDate(index)}: у середньому ${value} год. на працівника" style="height:${Math.max(4, value / max * 100)}%"></i>`).join("")}</div><div><span>30 днів тому</span><span>Сьогодні</span></div><small>Наведіть на стовпчик, щоб побачити середню кількість годин за день.</small>`;
-    const summary = page.querySelector(".employees-summary");
-    summary?.insertAdjacentElement("afterend", chart);
-    return () => chart.remove();
-  }, [monthHours]);
-  useEffect(() => {
-    const modal = document.querySelector(".employee-profile");
-    if (!modal || !selected) return;
-    modal.querySelector(".owner-payroll")?.remove();
-    const payroll = document.createElement("section");
-    payroll.className = "owner-payroll";
-    const payouts = selected.payouts || [];
-    const totalPaid = payouts.filter((payout) => payout.status === "paid").reduce((sum, payout) => sum + Number(payout.amount), 0);
-    const totalPending = payouts.filter((payout) => payout.status === "pending").reduce((sum, payout) => sum + Number(payout.amount), 0);
-    payroll.innerHTML = `<div class="owner-payroll-head"><h3>Зарплата</h3><span>Виплачено: ${totalPaid.toFixed(2)} USDT · До сплати: ${totalPending.toFixed(2)} USDT</span></div><div class="owner-payroll-form"><input class="payroll-amount" type="number" min="0.01" step="0.01" placeholder="Сума USDT" /><input class="payroll-note" maxlength="500" placeholder="Примітка (необов’язково)" /><select class="payroll-status"><option value="pending">До сплати</option><option value="paid">Вже виплачено</option></select><button class="payroll-create">Нарахувати</button></div><div class="owner-payout-list">${payouts.length ? payouts.map((payout) => `<div><span><b>${Number(payout.amount).toFixed(2)} USDT</b><small>${payout.note || "Зарплата"} · ${new Date(payout.created_at).toLocaleDateString("uk-UA")}</small></span><em class="${payout.status}">${payout.status === "paid" ? "Виплачено" : "До сплати"}</em>${payout.status === "pending" ? `<button data-payout-id="${payout.id}">Позначити виплаченою</button>` : ""}</div>`).join("") : "<p>Нарахувань ще немає.</p>"}</div>`;
-    const request = async (body: Record<string, unknown>) => {
-      const token = window.sessionStorage.getItem("nezaria_access_token");
-      const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
-      if (!token || !ownerSession) return;
-      const response = await fetch("/api/owner/employees", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "x-owner-session": ownerSession }, body: JSON.stringify(body) });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) { window.alert(result.error || "Не вдалося зберегти виплату."); return; }
-      const payout = result.payout as WorkerPayout;
-      setSelected((current) => current ? { ...current, payouts: body.action === "create_payout" ? [payout, ...current.payouts] : body.action === "delete_payout" ? current.payouts.filter((item) => item.id !== payout.id) : current.payouts.map((item) => item.id === payout.id ? payout : item) } : current);
-      await loadEmployees();
-    };
-    const createButton = payroll.querySelector(".payroll-create") as HTMLButtonElement | null;
-    const onCreate = () => {
-      const amount = Number((payroll.querySelector(".payroll-amount") as HTMLInputElement | null)?.value);
-      const note = (payroll.querySelector(".payroll-note") as HTMLInputElement | null)?.value || "";
-      const status = (payroll.querySelector(".payroll-status") as HTMLSelectElement | null)?.value;
-      if (!Number.isFinite(amount) || amount <= 0) { window.alert("Вкажіть суму зарплати більше нуля."); return; }
-      if (createButton) createButton.disabled = true;
-      void request({ action: "create_payout", id: selected.id, amount, note, status });
-    };
-    createButton?.addEventListener("click", onCreate);
-    const paidButtons = Array.from(payroll.querySelectorAll("[data-payout-id]"));
-    const onPaid = (event: Event) => { const id = (event.currentTarget as HTMLElement).dataset.payoutId; if (id) void request({ action: "mark_payout_paid", payout_id: id }); };
-    paidButtons.forEach((button) => button.addEventListener("click", onPaid));
-    const payoutItems = Array.from(payroll.querySelectorAll(".owner-payout-list>div"));
-    const onDetails = (event: Event) => {
-      if ((event.target as HTMLElement).closest("button")) return;
-      const payout = payouts[payoutItems.indexOf(event.currentTarget as HTMLElement)];
-      if (!payout) return;
-      modal.querySelector(".payout-detail-modal")?.remove();
-      const detail = document.createElement("div");
-      detail.className = "payout-detail-modal";
-      detail.innerHTML = `<div><button class="payout-detail-close" aria-label="Закрити">×</button><p class="panel-label">ДЕТАЛІ ВИПЛАТИ</p><h3>${Number(payout.amount).toFixed(2)} USDT</h3><p>Статус: <b>${payout.status === "paid" ? "Виплачено" : "До сплати"}</b></p><p>Створено: <b>${new Date(payout.created_at).toLocaleString("uk-UA")}</b></p><p>${payout.paid_at ? `Виплачено: <b>${new Date(payout.paid_at).toLocaleString("uk-UA")}</b>` : "Ще не позначена як виплачена"}</p><p>Примітка: <b>${payout.note || "Без примітки"}</b></p><button class="payout-detail-delete">Видалити виплату</button></div>`;
-      const close = () => detail.remove();
-      detail.querySelector(".payout-detail-close")?.addEventListener("click", close);
-      detail.querySelector(".payout-detail-delete")?.addEventListener("click", () => { if (window.confirm("Видалити цю виплату назавжди?")) { close(); void request({ action: "delete_payout", payout_id: payout.id }); } });
-      modal.append(detail);
-    };
-    payoutItems.forEach((item) => item.addEventListener("click", onDetails));
-    modal.querySelector(".terminate-employee")?.insertAdjacentElement("afterend", payroll);
-    return () => { createButton?.removeEventListener("click", onCreate); paidButtons.forEach((button) => button.removeEventListener("click", onPaid)); payoutItems.forEach((item) => item.removeEventListener("click", onDetails)); payroll.remove(); };
-  }, [selected]);
-  useEffect(() => {
-    const page = document.querySelector(".employees-page");
-    if (!page || employees.length === 0) return;
-    page.querySelector(".employees-efficiency-table")?.remove();
-    const table = document.createElement("section");
-    table.className = "panel employees-efficiency-table";
-    const formatMinutes = (minutes: number | null) => minutes === null ? "—" : minutes < 60 ? `${minutes} хв` : `${Math.floor(minutes / 60)} год ${minutes % 60} хв`;
-    table.innerHTML = `<p class="panel-label">ЕФЕКТИВНІСТЬ ПІДТРИМКИ</p><h2>Показники працівників</h2><div class="efficiency-head"><span>Працівник</span><span>Рейтинг</span><span>Закриті чати</span><span>1-ша відповідь</span><span>Години / 30 дн.</span><span>Статус</span></div>${employees.map((employee) => {
-      const rating = employee.reviews.length ? (employee.reviews.reduce((sum, review) => sum + review.rating, 0) / employee.reviews.length).toFixed(2) : "—";
-      const hours = (employee.daily_activity || []).reduce((sum, value) => sum + value, 0);
-      const online = employee.last_active_at ? Date.now() - new Date(employee.last_active_at).getTime() < 90000 : false;
-      return `<div class="efficiency-row"><span class="efficiency-name"><b>${employee.full_name}</b><small>${employee.city}</small></span><span class="efficiency-rating">${rating === "—" ? "—" : `★ ${rating}`}</span><span>${employee.closed_chats}</span><span>${formatMinutes(employee.first_response_minutes)}</span><span>${hours} год</span><span class="${online ? "online" : "offline"}">${online ? "Онлайн" : "Не в мережі"}</span></div>`;
-    }).join("")}`;
-    const monthly = page.querySelector(".monthly-work-chart");
-    monthly?.insertAdjacentElement("afterend", table);
-    return () => table.remove();
-  }, [employees]);
-  const terminateEmployee = async () => {
-    if (!selected || !window.confirm(`Звільнити ${selected.full_name}? Доступ працівника буде припинено.`)) return;
-    const token = window.sessionStorage.getItem("nezaria_access_token");
-    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
-    if (!token || !ownerSession) return;
-    setTerminating(true);
-    const response = await fetch("/api/owner/employees", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "x-owner-session": ownerSession }, body: JSON.stringify({ id: selected.id, action: "terminate" }) });
-    if (response.ok) { setEmployees((items) => items.filter((employee) => employee.id !== selected.id)); setSelected(null); }
-    else setError("Не вдалося звільнити працівника. Спробуйте ще раз.");
-    setTerminating(false);
-  };
-  const freezeEmployee = async () => {
-    if (!selected) return;
-    const action = selected.status === "frozen" ? "unfreeze" : "freeze";
-    const question = action === "freeze" ? `Заморозити акаунт ${selected.full_name}? Доступ до підтримки буде призупинено.` : `Розморозити акаунт ${selected.full_name}? Доступ до підтримки буде відновлено.`;
-    if (!window.confirm(question)) return;
-    const token = window.sessionStorage.getItem("nezaria_access_token");
-    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
-    if (!token || !ownerSession) return;
-    setTerminating(true);
-    const response = await fetch("/api/owner/employees", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "x-owner-session": ownerSession }, body: JSON.stringify({ id: selected.id, action }) });
-    if (response.ok) {
-      const status = action === "freeze" ? "frozen" : "approved";
-      setEmployees((items) => items.map((employee) => employee.id === selected.id ? { ...employee, status } : employee));
-      setSelected((employee) => employee ? { ...employee, status } : employee);
-    } else setError("Не вдалося змінити статус працівника. Спробуйте ще раз.");
-    setTerminating(false);
-  };
-  const savePermissions = async (permissions: Pick<EmployeeProfile, "can_use_chats" | "can_view_reviews" | "can_view_ratings" | "can_view_salary" | "can_view_statistics">) => {
-    if (!selected) return;
-    const token = window.sessionStorage.getItem("nezaria_access_token");
-    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
-    if (!token || !ownerSession) return;
-    const response = await fetch("/api/owner/employees", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "x-owner-session": ownerSession }, body: JSON.stringify({ id: selected.id, action: "update_permissions", permissions }) });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) { window.alert(result.error || "Не вдалося зберегти права доступу."); return; }
-    setSelected((current) => current ? { ...current, ...permissions } : current);
-    setEmployees((items) => items.map((employee) => employee.id === selected.id ? { ...employee, ...permissions } : employee));
-  };
-  useEffect(() => {
-    const modal = document.querySelector(".employee-profile");
-    if (!modal || !selected) return;
-    modal.querySelector(".employee-permissions")?.remove();
-    const section = document.createElement("section");
-    section.className = "employee-permissions";
-    const permissionList: [keyof Pick<EmployeeProfile, "can_use_chats" | "can_view_reviews" | "can_view_ratings" | "can_view_salary" | "can_view_statistics">, string][] = [["can_use_chats", "Чати"], ["can_view_reviews", "Відгуки"], ["can_view_ratings", "Оцінки та рейтинг"], ["can_view_salary", "Зарплата"], ["can_view_statistics", "Особиста статистика"]];
-    section.innerHTML = `<p class="panel-label">ПРАВА ДОСТУПУ</p><h3>Розділи працівника</h3><small>CEO може вимкнути окремі розділи. Зміни застосовуються одразу.</small><div>${permissionList.map(([key, label]) => `<label><input type="checkbox" data-permission="${key}" ${selected[key] ? "checked" : ""} />${label}</label>`).join("")}</div>`;
-    const onChange = () => {
-      const permissions = Object.fromEntries(Array.from(section.querySelectorAll<HTMLInputElement>("[data-permission]")).map((input) => [input.dataset.permission!, input.checked])) as Pick<EmployeeProfile, "can_use_chats" | "can_view_reviews" | "can_view_ratings" | "can_view_salary" | "can_view_statistics">;
-      void savePermissions(permissions);
-    };
-    const inputs = Array.from(section.querySelectorAll<HTMLInputElement>("input"));
-    inputs.forEach((input) => input.addEventListener("change", onChange));
-    modal.insertBefore(section, modal.querySelector(".freeze-employee"));
-    return () => { inputs.forEach((input) => input.removeEventListener("change", onChange)); section.remove(); };
-  }, [selected]);
-  useEffect(() => {
-    const modal = document.querySelector(".employee-profile");
-    if (!modal || !selected || modal.querySelector(".operator-settings")) return;
-    const section = document.createElement("section");
-    section.className = "operator-settings";
-    section.innerHTML = `<h3>Налаштування оператора</h3><label>Статус<select><option value="online">Онлайн</option><option value="break">Перерва</option><option value="offline">Офлайн</option></select></label><label>Ліміт активних чатів<input type="number" min="1" max="50" /></label><button>Зберегти налаштування</button>`;
-    const status = section.querySelector("select") as HTMLSelectElement;
-    const limit = section.querySelector("input") as HTMLInputElement;
-    const save = section.querySelector("button") as HTMLButtonElement;
-    status.value = (selected as EmployeeProfile & { operator_status?: string }).operator_status || "online";
-    limit.value = String((selected as EmployeeProfile & { active_chat_limit?: number }).active_chat_limit || 5);
-    save.onclick = async () => {
-      const token = window.sessionStorage.getItem("nezaria_access_token"); const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
-      const response = await fetch("/api/owner/employees", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token || ""}`, "x-owner-session": ownerSession || "" }, body: JSON.stringify({ action: "update_operator_settings", id: selected.id, operator_status: status.value, active_chat_limit: Number(limit.value) }) });
-      if (response.ok) { save.textContent = "Збережено"; void loadEmployees(); }
-    };
-    modal.insertBefore(section, modal.querySelector(".freeze-employee"));
-    return () => section.remove();
-  }, [selected]);
-  const reviewCount = employees.reduce((total, employee) => total + employee.reviews.length, 0);
-  const averageRating = reviewCount ? (employees.reduce((total, employee) => total + employee.reviews.reduce((sum, review) => sum + review.rating, 0), 0) / reviewCount).toFixed(2) : "—";
-  const filteredEmployees = employees.filter((employee) => {
-    const query = search.trim().toLocaleLowerCase("uk-UA");
-    const matchesQuery = !query || `${employee.full_name} ${employee.city} ${employee.phone}`.toLocaleLowerCase("uk-UA").includes(query);
-    const online = employee.status !== "frozen" && Boolean(employee.last_active_at) && Date.now() - new Date(employee.last_active_at!).getTime() < 90000;
-    const matchesStatus = statusFilter === "all" || statusFilter === "frozen" && employee.status === "frozen" || statusFilter === "online" && online || statusFilter === "offline" && employee.status !== "frozen" && !online;
-    return matchesQuery && matchesStatus;
-  });
-
-  return <section className="employees-page">
-    <section className="heading-row"><div><p className="eyebrow">ПРАЦІВНИКИ</p><h1>Ефективність <span>команди</span></h1><p className="subtle">Тут відображаються лише працівники, яких ви реально прийняли.</p></div><button className="sync" onClick={() => void loadEmployees()}>↻ Оновити</button></section>
-    <div className="list-filters"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Пошук за ім’ям, містом або телефоном" /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | "online" | "offline" | "frozen")}><option value="all">Усі статуси</option><option value="online">Онлайн</option><option value="offline">Не в мережі</option><option value="frozen">Заморожені</option></select><span>Знайдено: {filteredEmployees.length}</span></div>
-    <section className="employees-summary"><article className="panel"><p>Усього працівників</p><strong>{employees.length}</strong></article><article className="panel"><p>Відгуків клієнтів</p><strong>{reviewCount}</strong></article><article className="panel"><p>Середній рейтинг</p><strong>{averageRating === "—" ? "—" : `${averageRating} ★`}</strong></article><article className="panel"><p>Статус даних</p><strong className="employee-live">LIVE</strong></article></section>
-    {loading ? <article className="panel empty-applications">Завантажуємо працівників…</article> : error ? <article className="panel empty-applications">{error}</article> : employees.length === 0 ? <article className="panel empty-applications">Ще немає прийнятих працівників. Приймайте заявки у розділі «Команда».</article> : filteredEmployees.length === 0 ? <article className="panel empty-applications">За цими фільтрами працівників не знайдено.</article> : <article className="panel employees-table-panel"><div className="panel-head"><div><p className="panel-label">КОМАНДА ПІДТРИМКИ</p><h2>Усі працівники</h2></div></div><div className="team-table employees-table">{filteredEmployees.map((employee) => {
-      const rating = employee.reviews.length ? (employee.reviews.reduce((sum, review) => sum + review.rating, 0) / employee.reviews.length).toFixed(2) : "—";
-      const initials = employee.full_name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
-      const isOnline = employee.status !== "frozen" && Boolean(employee.last_active_at) && Date.now() - new Date(employee.last_active_at!).getTime() < 90000;
-      return <button className="team-row employee-row" key={employee.id} onClick={() => setSelected(employee)}><div className="member"><div className="avatar member-avatar employee-avatar">{employee.avatar_url ? <img src={employee.avatar_url} alt={`Фото ${employee.full_name}`} /> : initials}</div><div><strong>{employee.full_name}</strong><small>{employee.city}</small></div></div><div><small>Рейтинг</small><strong className="rating">{rating === "—" ? "—" : `★ ${rating}`}</strong></div><div><small>Відгуків</small><strong>{employee.reviews.length}</strong></div><span className={`status ${employee.status === "frozen" ? "frozen" : isOnline ? "online" : "break"}`}>{employee.status === "frozen" ? "Заморожено" : isOnline ? "Онлайн" : "Не в мережі"}</span></button>;
-    })}</div></article>}
-    {selected && <section className="employee-modal-backdrop" role="presentation" onMouseDown={() => setSelected(null)}><article className="panel employee-profile" role="dialog" aria-modal="true" aria-label={`Профіль ${selected.full_name}`} onMouseDown={(event) => event.stopPropagation()}><button className="profile-close" onClick={() => setSelected(null)} aria-label="Закрити">×</button><div className="employee-profile-head"><div className="profile-avatar">{selected.avatar_url ? <img src={selected.avatar_url} alt={`Фото ${selected.full_name}`} /> : selected.full_name.slice(0, 1).toUpperCase()}</div><div><p className="panel-label">ПРАЦІВНИК</p><h2>{selected.full_name}</h2><p>{selected.city} · {selected.age} років</p></div></div><div className="employee-info"><span>Телефон<strong>{selected.phone}</strong></span><span>Прийнятий<strong>{new Date(selected.created_at).toLocaleDateString("uk-UA")}</strong></span></div><button className="freeze-employee" onClick={() => void freezeEmployee()} disabled={terminating}>{terminating ? "Оновлюємо статус…" : selected.status === "frozen" ? "Розморозити акаунт" : "Заморозити акаунт"}</button><button className="terminate-employee" onClick={() => void terminateEmployee()} disabled={terminating}>{terminating ? "Звільняємо…" : "Звільнити працівника"}</button><div className="reviews-head"><h3>Відгуки клієнтів</h3><span>{selected.reviews.length}</span></div>{selected.reviews.length === 0 ? <p className="no-reviews">Відгуків ще немає. Вони з’являться після запуску чатів підтримки та оцінювання діалогів.</p> : <div className="reviews-list">{selected.reviews.map((review) => <article className="review" key={review.id}><div><strong>{review.client_name}</strong><span>{"★".repeat(review.rating)}</span></div><p>{review.comment}</p><small>{new Date(review.created_at).toLocaleDateString("uk-UA")}</small></article>)}</div>}</article></section>}
-  </section>;
+function TmIcon({ name }: { name: keyof typeof tmIcons }) {
+  return <svg viewBox="0 0 24 24" aria-hidden="true">{tmIcons[name]}</svg>;
 }
+
+function tmOwnerHeaders(json = false): Record<string, string> {
+  const token = window.sessionStorage.getItem("nezaria_access_token") || window.localStorage.getItem("nezaria_access_token") || "";
+  const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session") || window.localStorage.getItem("nezeriya_owner_session") || "";
+  return { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession, ...(json ? { "Content-Type": "application/json" } : {}) };
+}
+
+function tmDate(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+const tmMoney = (value: number) => new Intl.NumberFormat("uk-UA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0);
+
+function TmAvatar({ name, photo, status, size = "" }: { name: string; photo?: string | null; status?: string; size?: "" | "sm" | "lg" }) {
+  const initials = name.split(/\s+/).filter(Boolean).map((part) => part.charAt(0)).join("").slice(0, 2).toUpperCase() || "?";
+  return <span className={`tm-av ${size}`} data-on={status} style={{ background: regColors[regHash(name) % regColors.length] }}>{photo ? <img src={photo} alt="" /> : initials}</span>;
+}
+
+function TmStars({ value }: { value: number }) {
+  const full = Math.round(value || 0);
+  return <span className="tm-stars" aria-label={`${value.toFixed(1)} з 5`}>{"★".repeat(full)}<i>{"★".repeat(Math.max(0, 5 - full))}</i></span>;
+}
+
+function TmState({ kind = "empty", title, text }: { kind?: "empty" | "warn"; title: string; text?: string }) {
+  return <div className={`tm-state${kind === "warn" ? " err" : ""}`}><span className="tm-state-ic"><TmIcon name={kind === "warn" ? "warn" : "empty"} /></span><b>{title}</b>{text && <p>{text}</p>}</div>;
+}
+
+function TmKpi({ icon, label, value, unit, sub, highlight }: { icon: keyof typeof tmIcons; label: string; value: ReactNode; unit?: string; sub?: ReactNode; highlight?: boolean }) {
+  return <article className={`tm-kpi${highlight ? " hl" : ""}`}><div className="tm-kpi-top"><span className="tm-kpi-ic"><TmIcon name={icon} /></span>{label}</div><div className="tm-kpi-val">{value}{unit && <small>{unit}</small>}</div>{sub !== undefined && <div className="tm-kpi-sub">{sub}</div>}</article>;
+}
+
+function TmModal({ label, wide, onClose, children }: { label: string; wide?: boolean; onClose: () => void; children: ReactNode }) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    document.body.classList.add("tm-modal-open");
+    return () => { document.removeEventListener("keydown", onKey); document.body.classList.remove("tm-modal-open"); };
+  }, [onClose]);
+  return <div className="tm-modal" role="presentation" onMouseDown={onClose}>
+    <div className={`tm-modal-card${wide ? " wide" : ""}`} role="dialog" aria-modal="true" aria-label={label} onMouseDown={(event) => event.stopPropagation()}>
+      <button className="tm-x" aria-label="Закрити" onClick={onClose}><TmIcon name="close" /></button>
+      {children}
+    </div>
+  </div>;
+}
+
+// Two clicks within a few seconds confirm a destructive action.
+function useTmConfirm() {
+  const [armed, setArmed] = useState<string | null>(null);
+  const timer = useRef<number | null>(null);
+  const ask = (key: string) => {
+    if (armed === key) { setArmed(null); if (timer.current) window.clearTimeout(timer.current); return true; }
+    setArmed(key);
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setArmed((current) => current === key ? null : current), 3500);
+    return false;
+  };
+  return { armed, ask };
+}
+
+// ---------- Команда: заявки працівників ----------
+const tmApplicationStatus: Record<WorkerApplication["status"], [string, string]> = {
+  pending: ["tm-p-new", "На розгляді"], approved: ["tm-p-ok", "Прийнято"], rejected: ["tm-p-no", "Відхилено"], terminated: ["tm-p-fired", "Звільнено"], frozen: ["tm-p-break", "Заморожено"],
+};
 
 function ApplicationsPanel() {
   const [applications, setApplications] = useState<WorkerApplication[]>([]);
@@ -2453,76 +2293,352 @@ function ApplicationsPanel() {
   const [busyId, setBusyId] = useState("");
   const [view, setView] = useState<"active" | "archive">("active");
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "rejected" | "terminated">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | WorkerApplication["status"]>("all");
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
+  const confirm = useTmConfirm();
 
   const loadApplications = async () => {
-    const token = window.sessionStorage.getItem("nezaria_access_token");
-    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
-    if (!token || !ownerSession) {
-      setError("Сесію власника не знайдено. Вийдіть і увійдіть знову, обравши роль «Власник».");
-      setLoading(false);
-      return;
-    }
+    const headers = tmOwnerHeaders();
+    if (!headers["x-owner-session"]) { setError("Сесію власника не знайдено. Вийдіть і увійдіть знову, обравши роль «Власник»."); setLoading(false); return; }
     setLoading(true);
-    const response = await fetch("/api/owner/applications", {
-      headers: { Authorization: `Bearer ${token}`, "x-owner-session": ownerSession },
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) setError(result.error || "Не вдалося завантажити заявки.");
-    else setApplications(result.applications || []);
+    const response = await fetch("/api/owner/applications", { headers }).catch(() => null);
+    const result = response ? await response.json().catch(() => ({})) : {};
+    if (!response?.ok) setError(result.error || "Не вдалося завантажити заявки.");
+    else { setError(""); setApplications(result.applications || []); }
     setLoading(false);
   };
-
   useEffect(() => { void loadApplications(); }, []);
+  const flash = (text: string) => { setNotice(text); window.setTimeout(() => setNotice((current) => current === text ? "" : current), 2600); };
 
-  const decide = async (id: string, status: "approved" | "rejected") => {
-    const token = window.sessionStorage.getItem("nezaria_access_token");
-    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
-    if (!token || !ownerSession) return;
-    setBusyId(id);
-    const response = await fetch("/api/owner/applications", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "x-owner-session": ownerSession },
-      body: JSON.stringify({ id, status }),
-    });
-    if (!response.ok) setError("Не вдалося оновити заявку. Спробуйте ще раз.");
-    else setApplications((items) => items.map((item) => item.id === id ? { ...item, status } : item));
+  const decide = async (application: WorkerApplication, status: "approved" | "rejected") => {
+    setBusyId(application.id);
+    const response = await fetch("/api/owner/applications", { method: "PATCH", headers: tmOwnerHeaders(true), body: JSON.stringify({ id: application.id, status }) }).catch(() => null);
+    if (!response?.ok) flash("Не вдалося оновити заявку. Спробуйте ще раз.");
+    else { setApplications((items) => items.map((item) => item.id === application.id ? { ...item, status } : item)); setOpenId(null); flash(status === "approved" ? `Заявку «${application.full_name}» прийнято` : `Заявку «${application.full_name}» відхилено`); }
+    setBusyId("");
+  };
+  const removeArchived = async (application: WorkerApplication) => {
+    if (!confirm.ask(`delete-${application.id}`)) return;
+    setBusyId(application.id);
+    const response = await fetch("/api/owner/applications", { method: "DELETE", headers: tmOwnerHeaders(true), body: JSON.stringify({ id: application.id }) }).catch(() => null);
+    if (!response?.ok) flash("Не вдалося видалити заявку.");
+    else { setApplications((items) => items.filter((item) => item.id !== application.id)); flash("Заявку видалено разом із фото"); }
     setBusyId("");
   };
 
-  const removeArchived = async (id: string) => {
-    if (!window.confirm("Видалити заявку з архіву назавжди? Фото також буде видалено.")) return;
-    const token = window.sessionStorage.getItem("nezaria_access_token");
-    const ownerSession = window.sessionStorage.getItem("nezeriya_owner_session");
-    if (!token || !ownerSession) return;
-    setBusyId(id);
-    const response = await fetch("/api/owner/applications", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "x-owner-session": ownerSession },
-      body: JSON.stringify({ id }),
-    });
-    if (!response.ok) setError("Не вдалося видалити заявку.");
-    else setApplications((items) => items.filter((item) => item.id !== id));
-    setBusyId("");
+  const count = (status: WorkerApplication["status"]) => applications.filter((item) => item.status === status).length;
+  const isActive = (application: WorkerApplication) => application.status === "pending" || application.status === "approved";
+  const query = search.trim().toLocaleLowerCase("uk-UA").replace(/\s/g, "");
+  const visible = applications.filter((application) => (view === "active") === isActive(application)
+    && (statusFilter === "all" || application.status === statusFilter)
+    && (!query || `${application.full_name}${application.city}${application.phone}`.toLocaleLowerCase("uk-UA").replace(/\s/g, "").includes(query)));
+  const opened = applications.find((item) => item.id === openId) || null;
+  const statusOptions: ["all" | WorkerApplication["status"], string][] = view === "active" ? [["all", "Усі статуси"], ["pending", "На розгляді"], ["approved", "Прийнято"]] : [["all", "Усі статуси"], ["rejected", "Відхилено"], ["terminated", "Звільнено"]];
+
+  return <section className="tm-page aud">
+    <header className="aud-head">
+      <div><p className="aud-crumbs reg-eyebrow">Команда</p><h1>Заявки <span>працівників</span></h1><p className="aud-hint">Перевіряйте дані, фото документа та ухвалюйте рішення</p></div>
+      <button className={`aud-live${loading ? " loading" : ""}`} type="button" onClick={() => void loadApplications()} disabled={loading}><i />{loading ? "Оновлення…" : "Оновити"}</button>
+    </header>
+
+    <section className="tm-kpis k4" aria-label="Підсумки">
+      <TmKpi icon="file" label="Нові заявки" value={count("pending")} sub="Чекають на рішення" highlight />
+      <TmKpi icon="ok" label="Прийнято" value={count("approved")} sub="Працюють у команді" />
+      <TmKpi icon="no" label="Відхилено" value={count("rejected")} sub="В архіві" />
+      <TmKpi icon="pause" label="Звільнено" value={count("terminated")} sub="В архіві" />
+    </section>
+
+    <section className="aud-card tm-sec" aria-label="Заявки">
+      <div className="tm-toolbar">
+        <div className="tm-tabs" role="tablist">
+          <button role="tab" aria-selected={view === "active"} onClick={() => { setView("active"); setStatusFilter("all"); }}>Активні <i>{count("pending") + count("approved")}</i></button>
+          <button role="tab" aria-selected={view === "archive"} onClick={() => { setView("archive"); setStatusFilter("all"); }}>Архів <i>{count("rejected") + count("terminated")}</i></button>
+        </div>
+        <label className="reg-search tm-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg><input type="search" value={search} placeholder="Пошук за ПІБ, містом або телефоном" autoComplete="off" onChange={(event) => setSearch(event.target.value)} /></label>
+        <div className="reg-select"><select aria-label="Статус" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>{statusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></div>
+        <span className="tm-found">Знайдено: <b>{visible.length}</b></span>
+      </div>
+
+      {loading && !applications.length ? <TmState title="Завантажуємо заявки…" /> : error ? <TmState kind="warn" title="Не вдалося завантажити заявки" text={error} /> : visible.length === 0
+        ? <TmState title={search || statusFilter !== "all" ? "Нічого не знайдено" : view === "active" ? "Нових заявок немає" : "Архів порожній"} text={search || statusFilter !== "all" ? "Змініть пошук або статус." : view === "active" ? "Коли кандидат заповнить анкету, заявка з'явиться тут." : "Тут будуть відхилені заявки та звільнені працівники."} />
+        : <div className="tm-app-list">{visible.map((application) => {
+          const [pillClass, pillText] = tmApplicationStatus[application.status];
+          const busy = busyId === application.id;
+          return <article className={`tm-appl${isActive(application) ? "" : " decided"}`} key={application.id}>
+            <div className="tm-ap-who"><TmAvatar name={application.full_name} photo={application.face_photo_url} /><div><b>{application.full_name}</b><span>Подано {tmDate(application.created_at)}</span><span><span className={`tm-pill ${pillClass}`}>{pillText}</span></span></div></div>
+            <div className="tm-ap-facts"><span><TmIcon name="pin" />{application.city}</span><span><TmIcon name="tel" />{application.phone}</span><span><TmIcon name="cake" />{application.age} р.</span></div>
+            <div className="tm-ap-doc"><button className="tm-doc-btn" onClick={() => setOpenId(application.id)}><span className="tm-doc-thumb">{application.photo_url ? <img src={application.photo_url} alt="" /> : <TmIcon name="doc" />}</span>Фото документа</button></div>
+            <div className="tm-ap-act">
+              {application.status === "pending" && <><button className="tm-btn danger sm" disabled={busy} onClick={() => setOpenId(application.id)}>Відхилити</button><button className="tm-btn primary sm" disabled={busy} onClick={() => setOpenId(application.id)}>Прийняти</button></>}
+              {application.status === "rejected" && <button className={`tm-btn danger sm${confirm.armed === `delete-${application.id}` ? " armed" : ""}`} disabled={busy} onClick={() => void removeArchived(application)}>{busy ? "Видаляємо…" : confirm.armed === `delete-${application.id}` ? "Точно видалити?" : "Видалити"}</button>}
+            </div>
+          </article>;
+        })}</div>}
+    </section>
+
+    {opened && <TmModal label={`Заявка ${opened.full_name}`} wide onClose={() => setOpenId(null)}>
+      <p className="aud-crumbs reg-eyebrow">Перевірка заявки</p>
+      <h2 className="tm-modal-title">{opened.full_name}</h2>
+      <div className="tm-doc-photos">
+        <figure><figcaption>Фото документа</figcaption>{opened.photo_url ? <a href={opened.photo_url} target="_blank" rel="noreferrer"><img src={opened.photo_url} alt={`Фото документа: ${opened.full_name}`} /></a> : <div className="tm-doc-empty"><TmIcon name="doc" />Фото недоступне</div>}</figure>
+        <figure><figcaption>Фото обличчя</figcaption>{opened.face_photo_url ? <a href={opened.face_photo_url} target="_blank" rel="noreferrer"><img src={opened.face_photo_url} alt={`Фото обличчя: ${opened.full_name}`} /></a> : <div className="tm-doc-empty"><TmIcon name="users" />Фото недоступне</div>}</figure>
+      </div>
+      <dl className="tm-kv">
+        <div><dt>Місто</dt><dd>{opened.city}</dd></div>
+        <div><dt>Телефон</dt><dd>{opened.phone}</dd></div>
+        <div><dt>Вік</dt><dd>{opened.age} р.</dd></div>
+        <div><dt>Подано</dt><dd>{new Date(opened.created_at).toLocaleString("uk-UA")}</dd></div>
+        <div><dt>Статус</dt><dd><span className={`tm-pill ${tmApplicationStatus[opened.status][0]}`}>{tmApplicationStatus[opened.status][1]}</span></dd></div>
+      </dl>
+      {opened.status === "pending" && <div className="tm-modal-actions">
+        <button className={`tm-btn danger${confirm.armed === `reject-${opened.id}` ? " armed" : ""}`} disabled={busyId === opened.id} onClick={() => { if (confirm.ask(`reject-${opened.id}`)) void decide(opened, "rejected"); }}><TmIcon name="no" />{confirm.armed === `reject-${opened.id}` ? "Точно відхилити?" : "Відхилити"}</button>
+        <button className="tm-btn primary" disabled={busyId === opened.id} onClick={() => void decide(opened, "approved")}><TmIcon name="ok" />{busyId === opened.id ? "Зберігаємо…" : "Прийняти"}</button>
+      </div>}
+    </TmModal>}
+    {notice && <div className="tm-toast" role="status">{notice}</div>}
+  </section>;
+}
+
+// ---------- Працівники ----------
+type TmPermissions = Pick<EmployeeProfile, "can_use_chats" | "can_view_reviews" | "can_view_ratings" | "can_view_salary" | "can_view_statistics">;
+type TmEmployee = EmployeeProfile & { operator_status?: string; active_chat_limit?: number };
+const tmPermissionList: [keyof TmPermissions, string][] = [["can_use_chats", "Чати"], ["can_view_reviews", "Відгуки"], ["can_view_ratings", "Оцінки та рейтинг"], ["can_view_salary", "Зарплата"], ["can_view_statistics", "Особиста статистика"]];
+
+function tmEmployeeState(employee: EmployeeProfile, now: number): "on" | "off" | "frozen" {
+  if (employee.status === "frozen") return "frozen";
+  return employee.last_active_at && now - Date.parse(employee.last_active_at) < 90_000 ? "on" : "off";
+}
+
+function tmEmployeeNumbers(employee: EmployeeProfile) {
+  const rating = employee.reviews.length ? employee.reviews.reduce((sum, review) => sum + review.rating, 0) / employee.reviews.length : 0;
+  const hours = (employee.daily_activity || []).reduce((sum, value) => sum + value, 0);
+  const paid = employee.payouts.filter((payout) => payout.status === "paid").reduce((sum, payout) => sum + Number(payout.amount), 0);
+  const due = employee.payouts.filter((payout) => payout.status === "pending").reduce((sum, payout) => sum + Number(payout.amount), 0);
+  return { rating, hours, paid, due };
+}
+
+function TmHours({ values, label }: { values: number[]; label: string }) {
+  if (!values.length) return <div className="tm-hbars empty"><span className="aud-hint">Даних про робочий час ще немає</span></div>;
+  const max = Math.max(10, ...values) * 1.1;
+  const today = new Date();
+  return <div className="tm-hbars" role="img" aria-label={label}>
+    {values.map((value, index) => {
+      const day = new Date(today); day.setDate(day.getDate() - (values.length - 1 - index));
+      const weekend = day.getDay() === 0 || day.getDay() === 6;
+      return <span key={index} className={weekend ? "we" : ""} data-tip={`${String(day.getDate()).padStart(2, "0")}.${String(day.getMonth() + 1).padStart(2, "0")} · ${value.toFixed(1).replace(".", ",")} год`}><i style={{ height: `${value / max * 100}%` }} /></span>;
+    })}
+    <span className="tm-norm" style={{ bottom: `${8 / max * 100}%` }}><b>8 год</b></span>
+  </div>;
+}
+
+function EmployeeProfileModal({ employee, now, onClose, onChanged, onRemoved }: { employee: TmEmployee; now: number; onClose: () => void; onChanged: (employee: TmEmployee) => void; onRemoved: () => void }) {
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const [payout, setPayout] = useState({ amount: "", note: "", status: "pending" as "pending" | "paid" });
+  const [operator, setOperator] = useState({ status: employee.operator_status || "online", limit: String(employee.active_chat_limit || 5) });
+  const [saved, setSaved] = useState("");
+  const [copied, setCopied] = useState(false);
+  const confirm = useTmConfirm();
+  const numbers = tmEmployeeNumbers(employee);
+  const state = tmEmployeeState(employee, now);
+
+  const patch = async (key: string, body: Record<string, unknown>) => {
+    setBusy(key); setError("");
+    const response = await fetch("/api/owner/employees", { method: "PATCH", headers: tmOwnerHeaders(true), body: JSON.stringify(body) }).catch(() => null);
+    const result = response ? await response.json().catch(() => ({})) : {};
+    setBusy("");
+    if (!response?.ok) { setError(result.error || "Не вдалося зберегти зміни. Спробуйте ще раз."); return null; }
+    return result as { payout?: WorkerPayout };
   };
+  const flashSaved = (text: string) => { setSaved(text); window.setTimeout(() => setSaved((current) => current === text ? "" : current), 2200); };
 
-  const visibleApplications = applications.filter((application) => {
-    const inView = view === "archive" ? application.status === "rejected" || application.status === "terminated" : application.status === "pending" || application.status === "approved";
-    const query = search.trim().toLocaleLowerCase("uk-UA");
-    const matchesQuery = !query || `${application.full_name} ${application.city} ${application.phone}`.toLocaleLowerCase("uk-UA").includes(query);
-    const matchesStatus = statusFilter === "all" || application.status === statusFilter;
-    return inView && matchesQuery && matchesStatus;
-  });
+  const toggleFreeze = async () => {
+    if (!confirm.ask("freeze")) return;
+    const action = employee.status === "frozen" ? "unfreeze" : "freeze";
+    if (await patch("freeze", { id: employee.id, action })) onChanged({ ...employee, status: action === "freeze" ? "frozen" : "approved" });
+  };
+  const terminate = async () => {
+    if (!confirm.ask("terminate")) return;
+    if (await patch("terminate", { id: employee.id, action: "terminate" })) onRemoved();
+  };
+  const savePermission = async (key: keyof TmPermissions, value: boolean) => {
+    const permissions = Object.fromEntries(tmPermissionList.map(([name]) => [name, name === key ? value : employee[name]])) as TmPermissions;
+    if (await patch(`perm-${key}`, { id: employee.id, action: "update_permissions", permissions })) { onChanged({ ...employee, ...permissions }); flashSaved("Права збережено"); }
+  };
+  const saveOperator = async () => {
+    const limit = Number(operator.limit);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 50) { setError("Ліміт активних чатів — від 1 до 50."); return; }
+    if (await patch("operator", { action: "update_operator_settings", id: employee.id, operator_status: operator.status, active_chat_limit: limit })) { onChanged({ ...employee, operator_status: operator.status, active_chat_limit: limit }); flashSaved("Налаштування збережено"); }
+  };
+  const createPayout = async () => {
+    const amount = Number(payout.amount.replace(",", "."));
+    if (!Number.isFinite(amount) || amount <= 0) { setError("Вкажіть суму зарплати більше нуля."); return; }
+    const result = await patch("payout", { action: "create_payout", id: employee.id, amount, note: payout.note, status: payout.status });
+    if (result?.payout) { onChanged({ ...employee, payouts: [result.payout, ...employee.payouts] }); setPayout({ amount: "", note: "", status: "pending" }); flashSaved("Нараховано"); }
+  };
+  const markPaid = async (item: WorkerPayout) => {
+    const result = await patch(`paid-${item.id}`, { action: "mark_payout_paid", payout_id: item.id });
+    if (result?.payout) onChanged({ ...employee, payouts: employee.payouts.map((entry) => entry.id === item.id ? result.payout! : entry) });
+  };
+  const deletePayout = async (item: WorkerPayout) => {
+    if (!confirm.ask(`del-${item.id}`)) return;
+    if (await patch(`del-${item.id}`, { action: "delete_payout", payout_id: item.id })) onChanged({ ...employee, payouts: employee.payouts.filter((entry) => entry.id !== item.id) });
+  };
+  const copyWallet = () => {
+    if (!employee.ton_usdt_wallet) return;
+    const done = () => { setCopied(true); window.setTimeout(() => setCopied(false), 1200); };
+    if (navigator.clipboard) void navigator.clipboard.writeText(employee.ton_usdt_wallet).then(done, done); else done();
+  };
+  const minutes = employee.first_response_minutes;
 
-  return <section className="applications-page">
-    <section className="heading-row"><div><p className="eyebrow">КОМАНДА</p><h1>Заявки <span>працівників</span></h1><p className="subtle">Перевіряйте дані, фото документа та ухвалюйте рішення.</p></div><button className="sync" onClick={() => void loadApplications()}>↻ Оновити</button></section>
-    <div className="application-tabs"><button className={view === "active" ? "selected" : ""} onClick={() => setView("active")}>Активні</button><button className={view === "archive" ? "selected" : ""} onClick={() => setView("archive")}>Архів</button></div>
-    <div className="list-filters"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Пошук за ПІБ, містом або телефоном" /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | "pending" | "approved" | "rejected" | "terminated")}><option value="all">Усі статуси</option><option value="pending">На розгляді</option><option value="approved">Прийнято</option><option value="rejected">Відхилено</option><option value="terminated">Звільнено</option></select><span>Знайдено: {visibleApplications.length}</span></div>
-    {loading ? <article className="panel empty-applications">Завантажуємо заявки…</article> : error ? <article className="panel empty-applications">{error}</article> : visibleApplications.length === 0 ? <article className="panel empty-applications">{view === "archive" ? "В архіві поки немає заявок." : "Нових заявок поки немає."}</article> : <div className="applications-list">{visibleApplications.map((application) => <article className="panel application-card" key={application.id}>
-      <div className="application-main"><div className="candidate-details"><div className="face-square">{application.face_photo_url ? <a href={application.face_photo_url} target="_blank" rel="noreferrer"><img src={application.face_photo_url} alt={`Фото обличчя: ${application.full_name}`} /></a> : <span>Фото</span>}</div><div><p className="panel-label">КАНДИДАТ</p><h2>{application.full_name}</h2><p className="application-meta">{application.city} · {application.age} років · {application.phone}</p><p className="application-date">{new Date(application.created_at).toLocaleString("uk-UA")}</p></div></div><span className={`application-status ${application.status}`}>{application.status === "pending" ? "На розгляді" : application.status === "approved" ? "Прийнято" : application.status === "terminated" ? "Звільнено" : "Відхилено"}</span></div>
-      <div><small className="document-label">Фото паспорта</small><div className="document-preview">{application.photo_url ? <a href={application.photo_url} target="_blank" rel="noreferrer"><img src={application.photo_url} alt={`Фото паспорта: ${application.full_name}`} /></a> : <span>Фото недоступне</span>}</div></div>
-      {application.status === "pending" && <div className="application-actions"><button className="reject" disabled={busyId === application.id} onClick={() => void decide(application.id, "rejected")}>Відхилити</button><button className="approve" disabled={busyId === application.id} onClick={() => void decide(application.id, "approved")}>{busyId === application.id ? "Зберігаємо…" : "Прийняти"}</button></div>}{application.status === "rejected" && <div className="application-actions"><button className="delete-archive" disabled={busyId === application.id} onClick={() => void removeArchived(application.id)}>{busyId === application.id ? "Видаляємо…" : "Видалити"}</button></div>}
-    </article>)}</div>}
+  return <TmModal label={`Профіль ${employee.full_name}`} wide onClose={onClose}>
+    <div className="tm-pf-top">
+      <TmAvatar name={employee.full_name} photo={employee.avatar_url} status={state} size="lg" />
+      <div><p className="aud-crumbs reg-eyebrow">Працівник</p><h2 className="tm-modal-title">{employee.full_name}</h2><span className="aud-hint">{employee.city} · {employee.age} р. · з {tmDate(employee.created_at)}</span></div>
+      <span className={`tm-pill ${state === "on" ? "tm-p-on" : state === "frozen" ? "tm-p-break" : "tm-p-off"}`}>{state === "on" ? "Онлайн" : state === "frozen" ? "Заморожено" : "Не в мережі"}</span>
+    </div>
+    {error && <p className="tm-error">{error}</p>}
+    {saved && <p className="tm-saved">{saved}</p>}
+
+    <div className="tm-emp-stats wide">
+      <div><span>Рейтинг</span><b>{employee.reviews.length ? numbers.rating.toFixed(2).replace(".", ",") : "—"}</b></div>
+      <div><span>Відгуків</span><b>{employee.reviews.length}</b></div>
+      <div><span>Закриті чати</span><b>{employee.closed_chats}</b></div>
+      <div><span>1-ша відповідь</span><b>{minutes === null ? "—" : minutes < 60 ? `${minutes} хв` : `${Math.floor(minutes / 60)} год ${minutes % 60} хв`}</b></div>
+    </div>
+    <dl className="tm-kv">
+      <div><dt>Телефон</dt><dd>{employee.phone}</dd></div>
+      <div><dt>USDT гаманець (TON)</dt><dd className="tm-wallet">{employee.ton_usdt_wallet ? <><span>{employee.ton_usdt_wallet}</span><button className={`reg-cp biz-cp${copied ? " ok" : ""}`} aria-label="Копіювати гаманець" onClick={copyWallet}>{regCopyIcon}</button></> : "Не вказано"}</dd></div>
+    </dl>
+
+    <section className="tm-pf-sec"><h3>Робочі години · 30 днів</h3><TmHours values={employee.daily_activity || []} label={`Робочі години ${employee.full_name} за 30 днів`} /><div className="tm-h-axis"><span>30 днів тому</span><span>Сьогодні</span></div></section>
+
+    <section className="tm-pf-sec">
+      <h3>Налаштування оператора</h3>
+      <div className="tm-form-row three">
+        <label className="tm-fld">Статус<div className="reg-select"><select value={operator.status} onChange={(event) => setOperator({ ...operator, status: event.target.value })}><option value="online">Онлайн</option><option value="break">Перерва</option><option value="offline">Офлайн</option></select><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></div></label>
+        <label className="tm-fld">Ліміт активних чатів<input type="number" min={1} max={50} value={operator.limit} onChange={(event) => setOperator({ ...operator, limit: event.target.value })} /></label>
+        <button className="tm-btn ghost" disabled={busy === "operator"} onClick={() => void saveOperator()}>{busy === "operator" ? "Зберігаємо…" : "Зберегти"}</button>
+      </div>
+    </section>
+
+    <section className="tm-pf-sec">
+      <h3>Права доступу</h3>
+      <span className="aud-hint">Вимкнені розділи працівник не побачить. Зміни застосовуються одразу.</span>
+      <div className="tm-perms">{tmPermissionList.map(([key, label]) => <label key={key} className="reg-toggle"><input type="checkbox" checked={employee[key]} disabled={busy === `perm-${key}`} onChange={(event) => void savePermission(key, event.target.checked)} /><span />{label}</label>)}</div>
+    </section>
+
+    <section className="tm-pf-sec">
+      <div className="tm-sec-head"><h3>Зарплата</h3><span className="aud-hint">Виплачено: {tmMoney(numbers.paid)} USDT · До сплати: <b className={numbers.due ? "tm-due" : ""}>{tmMoney(numbers.due)} USDT</b></span></div>
+      <div className="tm-form-row four">
+        <label className="tm-fld">Сума, USDT<input inputMode="decimal" placeholder="0,00" value={payout.amount} onChange={(event) => setPayout({ ...payout, amount: event.target.value })} /></label>
+        <label className="tm-fld">Примітка<input maxLength={500} placeholder="Напр. «за жовтень»" value={payout.note} onChange={(event) => setPayout({ ...payout, note: event.target.value })} /></label>
+        <label className="tm-fld">Статус<div className="reg-select"><select value={payout.status} onChange={(event) => setPayout({ ...payout, status: event.target.value as "pending" | "paid" })}><option value="pending">До сплати</option><option value="paid">Вже виплачено</option></select><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></div></label>
+        <button className="tm-btn primary" disabled={busy === "payout"} onClick={() => void createPayout()}>Нарахувати</button>
+      </div>
+      {employee.payouts.length ? <div className="tm-list">{employee.payouts.map((item) => <div className="tm-li" key={item.id}>
+        <div className="tm-grow"><b>{tmMoney(Number(item.amount))} USDT</b><span>{item.note || "Зарплата"} · {tmDate(item.created_at)}{item.paid_at ? ` · виплачено ${tmDate(item.paid_at)}` : ""}</span></div>
+        <span className={`tm-pill ${item.status === "paid" ? "tm-p-ok" : "tm-p-due"}`}>{item.status === "paid" ? "Виплачено" : "До сплати"}</span>
+        {item.status === "pending" && <button className="tm-btn ghost sm" disabled={busy === `paid-${item.id}`} onClick={() => void markPaid(item)}>Сплачено</button>}
+        <button className={`tm-btn danger sm${confirm.armed === `del-${item.id}` ? " armed" : ""}`} disabled={busy === `del-${item.id}`} onClick={() => void deletePayout(item)}>{confirm.armed === `del-${item.id}` ? "Точно?" : "Видалити"}</button>
+      </div>)}</div> : <p className="aud-hint">Нарахувань ще немає.</p>}
+    </section>
+
+    <section className="tm-pf-sec">
+      <div className="tm-sec-head"><h3>Відгуки клієнтів</h3><span className="aud-hint">{employee.reviews.length}</span></div>
+      {employee.reviews.length ? <div className="tm-list">{employee.reviews.map((review) => <div className="tm-li top" key={review.id}><div className="tm-grow"><b>{review.client_name}</b><TmStars value={review.rating} /><span className="tm-quote">{review.comment}</span></div><span className="aud-hint">{tmDate(review.created_at)}</span></div>)}</div> : <p className="aud-hint">Відгуків ще немає. Вони з’являться після оцінювання діалогів підтримки.</p>}
+    </section>
+
+    <div className="tm-modal-actions">
+      <button className={`tm-btn ghost${confirm.armed === "freeze" ? " armed" : ""}`} disabled={busy === "freeze"} onClick={() => void toggleFreeze()}>{confirm.armed === "freeze" ? "Підтвердіть ще раз" : employee.status === "frozen" ? "Розморозити акаунт" : "Заморозити акаунт"}</button>
+      <button className={`tm-btn danger${confirm.armed === "terminate" ? " armed" : ""}`} disabled={busy === "terminate"} onClick={() => void terminate()}>{busy === "terminate" ? "Звільняємо…" : confirm.armed === "terminate" ? "Точно звільнити?" : "Звільнити працівника"}</button>
+    </div>
+  </TmModal>;
+}
+
+function EmployeesPanel() {
+  const [employees, setEmployees] = useState<TmEmployee[]>([]);
+  const [monthHours, setMonthHours] = useState<number[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "on" | "off" | "frozen">("all");
+  const [sort, setSort] = useState<"rating" | "chats" | "hours" | "due">("rating");
+  const [now, setNow] = useState(() => Date.now());
+
+  const loadEmployees = async () => {
+    const headers = tmOwnerHeaders();
+    if (!headers["x-owner-session"]) { setError("Сесію власника не знайдено. Увійдіть знову як власник."); setLoading(false); return; }
+    setLoading(true);
+    const response = await fetch("/api/owner/employees", { headers }).catch(() => null);
+    const result = response ? await response.json().catch(() => ({})) : {};
+    if (!response?.ok) setError(result.error || "Не вдалося завантажити працівників.");
+    else { setError(""); setEmployees(result.employees || []); setMonthHours(result.month_hours || []); }
+    setNow(Date.now());
+    setLoading(false);
+  };
+  useEffect(() => { void loadEmployees(); }, []);
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(timer); }, []);
+
+  const totals = employees.reduce((sum, employee) => {
+    const numbers = tmEmployeeNumbers(employee);
+    return { reviews: sum.reviews + employee.reviews.length, ratingSum: sum.ratingSum + employee.reviews.reduce((value, review) => value + review.rating, 0), chats: sum.chats + employee.closed_chats, paid: sum.paid + numbers.paid, due: sum.due + numbers.due };
+  }, { reviews: 0, ratingSum: 0, chats: 0, paid: 0, due: 0 });
+  const average = totals.reviews ? totals.ratingSum / totals.reviews : 0;
+  const onNow = employees.filter((employee) => tmEmployeeState(employee, now) === "on").length;
+  const hoursAverage = monthHours.length ? monthHours.reduce((sum, value) => sum + value, 0) / monthHours.length : 0;
+  const query = search.trim().toLocaleLowerCase("uk-UA").replace(/\s/g, "");
+  const rows = employees.map((employee) => ({ employee, state: tmEmployeeState(employee, now), ...tmEmployeeNumbers(employee) }))
+    .filter((row) => (statusFilter === "all" || row.state === statusFilter) && (!query || `${row.employee.full_name}${row.employee.city}${row.employee.phone}`.toLocaleLowerCase("uk-UA").replace(/\s/g, "").includes(query)))
+    .sort((a, b) => sort === "chats" ? b.employee.closed_chats - a.employee.closed_chats : sort === "hours" ? b.hours - a.hours : sort === "due" ? b.due - a.due : b.rating - a.rating);
+  const selected = employees.find((employee) => employee.id === selectedId) || null;
+
+  return <section className="tm-page aud">
+    <header className="aud-head">
+      <div><p className="aud-crumbs reg-eyebrow">Працівники</p><h1>Ефективність <span>команди</span></h1><p className="aud-hint">Лише працівники, яких ви реально прийняли</p></div>
+      <button className={`aud-live${loading ? " loading" : ""}`} type="button" onClick={() => void loadEmployees()} disabled={loading}><i />{loading ? "Оновлення…" : "Оновити"}</button>
+    </header>
+
+    <section className="tm-kpis" aria-label="Підсумки">
+      <TmKpi icon="users" label="Працівників" value={employees.length} sub={employees.length ? `${onNow} зараз онлайн` : "Ще нікого не прийнято"} highlight />
+      <TmKpi icon="chat" label="Відгуків клієнтів" value={totals.reviews} sub="За весь час" />
+      <TmKpi icon="star" label="Середній рейтинг" value={totals.reviews ? average.toFixed(1).replace(".", ",") : "—"} sub={totals.reviews ? <TmStars value={average} /> : "Відгуків поки немає"} />
+      <TmKpi icon="check" label="Закриті чати" value={totals.chats} sub="Діалоги підтримки" />
+      <TmKpi icon="cash" label="Зарплата команди" value={tmMoney(totals.paid)} unit="USDT" sub={totals.due ? <span className="tm-due">До сплати: {tmMoney(totals.due)} USDT</span> : "Боргів по зарплаті немає"} />
+    </section>
+
+    <section className="aud-card tm-sec" aria-labelledby="tmHoursTitle">
+      <div className="aud-row"><div><p className="aud-crumbs reg-eyebrow">Робочий час команди</p><h2 id="tmHoursTitle">Середні години на працівника · 30 днів</h2></div>
+        {monthHours.length > 0 && <div className="reg-stats"><div><span>Середнє</span><b>{hoursAverage.toFixed(1).replace(".", ",")} год</b></div><div><span>Днів понад 9 год</span><b>{monthHours.filter((value) => value > 9).length}</b></div></div>}</div>
+      <TmHours values={monthHours} label={`Середні години на працівника по днях, середнє ${hoursAverage.toFixed(1)}`} />
+      <div className="tm-h-axis"><span>30 днів тому</span><span>15 днів тому</span><span>Сьогодні</span></div>
+      <div className="tm-h-leg"><span><i className="wd" />Будні</span><span><i className="we" />Вихідні</span><span><i className="norm" />Норма 8 год</span></div>
+    </section>
+
+    <section className="aud-card tm-sec" aria-labelledby="tmStaffTitle">
+      <div><p className="aud-crumbs reg-eyebrow">Склад</p><h2 id="tmStaffTitle">Працівники</h2></div>
+      <div className="tm-toolbar">
+        <label className="reg-search tm-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg><input type="search" value={search} placeholder="Пошук за ім'ям, містом або телефоном" autoComplete="off" onChange={(event) => setSearch(event.target.value)} /></label>
+        <div className="side2-switch reg-segment" role="group" aria-label="Статус">{([["all", "Усі"], ["on", "Онлайн"], ["off", "Не в мережі"], ["frozen", "Заморожені"]] as const).map(([value, label]) => <button key={value} className={statusFilter === value ? "selected" : ""} onClick={() => setStatusFilter(value)}>{label}</button>)}</div>
+        <div className="reg-select"><select aria-label="Сортування" value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="rating">За рейтингом</option><option value="chats">За закритими чатами</option><option value="hours">За годинами</option><option value="due">За боргом по зарплаті</option></select><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></div>
+        <span className="tm-found">Знайдено: <b>{rows.length}</b></span>
+      </div>
+      {loading && !employees.length ? <TmState title="Завантажуємо працівників…" /> : error ? <TmState kind="warn" title="Не вдалося завантажити працівників" text={error} /> : !employees.length
+        ? <TmState title="Працівників ще немає" text="Коли ви приймете заявку в розділі «Команда», працівник з'явиться тут." />
+        : !rows.length ? <TmState title="Нічого не знайдено" text="Змініть пошук або статус." />
+        : <div className="tm-emp-grid">{rows.map(({ employee, state, rating, hours, paid, due }) => <button className="tm-emp" key={employee.id} onClick={() => setSelectedId(employee.id)}>
+          <div className="tm-emp-top"><TmAvatar name={employee.full_name} photo={employee.avatar_url} status={state} /><div className="tm-emp-who"><b>{employee.full_name}</b><span>з {tmDate(employee.created_at)}</span></div><span className={`tm-pill ${state === "on" ? "tm-p-on" : state === "frozen" ? "tm-p-break" : "tm-p-off"}`}>{state === "on" ? "Онлайн" : state === "frozen" ? "Заморожено" : "Не в мережі"}</span></div>
+          <div className="tm-emp-contact"><span><TmIcon name="pin" />{employee.city}</span><span><TmIcon name="tel" />{employee.phone}</span></div>
+          <div className="tm-emp-stats"><div><span>Рейтинг</span><b>{employee.reviews.length ? rating.toFixed(1).replace(".", ",") : "—"}</b></div><div><span>Відгуків</span><b>{employee.reviews.length}</b></div><div><span>Чатів</span><b>{employee.closed_chats}</b></div><div><span>Год / 30 дн</span><b>{Math.round(hours)}</b></div></div>
+          <div className="tm-emp-pay"><div><span>Виплачено</span><b>{tmMoney(paid)} USDT</b></div><div><span>До сплати</span><b className={due ? "tm-due" : ""}>{tmMoney(due)} USDT</b></div></div>
+        </button>)}</div>}
+    </section>
+
+    {selected && <EmployeeProfileModal key={selected.id} employee={selected} now={now} onClose={() => setSelectedId(null)}
+      onChanged={(next) => setEmployees((items) => items.map((item) => item.id === next.id ? next : item))}
+      onRemoved={() => { setEmployees((items) => items.filter((item) => item.id !== selected.id)); setSelectedId(null); }} />}
   </section>;
 }
 
@@ -2826,44 +2942,218 @@ function MediaScreen({ onBack }: { onBack: () => void }) {
   return <main className="media-cabinet"><aside className="media-sidebar"><div className="brand"><span className="brand-mark">N</span><span>nezeriya<span className="brand-light">.wallet</span></span></div><nav><button className={view === "banners" ? "selected" : ""} onClick={() => setView("banners")}>▣ Банери</button><button className={view === "statistics" ? "selected" : ""} onClick={() => { setView("statistics"); void loadEngagement(); }}>◈ Статистика</button><button className={view === "salary" ? "selected" : ""} onClick={() => { setView("salary"); void loadPayouts(); }}>₮ Зарплата</button></nav><AccountMenu name="Медійка" role="Медіа-команда" onSignOut={logout} /></aside><section className="media-content">{view === "salary" ? <section className="worker-feedback salary-panel"><p className="eyebrow">ЗАРПЛАТА</p><h1>Моя зарплата</h1><div className="media-salary-summary"><article className="panel"><p>До сплати</p><strong>{pending.toFixed(2)} USDT</strong><small>Виплати, що очікують переказу.</small></article><article className="panel"><p>Виплачено всього</p><strong>{paid.toFixed(2)} USDT</strong><small>Підтверджені CEO виплати.</small></article></div><article className="panel"><p>Історія виплат</p>{payouts.length === 0 ? <small>CEO ще не створив нарахувань.</small> : <div className="payout-history">{payouts.map((payout) => <div key={payout.id}><span><b>{Number(payout.amount).toFixed(2)} USDT</b><small>{payout.note || "Нарахування медійці"} · {new Date(payout.created_at).toLocaleDateString("uk-UA")}</small></span><em className={payout.status}>{payout.status === "paid" ? "Виплачено" : "До сплати"}</em></div>)}</div>}</article></section> : view === "statistics" ? <section className="worker-feedback"><p className="eyebrow">СТАТИСТИКА МЕДІЙКИ</p><h1>Результати публікацій</h1><div className="media-stat-cards"><article className="panel"><p>Доступних банерів</p><strong>{data.banners.length}</strong></article><article className="panel"><p>Переходів за посиланнями</p><strong>{engagement.clicks}</strong></article><article className="panel"><p>Середній рейтинг</p><strong>{engagement.average_rating === null ? "—" : `${engagement.average_rating.toFixed(2)} ★`}</strong></article><article className="panel"><p>Відгуків</p><strong>{engagement.reviews.length}</strong></article></div><article className="panel media-review-panel"><h2>Відгуки</h2>{engagement.reviews.length ? engagement.reviews.map((review) => <div className="media-review" key={review.id}><span><strong>{review.author_name}</strong><b>{"★".repeat(review.rating)}</b></span><p>{review.comment}</p><small>{new Date(review.created_at).toLocaleDateString("uk-UA")}</small></div>) : <p className="subtle">Відгуків поки немає.</p>}</article></section> : <><p className="eyebrow">МАТЕРІАЛИ ДЛЯ ПУБЛІКАЦІЙ</p><h1>Доступні банери</h1>{data.banners.length ? <div className="banner-grid">{data.banners.map((banner) => <article className="panel media-banner" key={banner.id}>{banner.image_url && <img src={banner.image_url} alt={banner.title} />}<h2>{banner.title}</h2>{banner.description && <p>{banner.description}</p>}{banner.target_url && <a href={banner.target_url} target="_blank" rel="noreferrer" onClick={() => trackBanner(banner.id)}>Відкрити посилання →</a>}</article>)}</div> : <article className="panel empty-applications">CEO ще не додав банери.</article>}</>}</section></main>;
 }
 
+// ---------- Медійка ----------
+type TmMediaApplication = { id: string; full_name: string; city: string; phone: string; telegram_channel: string; portfolio_url: string; status: string; created_at?: string };
+type TmBanner = { id: string; title: string; description: string | null; target_url: string | null; image_url: string | null; created_at?: string };
+type TmMediaPayout = { id: string; media_application_id: string; amount: number; status: "pending" | "paid"; note: string | null; created_at: string };
+type TmMediaStat = { id: string; full_name: string; banners: number; clicks: number; paid: number; pending: number; reviews: number; average_rating: number | null };
+
 function MediaOwnerPanel() {
-  const [data, setData] = useState<{ applications: { id: string; full_name: string; city: string; phone: string; telegram_channel: string; portfolio_url: string; status: string }[]; banners: { id: string; title: string; description: string | null; target_url: string | null; image_url: string | null }[] }>({ applications: [], banners: [] });
-  const [payouts, setPayouts] = useState<{ id: string; media_application_id: string; amount: number; status: "pending" | "paid"; note: string | null; created_at: string }[]>([]);
-  const [mediaStatistics, setMediaStatistics] = useState<{ id: string; full_name: string; banners: number; clicks: number; paid: number; pending: number; reviews: number; average_rating: number | null }[]>([]);
+  const [data, setData] = useState<{ applications: TmMediaApplication[]; banners: TmBanner[] }>({ applications: [], banners: [] });
+  const [payouts, setPayouts] = useState<TmMediaPayout[]>([]);
+  const [statistics, setStatistics] = useState<TmMediaStat[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState("");
+  const [banner, setBanner] = useState({ title: "", link: "", description: "" });
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState("");
+  const [dragging, setDragging] = useState(false);
+  const [bannerErrors, setBannerErrors] = useState<{ title?: boolean; link?: boolean; file?: boolean }>({});
   const [payoutForm, setPayoutForm] = useState({ media_application_id: "", amount: "", note: "", status: "pending" as "pending" | "paid" });
-  const [reviewForm, setReviewForm] = useState({ media_application_id: "", author_name: "Клієнт", rating: "5", comment: "" });
-  const [message, setMessage] = useState("");
-  const headers = () => ({ Authorization: `Bearer ${window.sessionStorage.getItem("nezaria_access_token") || ""}`, "x-owner-session": window.sessionStorage.getItem("nezeriya_owner_session") || "" });
-  const load = async () => { const [media, paymentData, analytics] = await Promise.all([fetch("/api/owner/media", { headers: headers() }), fetch("/api/owner/media/payouts", { headers: headers() }), fetch("/api/owner/media/analytics", { headers: headers() })]); if (media.ok) setData(await media.json()); if (paymentData.ok) { const result = await paymentData.json(); setPayouts(result.payouts || []); } if (analytics.ok) { const result = await analytics.json(); setMediaStatistics(result.statistics || []); } };
+  const [reviewForm, setReviewForm] = useState({ media_application_id: "", author_name: "", rating: 5, comment: "" });
+  const [payoutFilter, setPayoutFilter] = useState<"all" | "pending" | "paid">("all");
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const flash = (text: string) => { setNotice(text); window.setTimeout(() => setNotice((current) => current === text ? "" : current), 2600); };
+  const load = async () => {
+    setLoading(true);
+    const headers = tmOwnerHeaders();
+    const [media, paymentData, analytics] = await Promise.all([
+      fetch("/api/owner/media", { headers }).catch(() => null),
+      fetch("/api/owner/media/payouts", { headers }).catch(() => null),
+      fetch("/api/owner/media/analytics", { headers }).catch(() => null),
+    ]);
+    if (media?.ok) { setData(await media.json()); setError(""); } else setError("Не вдалося завантажити медіа-кабінет.");
+    if (paymentData?.ok) setPayouts((await paymentData.json()).payouts || []);
+    if (analytics?.ok) setStatistics((await analytics.json()).statistics || []);
+    setLoading(false);
+  };
   useEffect(() => { void load(); }, []);
-  useEffect(() => {
-    const panel = document.querySelector(".media-payroll");
-    const list = panel?.querySelector(".owner-payout-list");
-    if (!panel || !list || panel.querySelector(".payout-filter-bar")) return;
-    const filters = document.createElement("div"); filters.className = "list-filters payout-filter-bar";
-    const input = document.createElement("input"); input.placeholder = "Пошук виплати або медійки";
-    const status = document.createElement("select"); status.innerHTML = "<option value=\"all\">Усі виплати</option><option value=\"pending\">До сплати</option><option value=\"paid\">Виплачено</option>";
-    const count = document.createElement("span");
-    const apply = () => { let visible = 0; list.querySelectorAll(":scope>div").forEach((row) => { const matchesText = row.textContent?.toLocaleLowerCase("uk-UA").includes(input.value.trim().toLocaleLowerCase("uk-UA")) ?? true; const matchesStatus = status.value === "all" || row.querySelector(`em.${status.value}`); const show = matchesText && Boolean(matchesStatus); (row as HTMLElement).style.display = show ? "flex" : "none"; if (show) visible += 1; }); count.textContent = `Знайдено: ${visible}`; };
-    input.addEventListener("input", apply); status.addEventListener("change", apply); filters.append(input, status, count); panel.querySelector(".owner-payroll-form")?.insertAdjacentElement("afterend", filters); apply();
-    return () => filters.remove();
-  }, [payouts]);
-  const decide = async (id: string, status: string) => { await fetch("/api/owner/media", { method: "PATCH", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) }); void load(); };
-  const upload = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); const r = await fetch("/api/owner/media", { method: "POST", headers: headers(), body: new FormData(event.currentTarget) }); const result = await r.json().catch(() => ({})); setMessage(r.ok ? "Банер додано." : result.error || "Не вдалося додати банер."); if (r.ok) { event.currentTarget.reset(); void load(); } };
-  const createPayout = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); const amount = Number(payoutForm.amount); const r = await fetch("/api/owner/media/payouts", { method: "POST", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify({ ...payoutForm, amount }) }); const result = await r.json().catch(() => ({})); setMessage(r.ok ? "Виплату створено." : result.error || "Не вдалося створити виплату."); if (r.ok) { setPayoutForm({ media_application_id: "", amount: "", note: "", status: "pending" }); void load(); } };
-  const markPaid = async (id: string) => { const r = await fetch("/api/owner/media/payouts", { method: "PATCH", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify({ id }) }); const result = await r.json().catch(() => ({})); setMessage(r.ok ? "Виплату позначено як здійснену." : result.error || "Не вдалося оновити виплату."); if (r.ok) void load(); };
-  const addReview = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); const r = await fetch("/api/owner/media/analytics", { method: "POST", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify({ ...reviewForm, rating: Number(reviewForm.rating) }) }); const result = await r.json().catch(() => ({})); setMessage(r.ok ? "Відгук додано." : result.error || "Не вдалося додати відгук."); if (r.ok) { setReviewForm({ media_application_id: "", author_name: "Клієнт", rating: "5", comment: "" }); void load(); } };
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+
   const approved = data.applications.filter((application) => application.status === "approved");
-  const applicationName = (id: string) => data.applications.find((application) => application.id === id)?.full_name || "Медійка";
-  return <section className="media-owner-page">
-    <section className="heading-row"><div><p className="eyebrow">МЕДІЙКА</p><h1>Медіа <span>кабінет</span></h1><p className="subtle">Заявки медійок, банери, переходи та виплати.</p></div><button className="sync" onClick={() => void load()}>↻ Оновити</button></section>
-    <article className="panel media-upload"><h2>Додати банер</h2><form onSubmit={upload}><input name="title" placeholder="Назва банера *" required /><input name="target_url" type="url" placeholder="Посилання (необов’язково)" /><textarea name="description" placeholder="Опис" /><input name="image" type="file" accept="image/*" required /><button>Завантажити банер</button></form>{message && <p>{message}</p>}</article>
-    <article className="panel media-payroll"><div className="owner-payroll-head"><h2>Виплати медійкам</h2><span>Створюйте USDT-виплати та підтверджуйте переказ.</span></div><form className="media-payroll-form" onSubmit={createPayout}><select value={payoutForm.media_application_id} required onChange={(event) => setPayoutForm({ ...payoutForm, media_application_id: event.target.value })}><option value="">Оберіть медійку</option>{approved.map((application) => <option key={application.id} value={application.id}>{application.full_name}</option>)}</select><input type="number" min="0.01" step="0.01" placeholder="Сума USDT" value={payoutForm.amount} required onChange={(event) => setPayoutForm({ ...payoutForm, amount: event.target.value })} /><input placeholder="Примітка (необов’язково)" value={payoutForm.note} onChange={(event) => setPayoutForm({ ...payoutForm, note: event.target.value })} /><select value={payoutForm.status} onChange={(event) => setPayoutForm({ ...payoutForm, status: event.target.value as "pending" | "paid" })}><option value="pending">До сплати</option><option value="paid">Виплачено</option></select><button>Створити</button></form>{payouts.length ? <div className="owner-payout-list">{payouts.map((payout) => <div key={payout.id}><span><b>{Number(payout.amount).toFixed(2)} USDT · {applicationName(payout.media_application_id)}</b><small>{payout.note || "Без примітки"} · {new Date(payout.created_at).toLocaleDateString("uk-UA")}</small></span><em className={payout.status}>{payout.status === "paid" ? "Виплачено" : "До сплати"}</em>{payout.status === "pending" && <button onClick={() => void markPaid(payout.id)}>Позначити виплаченою</button>}</div>)}</div> : <p className="subtle">Виплат ще немає.</p>}</article>
-    <section className="media-stat-grid">{mediaStatistics.map((stat) => <article className="panel media-stat-row" key={stat.id}><div><h2>{stat.full_name}</h2><p>{stat.banners} банерів · {stat.clicks} переходів</p></div><div><b>{stat.paid.toFixed(2)} USDT</b><small>виплачено</small></div><div><b>{stat.pending.toFixed(2)} USDT</b><small>до сплати</small></div><div><b>{stat.average_rating === null ? "—" : `${stat.average_rating.toFixed(2)} ★`}</b><small>{stat.reviews} відгуків</small></div></article>)}</section>
-    <article className="panel media-review-form"><h2>Додати відгук медійці</h2><form onSubmit={addReview}><select value={reviewForm.media_application_id} required onChange={(event) => setReviewForm({ ...reviewForm, media_application_id: event.target.value })}><option value="">Оберіть медійку</option>{approved.map((application) => <option key={application.id} value={application.id}>{application.full_name}</option>)}</select><input value={reviewForm.author_name} maxLength={100} placeholder="Ім’я автора" onChange={(event) => setReviewForm({ ...reviewForm, author_name: event.target.value })} /><select value={reviewForm.rating} onChange={(event) => setReviewForm({ ...reviewForm, rating: event.target.value })}>{[5,4,3,2,1].map((rating) => <option key={rating} value={rating}>{rating} зірок</option>)}</select><input value={reviewForm.comment} required placeholder="Текст відгуку" onChange={(event) => setReviewForm({ ...reviewForm, comment: event.target.value })} /><button>Зберегти відгук</button></form></article>
-    <section className="media-owner-grid"><article className="panel"><h2>Заявки медійок</h2>{data.applications.length ? data.applications.map((application) => <div className="media-application-row" key={application.id}><div><strong>{application.full_name}</strong><small>{application.city} · {application.phone} · {application.telegram_channel}</small><a href={application.portfolio_url} target="_blank" rel="noreferrer">Портфоліо</a></div><em className={application.status}>{application.status === "pending" ? "На розгляді" : application.status === "approved" ? "Прийнято" : "Відхилено"}</em>{application.status === "pending" && <span><button onClick={() => void decide(application.id, "approved")}>Прийняти</button><button className="reject" onClick={() => void decide(application.id, "rejected")}>Відхилити</button></span>}</div>) : <p>Заявок поки немає.</p>}</article><article className="panel"><h2>Опубліковані банери</h2><div className="banner-list">{data.banners.map((banner) => <div key={banner.id}>{banner.image_url && <img src={banner.image_url} alt="" />}<strong>{banner.title}</strong></div>)}</div></article></section>
+  const pendingApplications = data.applications.filter((application) => application.status === "pending");
+  const nameOf = (id: string) => data.applications.find((application) => application.id === id)?.full_name || "Медійка";
+  const clicks = statistics.reduce((sum, stat) => sum + stat.clicks, 0);
+  const paid = payouts.filter((payout) => payout.status === "paid").reduce((sum, payout) => sum + Number(payout.amount), 0);
+  const duePayouts = payouts.filter((payout) => payout.status === "pending");
+  const due = duePayouts.reduce((sum, payout) => sum + Number(payout.amount), 0);
+
+  const pickFile = (next: File | undefined) => {
+    if (!next) return;
+    if (!next.type.startsWith("image/")) { flash("Оберіть зображення: PNG, JPG, WEBP або GIF"); return; }
+    if (next.size > 5 * 1024 * 1024) { flash("Файл більший за 5 МБ — стисніть зображення"); return; }
+    setFile(next);
+    setPreview(URL.createObjectURL(next));
+    setBannerErrors((current) => ({ ...current, file: false }));
+  };
+  const publish = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const errors = { title: !banner.title.trim(), link: Boolean(banner.link.trim()) && !/^https:\/\/\S+$/.test(banner.link.trim()), file: !file };
+    setBannerErrors(errors);
+    if (errors.title || errors.link || errors.file) return;
+    const form = new FormData();
+    form.set("title", banner.title.trim()); form.set("target_url", banner.link.trim()); form.set("description", banner.description.trim()); form.set("image", file!);
+    setBusy("banner");
+    const response = await fetch("/api/owner/media", { method: "POST", headers: tmOwnerHeaders(), body: form }).catch(() => null);
+    const result = response ? await response.json().catch(() => ({})) : {};
+    setBusy("");
+    if (!response?.ok) { flash(result.error || "Не вдалося додати банер."); return; }
+    flash(`Банер «${banner.title.trim()}» опубліковано`);
+    setBanner({ title: "", link: "", description: "" }); setFile(null); setPreview("");
+    if (fileInput.current) fileInput.current.value = "";
+    void load();
+  };
+  const decide = async (application: TmMediaApplication, status: "approved" | "rejected") => {
+    setBusy(`app-${application.id}`);
+    const response = await fetch("/api/owner/media", { method: "PATCH", headers: tmOwnerHeaders(true), body: JSON.stringify({ id: application.id, status }) }).catch(() => null);
+    setBusy("");
+    flash(response?.ok ? (status === "approved" ? `«${application.full_name}» додано до медійок` : "Заявку відхилено") : "Не вдалося оновити заявку.");
+    if (response?.ok) void load();
+  };
+  const createPayout = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const amount = Number(payoutForm.amount.replace(",", ".").replace(/\s/g, ""));
+    if (!payoutForm.media_application_id) { flash("Оберіть медійку"); return; }
+    if (!Number.isFinite(amount) || amount <= 0) { flash("Вкажіть суму більше нуля"); return; }
+    setBusy("payout");
+    const response = await fetch("/api/owner/media/payouts", { method: "POST", headers: tmOwnerHeaders(true), body: JSON.stringify({ ...payoutForm, amount }) }).catch(() => null);
+    const result = response ? await response.json().catch(() => ({})) : {};
+    setBusy("");
+    if (!response?.ok) { flash(result.error || "Не вдалося створити виплату."); return; }
+    flash(`Виплату створено: ${tmMoney(amount)} USDT`);
+    setPayoutForm({ media_application_id: payoutForm.media_application_id, amount: "", note: "", status: "pending" });
+    void load();
+  };
+  const markPaid = async (id: string) => {
+    setBusy(`paid-${id}`);
+    const response = await fetch("/api/owner/media/payouts", { method: "PATCH", headers: tmOwnerHeaders(true), body: JSON.stringify({ id }) }).catch(() => null);
+    const result = response ? await response.json().catch(() => ({})) : {};
+    setBusy("");
+    flash(response?.ok ? "Виплату позначено сплаченою" : result.error || "Не вдалося оновити виплату.");
+    if (response?.ok) void load();
+  };
+  const addReview = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!reviewForm.media_application_id) { flash("Оберіть медійку"); return; }
+    if (!reviewForm.comment.trim()) { flash("Напишіть текст відгуку"); return; }
+    setBusy("review");
+    const response = await fetch("/api/owner/media/analytics", { method: "POST", headers: tmOwnerHeaders(true), body: JSON.stringify({ ...reviewForm, author_name: reviewForm.author_name.trim() || "Клієнт" }) }).catch(() => null);
+    const result = response ? await response.json().catch(() => ({})) : {};
+    setBusy("");
+    if (!response?.ok) { flash(result.error || "Не вдалося додати відгук."); return; }
+    flash("Відгук збережено");
+    setReviewForm({ media_application_id: reviewForm.media_application_id, author_name: "", rating: 5, comment: "" });
+    void load();
+  };
+  const mediaOptions = approved.length ? approved.map((application) => <option key={application.id} value={application.id}>{application.full_name}</option>) : null;
+  const visiblePayouts = payouts.filter((payout) => payoutFilter === "all" || payout.status === payoutFilter).sort((a, b) => (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1) || Date.parse(b.created_at) - Date.parse(a.created_at));
+  const sortedApplications = [...data.applications].sort((a, b) => (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1));
+
+  return <section className="tm-page aud">
+    <header className="aud-head">
+      <div><p className="aud-crumbs reg-eyebrow">Медійка</p><h1>Медіа <span>кабінет</span></h1><p className="aud-hint">Заявки медійок, банери, переходи та виплати</p></div>
+      <button className={`aud-live${loading ? " loading" : ""}`} type="button" onClick={() => void load()} disabled={loading}><i />{loading ? "Оновлення…" : "Оновити"}</button>
+    </header>
+    {error && <p className="tm-error">{error}</p>}
+
+    <section className="tm-kpis" aria-label="Підсумки">
+      <TmKpi icon="users" label="Медійок" value={approved.length} sub={pendingApplications.length ? `${pendingApplications.length} нових заявок` : "Нових заявок немає"} highlight />
+      <TmKpi icon="image" label="Банерів" value={data.banners.length} sub="Опубліковано" />
+      <TmKpi icon="click" label="Переходів" value={clicks} sub="З усіх банерів" />
+      <TmKpi icon="ok" label="Виплачено" value={tmMoney(paid)} unit="USDT" sub="Медійкам за весь час" />
+      <TmKpi icon="clock" label="До сплати" value={tmMoney(due)} unit="USDT" sub={duePayouts.length ? <span className="tm-due">{duePayouts.length} виплат очікують</span> : "Усе сплачено"} />
+    </section>
+
+    <div className="tm-m-grid">
+      <div className="tm-m-col">
+        <section className="aud-card tm-sec" aria-labelledby="tmBannerTitle">
+          <div><p className="aud-crumbs reg-eyebrow">Банери</p><h2 id="tmBannerTitle">Додати банер</h2></div>
+          <form className="tm-form-grid" onSubmit={(event) => void publish(event)} noValidate>
+            <label className={`tm-drop full${dragging ? " over" : ""}${bannerErrors.file ? " invalid" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); pickFile(event.dataTransfer.files[0]); }}>
+              <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => pickFile(event.target.files?.[0])} />
+              <span className="tm-drop-prev">{preview ? <img src={preview} alt="Прев'ю банера" /> : <TmIcon name="image" />}</span>
+              <span className="tm-drop-txt"><b>{file ? `${file.name} · ${(file.size / 1024).toFixed(0)} КБ` : "Перетягніть зображення або оберіть файл"}</b><span>{bannerErrors.file ? "Додайте зображення банера" : "PNG, JPG, WEBP або GIF · до 5 МБ · рекомендовано 1200×675"}</span></span>
+            </label>
+            <label className="tm-fld">Назва банера<input aria-invalid={bannerErrors.title} maxLength={60} placeholder="Напр. «Осінній бонус 20%»" value={banner.title} onChange={(event) => setBanner({ ...banner, title: event.target.value })} />{bannerErrors.title && <span className="tm-hint err">Вкажіть назву банера</span>}</label>
+            <label className="tm-fld">Посилання <i>(необов&apos;язково)</i><input aria-invalid={bannerErrors.link} inputMode="url" placeholder="https://t.me/…" value={banner.link} onChange={(event) => setBanner({ ...banner, link: event.target.value })} />{bannerErrors.link && <span className="tm-hint err">Посилання має починатися з https://</span>}</label>
+            <label className="tm-fld full">Опис <i>(необов&apos;язково)</i><textarea rows={2} placeholder="Що побачить медійка: умови, дедлайн, куди вести трафік" value={banner.description} onChange={(event) => setBanner({ ...banner, description: event.target.value })} /></label>
+            <div className="full tm-right"><button className="tm-btn primary" type="submit" disabled={busy === "banner"}><TmIcon name="upload" />{busy === "banner" ? "Завантажуємо…" : "Опублікувати банер"}</button></div>
+          </form>
+        </section>
+
+        <section className="aud-card tm-sec" aria-labelledby="tmPublishedTitle">
+          <div className="tm-sec-head"><div><p className="aud-crumbs reg-eyebrow">Опубліковані</p><h2 id="tmPublishedTitle">Банери</h2></div><span className="aud-hint">{data.banners.length ? `${data.banners.length} банерів · ${clicks} переходів` : ""}</span></div>
+          {data.banners.length ? <div className="tm-banners">{data.banners.map((item) => <article className="tm-bn" key={item.id}>
+            <div className="tm-bn-img" style={{ background: `linear-gradient(135deg,${regColors[regHash(item.title) % regColors.length]}55,#141A20)` }}>{item.image_url ? <img src={item.image_url} alt={item.title} /> : item.title}</div>
+            <div className="tm-bn-body"><b>{item.title}</b>{item.target_url ? <a className="tm-bn-link" href={item.target_url} target="_blank" rel="noreferrer">{item.target_url.replace(/^https?:\/\//, "")}</a> : <span className="tm-bn-link none">Без посилання</span>}{item.description && <span className="tm-bn-desc">{item.description}</span>}{item.created_at && <span className="aud-hint win-small">{tmDate(item.created_at)}</span>}</div>
+          </article>)}</div> : <TmState title="Банерів ще немає" text="Опублікуйте перший банер — медійки побачать його у своєму кабінеті." />}
+        </section>
+      </div>
+
+      <div className="tm-m-col">
+        <section className="aud-card tm-sec" aria-labelledby="tmApplicationsTitle">
+          <div className="tm-sec-head"><div><p className="aud-crumbs reg-eyebrow">Заявки</p><h2 id="tmApplicationsTitle">Заявки медійок</h2></div>{pendingApplications.length > 0 && <span className="tm-pill tm-p-new">{pendingApplications.length} нових</span>}</div>
+          {sortedApplications.length ? <div className="tm-list">{sortedApplications.map((application) => <div className="tm-li" key={application.id}>
+            <TmAvatar name={application.full_name} size="sm" />
+            <div className="tm-grow"><b>{application.full_name}</b><span>{application.telegram_channel} · {application.city} · {application.phone}</span>{application.portfolio_url && <a className="tm-bn-link" href={application.portfolio_url} target="_blank" rel="noreferrer">Портфоліо</a>}</div>
+            {application.status === "pending"
+              ? <div className="tm-li-actions"><button className="tm-btn danger sm" disabled={busy === `app-${application.id}`} onClick={() => void decide(application, "rejected")}>Відхилити</button><button className="tm-btn primary sm" disabled={busy === `app-${application.id}`} onClick={() => void decide(application, "approved")}>Прийняти</button></div>
+              : <span className={`tm-pill ${application.status === "approved" ? "tm-p-ok" : "tm-p-no"}`}>{application.status === "approved" ? "Прийнято" : "Відхилено"}</span>}
+          </div>)}</div> : <TmState title="Заявок поки немає" text="Коли блогер або канал подасть заявку на співпрацю, вона з'явиться тут." />}
+        </section>
+
+        <section className="aud-card tm-sec" aria-labelledby="tmPayoutsTitle">
+          <div className="tm-sec-head"><div><p className="aud-crumbs reg-eyebrow">Виплати</p><h2 id="tmPayoutsTitle">Виплати медійкам</h2></div><span className="aud-hint">USDT-виплати та підтвердження переказу</span></div>
+          <form className="tm-form-row media" onSubmit={(event) => void createPayout(event)} noValidate>
+            <label className="tm-fld">Медійка<div className="reg-select"><select value={payoutForm.media_application_id} onChange={(event) => setPayoutForm({ ...payoutForm, media_application_id: event.target.value })}><option value="">{approved.length ? "Оберіть медійку" : "Спершу прийміть медійку"}</option>{mediaOptions}</select><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></div></label>
+            <label className="tm-fld">Сума, USDT<input inputMode="decimal" placeholder="0,00" value={payoutForm.amount} onChange={(event) => setPayoutForm({ ...payoutForm, amount: event.target.value })} /></label>
+            <label className="tm-fld">Примітка<input placeholder="Напр. «за жовтень»" value={payoutForm.note} onChange={(event) => setPayoutForm({ ...payoutForm, note: event.target.value })} /></label>
+            <label className="tm-fld">Статус<div className="reg-select"><select value={payoutForm.status} onChange={(event) => setPayoutForm({ ...payoutForm, status: event.target.value as "pending" | "paid" })}><option value="pending">До сплати</option><option value="paid">Сплачено</option></select><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></div></label>
+            <button className="tm-btn primary" type="submit" disabled={busy === "payout"}>Створити</button>
+          </form>
+          {payouts.length > 0 && <div className="side2-switch reg-segment tm-filter" role="group" aria-label="Фільтр виплат">{([["all", "Усі"], ["pending", "До сплати"], ["paid", "Сплачено"]] as const).map(([value, label]) => <button key={value} className={payoutFilter === value ? "selected" : ""} onClick={() => setPayoutFilter(value)}>{label}</button>)}</div>}
+          {visiblePayouts.length ? <div className="tm-list">{visiblePayouts.map((payout) => <div className="tm-li" key={payout.id}>
+            <TmAvatar name={nameOf(payout.media_application_id)} size="sm" />
+            <div className="tm-grow"><b>{nameOf(payout.media_application_id)}</b><span>{tmDate(payout.created_at)}{payout.note ? ` · ${payout.note}` : ""}</span></div>
+            <div className="tm-pay-r"><span className="tm-amt">{tmMoney(Number(payout.amount))} USDT</span><span className={`tm-pill ${payout.status === "paid" ? "tm-p-ok" : "tm-p-due"}`}>{payout.status === "paid" ? "Сплачено" : "До сплати"}</span></div>
+            {payout.status === "pending" && <button className="tm-btn ghost sm" disabled={busy === `paid-${payout.id}`} onClick={() => void markPaid(payout.id)}>Сплачено</button>}
+          </div>)}</div> : <TmState title={payouts.length ? "Нічого не знайдено" : "Виплат ще немає"} text={payouts.length ? "Змініть фільтр." : "Створіть першу виплату у формі вище."} />}
+        </section>
+
+        <section className="aud-card tm-sec" aria-labelledby="tmReviewsTitle">
+          <div><p className="aud-crumbs reg-eyebrow">Відгуки</p><h2 id="tmReviewsTitle">Відгуки й результати медійок</h2></div>
+          <form className="tm-review-form" onSubmit={(event) => void addReview(event)} noValidate>
+            <div className="tm-form-row three">
+              <label className="tm-fld">Медійка<div className="reg-select"><select value={reviewForm.media_application_id} onChange={(event) => setReviewForm({ ...reviewForm, media_application_id: event.target.value })}><option value="">{approved.length ? "Оберіть медійку" : "Спершу прийміть медійку"}</option>{mediaOptions}</select><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></div></label>
+              <label className="tm-fld">Клієнт<input maxLength={100} placeholder="Ім'я або @username" value={reviewForm.author_name} onChange={(event) => setReviewForm({ ...reviewForm, author_name: event.target.value })} /></label>
+              <div className="tm-fld"><span id="tmRateLabel">Оцінка</span><div className="tm-rate" role="radiogroup" aria-labelledby="tmRateLabel">{[1, 2, 3, 4, 5].map((value) => <button key={value} type="button" role="radio" aria-checked={reviewForm.rating === value} aria-label={`${value} з 5`} className={value <= reviewForm.rating ? "on" : ""} onClick={() => setReviewForm({ ...reviewForm, rating: value })}>★</button>)}</div></div>
+            </div>
+            <label className="tm-fld">Текст відгуку<textarea rows={2} maxLength={1000} placeholder="Що сподобалось або ні" value={reviewForm.comment} onChange={(event) => setReviewForm({ ...reviewForm, comment: event.target.value })} /></label>
+            <div className="tm-right"><button className="tm-btn primary" type="submit" disabled={busy === "review"}>Зберегти відгук</button></div>
+          </form>
+          {statistics.length > 0 && <div className="tm-list">{statistics.map((stat) => <div className="tm-li" key={stat.id}>
+            <TmAvatar name={stat.full_name} size="sm" />
+            <div className="tm-grow"><b>{stat.full_name}</b><span>{stat.clicks} переходів · виплачено {tmMoney(stat.paid)} USDT{stat.pending ? ` · до сплати ${tmMoney(stat.pending)} USDT` : ""}</span></div>
+            <div className="tm-pay-r">{stat.average_rating === null ? <span className="aud-hint">Без відгуків</span> : <><TmStars value={stat.average_rating} /><span className="aud-hint">{stat.average_rating.toFixed(2).replace(".", ",")} · {stat.reviews} відгуків</span></>}</div>
+          </div>)}</div>}
+        </section>
+      </div>
+    </div>
+    {notice && <div className="tm-toast" role="status">{notice}</div>}
   </section>;
-  return <section className="media-owner-page"><section className="heading-row"><div><p className="eyebrow">МЕДІЙКА</p><h1>Медіа <span>кабінет</span></h1><p className="subtle">Заявки медійок, банери та виплати.</p></div><button className="sync" onClick={() => void load()}>↻ Оновити</button></section><article className="panel media-upload"><h2>Додати банер</h2><form onSubmit={upload}><input name="title" placeholder="Назва банера *" required /><input name="target_url" type="url" placeholder="Посилання (необов’язково)" /><textarea name="description" placeholder="Опис" /><input name="image" type="file" accept="image/*" required /><button>Завантажити банер</button></form>{message && <p>{message}</p>}</article><article className="panel media-payroll"><div className="owner-payroll-head"><h2>Виплати медійкам</h2><span>Створюйте USDT-виплати та підтверджуйте переказ.</span></div><form className="media-payroll-form" onSubmit={createPayout}><select value={payoutForm.media_application_id} required onChange={(event) => setPayoutForm({ ...payoutForm, media_application_id: event.target.value })}><option value="">Оберіть медійку</option>{approved.map((application) => <option key={application.id} value={application.id}>{application.full_name}</option>)}</select><input type="number" min="0.01" step="0.01" placeholder="Сума USDT" value={payoutForm.amount} required onChange={(event) => setPayoutForm({ ...payoutForm, amount: event.target.value })} /><input placeholder="Примітка (необов’язково)" value={payoutForm.note} onChange={(event) => setPayoutForm({ ...payoutForm, note: event.target.value })} /><select value={payoutForm.status} onChange={(event) => setPayoutForm({ ...payoutForm, status: event.target.value as "pending" | "paid" })}><option value="pending">До сплати</option><option value="paid">Виплачено</option></select><button>Створити</button></form>{payouts.length ? <div className="owner-payout-list">{payouts.map((payout) => <div key={payout.id}><span><b>{Number(payout.amount).toFixed(2)} USDT · {applicationName(payout.media_application_id)}</b><small>{payout.note || "Без примітки"} · {new Date(payout.created_at).toLocaleDateString("uk-UA")}</small></span><em className={payout.status}>{payout.status === "paid" ? "Виплачено" : "До сплати"}</em>{payout.status === "pending" && <button onClick={() => void markPaid(payout.id)}>Позначити виплаченою</button>}</div>)}</div> : <p className="subtle">Виплат ще немає.</p>}</article><section className="media-owner-grid"><article className="panel"><h2>Заявки медійок</h2>{data.applications.length ? data.applications.map((application) => <div className="media-application-row" key={application.id}><div><strong>{application.full_name}</strong><small>{application.city} · {application.phone} · {application.telegram_channel}</small><a href={application.portfolio_url} target="_blank" rel="noreferrer">Портфоліо</a></div><em className={application.status}>{application.status === "pending" ? "На розгляді" : application.status === "approved" ? "Прийнято" : "Відхилено"}</em>{application.status === "pending" && <span><button onClick={() => void decide(application.id, "approved")}>Прийняти</button><button className="reject" onClick={() => void decide(application.id, "rejected")}>Відхилити</button></span>}</div>) : <p>Заявок поки немає.</p>}</article><article className="panel"><h2>Опубліковані банери</h2><div className="banner-list">{data.banners.map((banner) => <div key={banner.id}>{banner.image_url && <img src={banner.image_url} alt="" />}<strong>{banner.title}</strong></div>)}</div></article></section></section>;
 }
 
 function AuthScreen({ checking, onGoogleSignIn }: { checking: boolean; onGoogleSignIn: () => void }) {
