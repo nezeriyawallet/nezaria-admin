@@ -4580,6 +4580,25 @@ html[data-theme="light"] .side2-item.active svg { color:#12755f; }
 .sup-stars { color:#F5C451; letter-spacing:2px; font-size:15px; }
 .sup-stars i { font-style:normal; color:var(--sup-dim); }
 .sup-review { margin:12px 16px; font-size:13px; line-height:1.5; color:var(--sup-text-2); }
+.sup-info-actions { display:flex; flex-direction:column; gap:8px; margin:auto 16px 0; padding:16px 0; }
+.sup-info-actions .sup-ghost { width:100%; justify-content:center; }
+.sup-info-actions small { font-size:12px; line-height:1.45; color:var(--sup-dim); text-align:center; }
+.sup-transfer .tm-modal-card { width:min(440px,100%); gap:14px; }
+.sup-transfer-x { position:absolute; top:14px; right:14px; }
+.sup-transfer-sub { margin:6px 0 0; font-size:13px; color:var(--sup-muted); }
+.sup-transfer-empty { margin:0; padding:24px 12px; border-radius:14px; background:#0B0E12; border:1px dashed var(--sup-line-2); color:var(--sup-muted); font-size:14px; text-align:center; }
+.sup-transfer-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; max-height:360px; overflow-y:auto; }
+.sup-transfer-list button { display:flex; align-items:center; gap:12px; width:100%; padding:10px 12px; border-radius:14px; border:1px solid var(--sup-line); background:var(--sup-raise); color:var(--sup-text); text-align:left; cursor:pointer; }
+.sup-transfer-list button:hover:not(:disabled) { border-color:rgba(61,220,151,.4); background:var(--sup-chip); }
+.sup-transfer-list button:disabled { opacity:.55; cursor:not-allowed; }
+.sup-transfer-list .sup-av::after { display:none; }
+.sup-transfer-name { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.sup-transfer-name b { font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sup-transfer-name small { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--sup-muted); }
+.sup-transfer-name small i { width:7px; height:7px; border-radius:50%; background:var(--sup-mint); }
+.sup-transfer-list button:disabled .sup-transfer-name small i { background:var(--sup-new); }
+.sup-transfer-load { display:flex; flex-direction:column; align-items:flex-end; font:600 13px var(--font-geist-mono), ui-monospace, monospace; }
+.sup-transfer-load small { font:500 11px var(--font-onest), system-ui, sans-serif; color:var(--sup-dim); }
 
 @media (max-width:1280px) {
   .sup-body, .sup-body.no-info { grid-template-columns:300px minmax(0,1fr); }
