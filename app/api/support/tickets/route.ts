@@ -21,6 +21,7 @@ export async function GET(request: Request) {
     await closeInactiveChats(config);
     await markInactiveOperatorsOffline(config);
   }
+  if (new URL(request.url).searchParams.get("operators") === "1") return Response.json({ operators: await onlineOperators(config, access.userId) });
   return Response.json(await listTickets(config, access.userId, access.owner));
 }
 
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
   if (!access.owner && !access.canUseChats) return Response.json({ error: "Chat access is disabled by CEO" }, { status: 403 });
   const config = configForServer();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
-  const body = await request.json().catch(() => null) as { action?: string; ticketId?: string; message?: string } | null;
+  const body = await request.json().catch(() => null) as { action?: string; ticketId?: string; message?: string; targetUserId?: string } | null;
   if (!body?.ticketId || !body.action) return Response.json({ error: "Invalid request" }, { status: 400 });
   const ticket = await ticketById(config, body.ticketId);
   if (!ticket) return Response.json({ error: "Ticket not found" }, { status: 404 });
@@ -47,6 +48,34 @@ export async function POST(request: Request) {
     const telegramMessageId = await sendTelegram(ticket, greeting);
     await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: telegramMessageId, sender_type: "agent", body: greeting });
     await patch(config, "support_tickets", `id=eq.${ticket.id}`, { status: "in_progress", assigned_to: access.userId, assigned_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    return Response.json({ ok: true });
+  }
+  // A new ticket is still in the shared queue, so any operator may hand it on
+  // or dismiss it; a taken ticket only by its operator or the CEO.
+  const canManage = access.owner || ticket.status === "new" || ticket.assigned_to === access.userId;
+  if (body.action === "transfer") {
+    if (!canManage) return Response.json({ error: "This ticket is assigned to another agent" }, { status: 403 });
+    if (ticket.status !== "new" && ticket.status !== "in_progress") return Response.json({ error: "Передати можна лише відкритий чат." }, { status: 409 });
+    const target = (await onlineOperators(config, access.userId)).find((operator) => operator.user_id === body.targetUserId);
+    if (!target) return Response.json({ error: "Цей працівник уже не в мережі. Оберіть іншого." }, { status: 409 });
+    if (target.active_chats >= target.active_chat_limit) return Response.json({ error: `У ${target.full_name} уже максимум активних чатів.` }, { status: 409 });
+    if (ticket.status === "new") {
+      const greeting = "Вітаємо вас у технічній підтримці Nezeriya Wallet";
+      const telegramMessageId = await sendTelegram(ticket, greeting);
+      await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: telegramMessageId, sender_type: "agent", body: greeting });
+    }
+    const from = ticket.assigned_to ? (await operatorNames(config, [ticket.assigned_to])).get(ticket.assigned_to) : null;
+    await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: null, sender_type: "system", body: `Чат передано${from ? ` від ${from}` : ""} працівнику ${target.full_name}` });
+    await patch(config, "support_tickets", `id=eq.${ticket.id}`, { status: "in_progress", assigned_to: target.user_id, assigned_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    return Response.json({ ok: true });
+  }
+  if (body.action === "dismiss") {
+    if (!canManage) return Response.json({ error: "This ticket is assigned to another agent" }, { status: 403 });
+    if (ticket.status !== "new" && ticket.status !== "in_progress") return Response.json({ error: "Цей чат уже закрито." }, { status: 409 });
+    // Closed quietly: the client gets no rating request. A new message from the
+    // client reopens the chat as a new request (see syncTelegram).
+    await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: null, sender_type: "system", body: "Позначено як помилкову задачу і закрито" });
+    await patch(config, "support_tickets", `id=eq.${ticket.id}`, { status: "closed", updated_at: new Date().toISOString() });
     return Response.json({ ok: true });
   }
   if (!access.owner && ticket.assigned_to !== access.userId) return Response.json({ error: "This ticket is assigned to another agent" }, { status: 403 });
@@ -112,6 +141,31 @@ async function activeChatLimit(config: Config, userId: string) {
   return Number.isInteger(worker?.active_chat_limit) ? worker.active_chat_limit : DEFAULT_ACTIVE_CHAT_LIMIT;
 }
 
+type Operator = { user_id: string; full_name: string; active_chats: number; active_chat_limit: number };
+
+async function onlineOperators(config: Config, exceptUserId: string): Promise<Operator[]> {
+  const cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  const workersResponse = await rest(config, `/worker_applications?status=eq.approved&can_use_chats=eq.true&operator_status=eq.online&last_active_at=gte.${encodeURIComponent(cutoff)}&user_id=neq.${encodeURIComponent(exceptUserId)}&select=user_id,full_name,active_chat_limit&order=full_name.asc`);
+  const workers = workersResponse.ok ? await workersResponse.json() as { user_id: string; full_name: string | null; active_chat_limit: number }[] : [];
+  if (!workers.length) return [];
+  const activeResponse = await rest(config, "/support_tickets?status=eq.in_progress&assigned_to=not.is.null&select=assigned_to");
+  const active = activeResponse.ok ? await activeResponse.json() as Pick<Ticket, "assigned_to">[] : [];
+  return workers.map((worker) => ({
+    user_id: worker.user_id,
+    full_name: worker.full_name?.trim() || "Працівник",
+    active_chats: active.filter((item) => item.assigned_to === worker.user_id).length,
+    active_chat_limit: Number.isInteger(worker.active_chat_limit) ? worker.active_chat_limit : DEFAULT_ACTIVE_CHAT_LIMIT,
+  }));
+}
+
+async function operatorNames(config: Config, userIds: string[]) {
+  const ids = [...new Set(userIds)];
+  if (!ids.length) return new Map<string, string>();
+  const response = await rest(config, `/worker_applications?user_id=in.(${ids.map(encodeURIComponent).join(",")})&select=user_id,full_name`);
+  const rows = response.ok ? await response.json() as { user_id: string; full_name: string | null }[] : [];
+  return new Map(rows.filter((row) => row.full_name?.trim()).map((row) => [row.user_id, row.full_name!.trim()]));
+}
+
 async function listTickets(config: Config, userId: string, owner: boolean) {
   const ticketsResponse = await rest(config, "/support_tickets?status=neq.closed&telegram_peer_id=neq.777000&select=*&order=updated_at.desc");
   const messagesResponse = await rest(config, "/support_messages?select=*&order=sent_at.asc");
@@ -119,7 +173,9 @@ async function listTickets(config: Config, userId: string, owner: boolean) {
   const tickets = ticketsResponse.ok ? await ticketsResponse.json() as Ticket[] : [];
   const messages = messagesResponse.ok ? await messagesResponse.json() as Message[] : [];
   const skipped = new Set(skipsResponse.ok ? (await skipsResponse.json() as { ticket_id: string }[]).map((skip) => skip.ticket_id) : []);
-  return { tickets: tickets.filter((ticket) => !skipped.has(ticket.id) && (ticket.status === "new" || owner || ticket.assigned_to === userId)).map((ticket) => ({ ...ticket, messages: messages.filter((message) => message.ticket_id === ticket.id) })) };
+  const visible = tickets.filter((ticket) => !skipped.has(ticket.id) && (ticket.status === "new" || owner || ticket.assigned_to === userId));
+  const names = await operatorNames(config, visible.flatMap((ticket) => ticket.assigned_to ? [ticket.assigned_to] : []));
+  return { tickets: visible.map((ticket) => ({ ...ticket, assigned_name: ticket.assigned_to ? names.get(ticket.assigned_to) || null : null, messages: messages.filter((message) => message.ticket_id === ticket.id) })) };
 }
 
 async function telegramClient() {

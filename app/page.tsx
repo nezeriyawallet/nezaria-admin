@@ -33,7 +33,8 @@ type AcquiringMetrics = { businesses: number; merchants: number; products: numbe
 type WheelWin = { id: number; username: string; name: string; walletId: number; wheel: number; dropped: string; reward: string; createdAt: string; game?: string };
 type WheelWinSummary = { monthlyWonNzr: number; monthlyLostNzr: number; monthlyCollectedNzr: number; monthlyNetEarningsNzr: number; monthlyWheelSpentNzr: number; monthlyPlinkoSpentNzr: number; monthlyWheelWonNzr: number; monthlyPlinkoWonNzr: number; monthlySpinsSpentNzr: number; monthlySpinsWonNzr: number; monthlyDoubleSpentNzr: number; monthlyDoubleWonNzr: number };
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
-type SupportTicket = { id: string; client_name: string; client_username: string | null; status: "new" | "in_progress" | "awaiting_rating" | "closed"; assigned_to: string | null; rating: number | null; review: string | null; created_at: string; updated_at: string; messages: SupportMessage[] };
+type SupportTicket = { id: string; client_name: string; client_username: string | null; status: "new" | "in_progress" | "awaiting_rating" | "closed"; assigned_to: string | null; assigned_name?: string | null; rating: number | null; review: string | null; created_at: string; updated_at: string; messages: SupportMessage[] };
+type SupportOperator = { user_id: string; full_name: string; active_chats: number; active_chat_limit: number };
 
 const navigation: NavItem[] = ["Огляд", "Користувачі", "Виграші", "Магазин", "Бізнес", "Фінанси", "Команда", "Працівники", "Медійка"];
 const navGroups: { label: string; items: NavItem[] }[] = [
@@ -987,6 +988,10 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmDismiss, setConfirmDismiss] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [operators, setOperators] = useState<SupportOperator[] | null>(null);
+  const [transferError, setTransferError] = useState("");
   // On narrow screens the client card overlays the chat, so it starts closed.
   const [showInfo, setShowInfo] = useState(() => typeof window === "undefined" || window.innerWidth > 1280);
   const [statusMenu, setStatusMenu] = useState(false);
@@ -1040,22 +1045,43 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
     if (box) box.scrollTop = box.scrollHeight;
   }, [selected?.id, messageCount]);
 
-  const open = (ticket: SupportTicket) => { setSelectedId(ticket.id); setConfirmClose(false); setMessage(""); if (window.innerWidth <= 1280) setShowInfo(false); };
-  const action = async (actionName: "take" | "send" | "close", text = message) => {
-    if (!selected || busy) return;
-    if (actionName === "send" && !text.trim()) return;
+  const open = (ticket: SupportTicket) => { setSelectedId(ticket.id); setConfirmClose(false); setConfirmDismiss(false); setTransferOpen(false); setMessage(""); if (window.innerWidth <= 1280) setShowInfo(false); };
+  const action = async (actionName: "take" | "send" | "close" | "transfer" | "dismiss", text = message, targetUserId = "") => {
+    if (!selected || busy) return false;
+    if (actionName === "send" && !text.trim()) return false;
     setBusy(true);
-    const response = await fetch("/api/support/tickets", { method: "POST", headers: { "Content-Type": "application/json", ...headers() }, body: JSON.stringify({ action: actionName, ticketId: selected.id, message: text }) });
+    const response = await fetch("/api/support/tickets", { method: "POST", headers: { "Content-Type": "application/json", ...headers() }, body: JSON.stringify({ action: actionName, ticketId: selected.id, message: text, targetUserId }) });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) setError(result.error || "Не вдалося виконати дію.");
-    else {
+    if (!response.ok) {
+      if (actionName === "transfer") setTransferError(result.error || "Не вдалося передати чат.");
+      else setError(result.error || "Не вдалося виконати дію.");
+    } else {
       setError("");
       if (actionName === "send") setMessage("");
-      setSelectedId(selected.id);
+      // A handed-on or dismissed chat usually leaves this operator's list.
+      setSelectedId(actionName === "transfer" || actionName === "dismiss" ? "" : selected.id);
       await load(false);
     }
     setConfirmClose(false);
+    setConfirmDismiss(false);
     setBusy(false);
+    return response.ok;
+  };
+  const openTransfer = async () => {
+    setTransferOpen(true);
+    setTransferError("");
+    setOperators(null);
+    const response = await fetch("/api/support/tickets?operators=1", { headers: headers() });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) { setTransferError(result.error || "Не вдалося завантажити працівників."); setOperators([]); }
+    else setOperators(result.operators || []);
+  };
+  const transferTo = async (operator: SupportOperator) => {
+    if (await action("transfer", "", operator.user_id)) setTransferOpen(false);
+  };
+  const dismissChat = () => {
+    if (!confirmDismiss) { setConfirmDismiss(true); window.setTimeout(() => setConfirmDismiss(false), 3000); return; }
+    void action("dismiss");
   };
   const closeChat = () => {
     if (!confirmClose) { setConfirmClose(true); window.setTimeout(() => setConfirmClose(false), 3000); return; }
@@ -1179,12 +1205,33 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
           <div><dt>Відкрито</dt><dd>{supDay(selected.created_at)}, {supTime(selected.created_at)}</dd></div>
           <div><dt>Остання активність</dt><dd>{supDay(selected.updated_at)}, {supTime(selected.updated_at)}</dd></div>
           <div><dt>Повідомлень</dt><dd>{selected.messages.length}</dd></div>
-          <div><dt>Оператор</dt><dd>{selected.assigned_to ? "Призначено" : "—"}</dd></div>
+          <div><dt>Оператор</dt><dd>{selected.assigned_to ? selected.assigned_name || "Призначено" : "—"}</dd></div>
         </dl>
+        {(selected.status === "new" || selected.status === "in_progress") && <div className="sup-info-actions">
+          <button className="sup-ghost" disabled={busy} onClick={() => void openTransfer()}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h13M13 3l4 4-4 4M20 17H7M11 13l-4 4 4 4" /></svg>Передати іншому</button>
+          <button className={`sup-ghost${confirmDismiss ? " confirm" : ""}`} disabled={busy} onClick={dismissChat}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="m8.5 8.5 7 7M15.5 8.5l-7 7" /></svg>{confirmDismiss ? "Точно закрити?" : "Помилкова задача"}</button>
+          <small>Помилкова задача — клієнту вже допомогли. Чат закривається без запиту оцінки.</small>
+        </div>}
         {selected.status === "awaiting_rating" && <div className="sup-rating">{selected.rating ? <><span>Оцінка клієнта</span><span className="sup-stars">{"★".repeat(selected.rating)}<i>{"★".repeat(Math.max(0, 5 - selected.rating))}</i></span></> : <span>Очікуємо оцінку клієнта</span>}</div>}
         {selected.review && <p className="sup-review">«{selected.review}»</p>}
       </aside>}
     </div>
+
+    {transferOpen && selected && <div className="tm-modal sup-transfer" role="dialog" aria-modal="true" aria-label="Передати чат" onClick={() => setTransferOpen(false)}>
+      <div className="tm-modal-card" onClick={(event) => event.stopPropagation()}>
+        <button className="sup-icon-btn sup-transfer-x" aria-label="Закрити" onClick={() => setTransferOpen(false)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
+        <div><p className="ov-eyebrow">Передати чат</p><h2 className="tm-modal-title">Працівники в мережі</h2><p className="sup-transfer-sub">Клієнт: {selected.client_name || (selected.client_username ? `@${selected.client_username}` : "Без імені")}</p></div>
+        {transferError && <p className="sup-error">{transferError}</p>}
+        {operators === null ? <p className="sup-transfer-empty">Шукаємо працівників онлайн…</p> : operators.length === 0 ? <p className="sup-transfer-empty">Зараз немає інших працівників у мережі.</p> : <ul className="sup-transfer-list">{operators.map((operator) => {
+          const full = operator.active_chats >= operator.active_chat_limit;
+          return <li key={operator.user_id}><button disabled={busy || full} onClick={() => void transferTo(operator)}>
+            <span className="sup-av" style={{ background: regColors[regHash(operator.user_id) % regColors.length] }}>{supInitials(operator.full_name)}</span>
+            <span className="sup-transfer-name"><b>{operator.full_name}</b><small><i />{full ? "Ліміт чатів вичерпано" : "У мережі"}</small></span>
+            <span className="sup-transfer-load">{operator.active_chats} / {operator.active_chat_limit}<small>чатів</small></span>
+          </button></li>;
+        })}</ul>}
+      </div>
+    </div>}
   </section>;
 }
 
