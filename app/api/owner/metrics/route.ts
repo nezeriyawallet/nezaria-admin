@@ -56,7 +56,7 @@ export async function GET(request: Request) {
   const turnoverYear = Number.isInteger(requestedTurnoverYear) && requestedTurnoverYear >= 2020 && requestedTurnoverYear <= 2100
     ? requestedTurnoverYear
     : (hasSelectedMonth ? selectedYear : new Date().getFullYear());
-  const [values, analytics, revenue, exchangeRevenue] = await Promise.all([Promise.all(Object.entries(endpoints).map(async ([name, endpoint]) => {
+  const [values, analytics, revenue, exchangeRevenue, monthStats] = await Promise.all([Promise.all(Object.entries(endpoints).map(async ([name, endpoint]) => {
     try {
       const separator = endpoint.path.includes("?") ? "&" : "?";
       const parameters = [endpoint.monthScoped ? monthQuery : "", `_=${fresh}`].filter(Boolean).join("&");
@@ -93,8 +93,23 @@ export async function GET(request: Request) {
       });
       return response.ok ? await response.json() as Record<string, unknown> : {};
     } catch { return {}; }
+  })(), (async () => {
+    // Detailed statistics for the selected (by default the current) month.
+    // Keys come back prefixed, e.g. monthTransactions, so they never clash
+    // with the all-time figures above.
+    try {
+      const parameters = [monthQuery, `_=${fresh}`].filter(Boolean).join("&");
+      const response = await fetch(`${baseUrl}/admin/api/stats/monthly?${parameters}`, {
+        headers: { "X-Admin-Key": apiKey, Accept: "application/json" }, cache: "no-store",
+      });
+      if (!response.ok) return {};
+      const body = await response.json() as Record<string, unknown>;
+      return Object.fromEntries(Object.entries(body)
+        .filter(([key, value]) => key !== "year" && key !== "month" && (typeof value === "number" || typeof value === "string"))
+        .map(([key, value]) => [`month${key.charAt(0).toUpperCase()}${key.slice(1)}`, value]));
+    } catch { return {}; }
   })()]);
-  return Response.json({ metrics: { ...Object.fromEntries(values), ...analytics, ...revenue, ...exchangeRevenue, selectedYear: hasSelectedMonth ? selectedYear : null, selectedMonth: hasSelectedMonth ? selectedMonth : null, selectedTurnoverYear: turnoverYear }, updatedAt: new Date().toISOString() }, {
+  return Response.json({ metrics: { ...Object.fromEntries(values), ...analytics, ...revenue, ...exchangeRevenue, ...monthStats, selectedYear: hasSelectedMonth ? selectedYear : null, selectedMonth: hasSelectedMonth ? selectedMonth : null, selectedTurnoverYear: turnoverYear }, updatedAt: new Date().toISOString() }, {
     headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", Pragma: "no-cache" },
   });
 }

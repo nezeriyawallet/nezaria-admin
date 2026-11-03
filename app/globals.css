@@ -4839,6 +4839,7 @@ html[data-theme="light"] .side2-item.active svg { color:#12755f; }
 .fin-risk b { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; }
 .fin-risk div.warn { background:#1A1312; border-color:rgba(255,138,122,.18); }
 .fin-risk div.warn b { color:#FFB3A8; }
+.fin-risk small, .fin-nzr-grid small { font-size:11px; color:var(--aud-muted); font-variant-numeric:tabular-nums; opacity:.8; }
 
 .fin-nzr { padding:24px; gap:20px; }
 .fin-nzr-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }

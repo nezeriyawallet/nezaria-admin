@@ -117,7 +117,7 @@ function responseTimerState(ticket: SupportTicket | undefined, now: number) {
 export default function Home() {
   const [active, setActive] = useState<NavItem>("Огляд");
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("ceo");
-  const [period, setPeriod] = useState("30 днів");
+  const [period, setPeriod] = useState<OverviewPeriod>("Цей місяць");
   const [updated, setUpdated] = useState("Оновлено щойно");
   const [notice, setNotice] = useState<string | null>(null);
   const [authState, setAuthState] = useState<"checking" | "signed_out" | "signed_in">("checking");
@@ -750,27 +750,54 @@ const ovIcons = {
   trophy: <><path d="M8 21h8M12 17v4" /><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z" /><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3" /></>,
 };
 
-function OverviewPanel({ walletMetrics, metricsError, fallbackFeature, fallbackFeatureValue, period, onPeriod, refreshing, onRefresh, onOpenSupport }: { walletMetrics: WalletMetrics | null; metricsError: string; fallbackFeature: string; fallbackFeatureValue: number; period: string; onPeriod: (period: string) => void; refreshing: boolean; onRefresh: () => void; onOpenSupport: () => void }) {
+type OverviewPeriod = "Цей місяць" | "Весь час";
+const overviewPeriods: OverviewPeriod[] = ["Цей місяць", "Весь час"];
+
+function OverviewPanel({ walletMetrics, metricsError, fallbackFeature, fallbackFeatureValue, period, onPeriod, refreshing, onRefresh, onOpenSupport }: { walletMetrics: WalletMetrics | null; metricsError: string; fallbackFeature: string; fallbackFeatureValue: number; period: OverviewPeriod; onPeriod: (period: OverviewPeriod) => void; refreshing: boolean; onRefresh: () => void; onOpenSupport: () => void }) {
   const [hovered, setHovered] = useState<number | null>(null);
   const m = walletMetrics;
   const featureValue = m?.mostProfitableValueNzr === null || m?.mostProfitableValueNzr === undefined ? fallbackFeatureValue : m.mostProfitableValueNzr;
-  const kpis = [
+  // "Цей місяць" (default) shows only what happened in the selected month —
+  // the current one unless another month was picked on the Finance page;
+  // "Весь час" keeps the all-time totals.
+  const monthly = period === "Цей місяць";
+  const monthName = m && Number(m.selectedMonth) >= 1 ? `${finMonths[Number(m.selectedMonth) - 1]} ${m.selectedYear}` : finMonths[new Date().getMonth()];
+  const monthValue = (key: string) => m?.[key] ?? null;
+  // Same formula as the Finance page: net = Stars payout + NZR sales − buybacks, income = net + fees.
+  const monthNet = m ? metricNumber(m.monthlyTelegramStarsFragmentRevenueUsd) + metricNumber(m.monthlyNzrSoldToUsers) * metricNumber(m.nzrSaleRateUsd)
+    - metricNumber(m.monthlyNzrBoughtFromUsers) * metricNumber(m.nzrBuybackRateUsd) : 0;
+  const monthIncome = m ? monthNet + metricNumber(m.monthlyCommission) : 0;
+  const kpis = monthly ? [
+    { icon: "box" as const, tone: "mint", label: "Чистий прибуток за місяць", value: m ? displayMetric(monthNet, "$") : "—", unit: "" },
+    { icon: "arrow" as const, tone: "blue", label: "Комісія за місяць", value: m ? displayMetric(m.monthlyCommission, "$") : "—", unit: "" },
+    { icon: "star" as const, tone: "gold", label: "Дохід Telegram Stars", value: m ? displayMetric(m.monthlyStars) : "—", unit: "NZR" },
+    { icon: "users" as const, tone: "blue", label: "Нові користувачі", value: m ? displayMetric(monthValue("monthNewUsers")) : "—", unit: m ? `з ${displayMetric(m.users)}` : "" },
+    { icon: "trophy" as const, tone: "mint", label: "Найприбутковіша функція", value: m ? String(m.mostProfitableFeature || fallbackFeature) : "—", unit: m ? `${displayMetric(featureValue)} NZR` : "" },
+  ] : [
     { icon: "box" as const, tone: "mint", label: "Загальна комісія", value: m ? displayMetric(m.totalCommission, "$") : "—", unit: "" },
     { icon: "arrow" as const, tone: "blue", label: "Комісія за місяць", value: m ? displayMetric(m.monthlyCommission, "$") : "—", unit: "" },
     { icon: "star" as const, tone: "gold", label: "Дохід Telegram Stars", value: m ? displayMetric(m.monthlyStars) : "—", unit: "NZR" },
     { icon: "users" as const, tone: "blue", label: "Зареєстровані користувачі", value: m ? displayMetric(m.users) : "—", unit: "" },
     { icon: "trophy" as const, tone: "mint", label: "Найприбутковіша функція", value: m ? String(m.mostProfitableFeature || fallbackFeature) : "—", unit: m ? `${displayMetric(featureValue)} NZR` : "" },
   ];
-  const walletRows: [string, string, boolean?][] = [
+  const walletRows: [string, string, boolean?][] = monthly ? [
+    ["Нових гаманців", displayMetric(monthValue("monthNewWallets"))], ["Транзакцій", displayMetric(monthValue("monthTransactions"))],
+    ["Невдалих транзакцій", displayMetric(monthValue("monthFailedTransactions")), true], ["DeDust swap", displayMetric(monthValue("monthDedustSwaps"))],
+    ["Реферальний дохід", displayMetric(monthValue("monthReferralTotal"), "$")], ["Втрати рулетки", m && monthValue("monthWheelLoss") !== null ? `${displayMetric(monthValue("monthWheelLoss"))} NZR` : "—"],
+  ] : [
     ["Гаманців", displayMetric(m?.wallets)], ["Транзакцій", displayMetric(m?.transactions)],
     ["Невдалих транзакцій", displayMetric(m?.failedTransactions), true], ["DeDust swap", displayMetric(m?.dedustSwaps)],
     ["Реферальний дохід", displayMetric(m?.referralTotal, "$")], ["Втрати рулетки", m ? `${displayMetric(m.wheelLoss)} NZR` : "—"],
   ];
-  const nzrRows: [string, string][] = [
+  const nzrRows: [string, string][] = monthly ? [
+    ["NZR транзакцій", displayMetric(monthValue("monthNzrTransactions"))], ["Продажі NZR", displayMetric(monthValue("monthNzrSwapSell"))],
+    ["Купівлі NZR", displayMetric(monthValue("monthNzrSwapBuy"))], ["Покупки NZR за Stars", displayMetric(monthValue("monthNzrStars"))],
+  ] : [
     ["NZR транзакцій", displayMetric(m?.nzrTransactions)], ["Продажі NZR", displayMetric(m?.nzrSwapSell)],
     ["Купівлі NZR", displayMetric(m?.nzrSwapBuy)], ["Покупки NZR за Stars", displayMetric(m?.nzrStars)],
   ];
-  const totalIncome = m ? displayMetric(metricNumber(m.totalCommission) + metricNumber(m.nzrExchangeNetUsd), "$") : "—";
+  const totalIncome = m ? displayMetric(monthly ? monthIncome : metricNumber(m.totalCommission) + metricNumber(m.nzrExchangeNetUsd), "$") : "—";
+  const periodLabel = monthly ? monthName : "за весь час";
   // The chart shows every day of the selected year; until the year loads (or
   // if the wallet API is older) it falls back to the last 30 days.
   const thisYear = new Date().getFullYear();
@@ -836,7 +863,7 @@ function OverviewPanel({ walletMetrics, metricsError, fallbackFeature, fallbackF
       <div className="ov-actions">
         <NotificationBell role="owner" owner />
         <span className="ov-live"><i />Live</span>
-        <div className="ov-segment" role="group" aria-label="Період">{["7 днів", "30 днів", "Рік"].map((item) => <button key={item} className={period === item ? "selected" : ""} onClick={() => onPeriod(item)}>{item}</button>)}</div>
+        <div className="ov-segment" role="group" aria-label="Період">{overviewPeriods.map((item) => <button key={item} className={period === item ? "selected" : ""} onClick={() => onPeriod(item)}>{item}</button>)}</div>
         <button className={`ov-btn${refreshing ? " spin" : ""}`} onClick={onRefresh} disabled={refreshing}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8" /><path d="M4 3v5h5" /><path d="M4 13a8 8 0 0 0 14.6 4.5L20 16" /><path d="M20 21v-5h-5" /></svg>Синхронізувати</button>
       </div>
     </header>
@@ -852,17 +879,17 @@ function OverviewPanel({ walletMetrics, metricsError, fallbackFeature, fallbackF
 
     <section className="ov-ops">
       <article className="ov-card">
-        <p className="ov-eyebrow">Операції гаманця</p><h2>Детальна статистика</h2>
+        <p className="ov-eyebrow">Операції гаманця · {periodLabel}</p><h2>Детальна статистика</h2>
         <dl className="ov-kv">{walletRows.map(([label, value, warn]) => <div key={label}><dt>{label}</dt><dd className={warn ? "warn" : ""}>{value}</dd></div>)}</dl>
       </article>
       <article className="ov-card">
-        <p className="ov-eyebrow">NZR</p><h2>Активність токена</h2>
+        <p className="ov-eyebrow">NZR · {periodLabel}</p><h2>Активність токена</h2>
         <dl className="ov-kv">{nzrRows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
       </article>
       <article className="ov-card ov-earn">
-        <div><p className="ov-eyebrow">Заробіток</p><h2>Загальна сума доходу</h2></div>
+        <div><p className="ov-eyebrow">Заробіток · {periodLabel}</p><h2>{monthly ? "Дохід за місяць" : "Загальна сума доходу"}</h2></div>
         <strong>{totalIncome}</strong>
-        <p className="ov-note">Комісії + Stars за курсом Fragment − успішні викупи NZR</p>
+        <p className="ov-note">{monthly ? "Комісії + Stars за курсом Fragment + продаж NZR − викупи NZR за місяць" : "Комісії + Stars за курсом Fragment − успішні викупи NZR"}</p>
       </article>
     </section>
 
@@ -1549,7 +1576,12 @@ function FinancePanel({ walletMetrics, selectedMonth, onSelectedMonthChange, onS
   const spreadTotal = value("nzrBuybackSpreadUsd");
   const spreadQty = perNzr > 0 ? Math.round(spreadTotal / perNzr) : 0;
   const rateMax = Math.max(fragRate, buyRate) || 1;
-  const flows: [string, number, string][] = [["Продажі", value("nzrSwapSell"), "var(--fin-in)"], ["Покупки за Stars", value("nzrStars"), "var(--aud-gold)"], ["Купівлі", value("nzrSwapBuy"), "var(--fin-sum)"]];
+  // Month-scoped figures from /admin/api/stats/monthly; shown only once they
+  // belong to the month picked above (they reload after each pick).
+  const periodName = `${finMonths[monthIndex].toLowerCase()} ${year} р.`;
+  const monthShown = (key: string, format: (amount: number) => string) => metricsMatch && m?.[key] !== undefined && m?.[key] !== null ? format(value(key)) : "—";
+  const flowKey = (key: string) => metricsMatch && m?.[`month${key.charAt(0).toUpperCase()}${key.slice(1)}`] != null ? value(`month${key.charAt(0).toUpperCase()}${key.slice(1)}`) : 0;
+  const flows: [string, number, string][] = [["Продажі", flowKey("nzrSwapSell"), "var(--fin-in)"], ["Покупки за Stars", flowKey("nzrStars"), "var(--aud-gold)"], ["Купівлі", flowKey("nzrSwapBuy"), "var(--fin-sum)"]];
   const flowTotal = flows.reduce((sum, [, amount]) => sum + amount, 0) || 1;
   const seconds = Math.max(0, Math.round((now - seen.at) / 1000));
 
@@ -1651,23 +1683,23 @@ function FinancePanel({ walletMetrics, selectedMonth, onSelectedMonthChange, onS
 
       <article className="aud-card fin-card">
         <div className="fin-card-head"><span className="aud-icon fin-red"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 20h20L12 3Z" /><path d="M12 10v4M12 17h.01" /></svg></span>
-          <div><p className="aud-crumbs reg-eyebrow">Ризики й партнери</p><h3>Контроль за весь час</h3></div></div>
+          <div><p className="aud-crumbs reg-eyebrow">Ризики й партнери</p><h3>Контроль · {periodName}</h3></div></div>
         <div className="fin-risk">
-          <div className="warn"><span>Втрати рулетки</span><b>{m ? `${finCount.format(value("wheelLoss"))} NZR` : "—"}</b></div>
-          <div className="warn"><span>Невдалих транзакцій</span><b>{m ? finCount.format(value("failedTransactions")) : "—"}</b></div>
-          <div><span>Реферальний дохід</span><b>{m ? finUsd(value("referralTotal"), 0) : "—"}</b></div>
-          <div><span>Операцій DeDust</span><b>{m ? finCount.format(value("dedustSwaps")) : "—"}</b></div>
+          <div className="warn"><span>Втрати рулетки</span><b>{monthShown("monthWheelLoss", (amount) => `${finCount.format(amount)} NZR`)}</b><small>за весь час: {m ? `${finCount.format(value("wheelLoss"))} NZR` : "—"}</small></div>
+          <div className="warn"><span>Невдалих транзакцій</span><b>{monthShown("monthFailedTransactions", finCount.format)}</b><small>за весь час: {m ? finCount.format(value("failedTransactions")) : "—"}</small></div>
+          <div><span>Реферальний дохід</span><b>{monthShown("monthReferralTotal", (amount) => finUsd(amount, 0))}</b><small>за весь час: {m ? finUsd(value("referralTotal"), 0) : "—"}</small></div>
+          <div><span>Операцій DeDust</span><b>{monthShown("monthDedustSwaps", finCount.format)}</b><small>за весь час: {m ? finCount.format(value("dedustSwaps")) : "—"}</small></div>
         </div>
       </article>
     </section>
 
     <section className="aud-card fin-nzr" aria-labelledby="finNzrTitle">
-      <div className="aud-row"><div><p className="aud-crumbs reg-eyebrow">NZR</p><h2 id="finNzrTitle">Операції токена</h2></div><span className="aud-hint">за весь час</span></div>
+      <div className="aud-row"><div><p className="aud-crumbs reg-eyebrow">NZR</p><h2 id="finNzrTitle">Операції токена</h2></div><span className="aud-hint">{periodName}</span></div>
       <div className="fin-nzr-grid">
-        <div><span>Транзакцій NZR</span><b>{m ? finCount.format(value("nzrTransactions")) : "—"}</b></div>
-        <div><span>Продажі NZR</span><b>{m ? finCount.format(value("nzrSwapSell")) : "—"}</b></div>
-        <div><span>Купівлі NZR</span><b>{m ? finCount.format(value("nzrSwapBuy")) : "—"}</b></div>
-        <div><span>Покупки NZR за Stars</span><b>{m ? finCount.format(value("nzrStars")) : "—"}</b></div>
+        <div><span>Транзакцій NZR</span><b>{monthShown("monthNzrTransactions", finCount.format)}</b><small>за весь час: {m ? finCount.format(value("nzrTransactions")) : "—"}</small></div>
+        <div><span>Продажі NZR</span><b>{monthShown("monthNzrSwapSell", finCount.format)}</b><small>за весь час: {m ? finCount.format(value("nzrSwapSell")) : "—"}</small></div>
+        <div><span>Купівлі NZR</span><b>{monthShown("monthNzrSwapBuy", finCount.format)}</b><small>за весь час: {m ? finCount.format(value("nzrSwapBuy")) : "—"}</small></div>
+        <div><span>Покупки NZR за Stars</span><b>{monthShown("monthNzrStars", finCount.format)}</b><small>за весь час: {m ? finCount.format(value("nzrStars")) : "—"}</small></div>
       </div>
       <div className="fin-flow">
         <div className="fin-flow-bar">{flows.map(([label, amount, color]) => amount > 0 && <i key={label} style={{ flexGrow: amount, background: color }} />)}</div>
