@@ -1599,11 +1599,11 @@ function FinancePanel({ walletMetrics, selectedMonth, onSelectedMonthChange, onS
       </div>
     </header>
 
-    <section className="fin-all" aria-label="За весь час">
-      <div className="fin-all-item main"><span className="fin-lbl">Загальний дохід <i>за весь час</i></span><b className="fin-big win-accent">{m ? finUsd(income) : "—"}</b><span className="fin-sub">Комісії + виплата Fragment за Stars + обмін NZR</span></div>
-      <div className="fin-all-item"><span className="fin-lbl">Оборот компанії <i>за весь час</i></span><b className="fin-big">{m ? finUsd(turnover) : "—"}</b><span className="fin-sub">Stars, продаж NZR і виплати за викуп</span></div>
+    <section className="fin-all" aria-label={`За ${finMonths[monthIndex].toLowerCase()} ${year} р.`}>
+      <div className="fin-all-item main"><span className="fin-lbl">Дохід <i>за {finMonths[monthIndex].toLowerCase()}</i></span><b className="fin-big win-accent">{selectedCalc ? finUsd(selectedCalc.income) : "—"}</b><span className="fin-sub">За весь час: {m ? finUsd(income) : "—"}</span></div>
+      <div className="fin-all-item"><span className="fin-lbl">Оборот компанії <i>за {finMonths[monthIndex].toLowerCase()}</i></span><b className="fin-big">{selected ? finUsd(selected.turnoverUsd) : "—"}</b><span className="fin-sub">За весь час: {m ? finUsd(turnover) : "—"}</span></div>
       <div className="fin-all-item"><span className="fin-lbl">Оборот <i>за {year} р.</i></span><b className="fin-big">{m ? finUsd(yearTurnover) : "—"}</b><span className="fin-sub">{m && turnover ? `${finPercent.format(yearTurnover / turnover * 100)}% від обороту за весь час` : ""}</span></div>
-      <div className="fin-all-item"><span className="fin-lbl">Маржа доходу <i>за весь час</i></span><b className="fin-big">{m && turnover ? `${finPercent.format(income / turnover * 100)}%` : "—"}</b><span className="fin-sub">Дохід ÷ оборот</span></div>
+      <div className="fin-all-item"><span className="fin-lbl">Маржа доходу <i>за {finMonths[monthIndex].toLowerCase()}</i></span><b className="fin-big">{selected && selectedCalc && selected.turnoverUsd ? `${finPercent.format(selectedCalc.income / selected.turnoverUsd * 100)}%` : "—"}</b><span className="fin-sub">За весь час: {m && turnover ? `${finPercent.format(income / turnover * 100)}%` : "—"}</span></div>
     </section>
 
     <section className="fin-month">
