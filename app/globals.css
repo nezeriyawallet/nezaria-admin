@@ -4408,6 +4408,9 @@ html[data-theme="light"] .side2-item.active svg { color:#12755f; }
 .reg-pts.ref .reg-bar i { background:var(--aud-blue); }
 .reg-pts small { min-width:44px; text-align:right; font:500 12px var(--font-geist-mono), ui-monospace, monospace; color:var(--aud-muted); }
 .reg-zero { font:500 14px var(--font-geist-mono), ui-monospace, monospace; color:var(--aud-dim); }
+.reg-rank { --rank:#767676; display:inline-flex; align-items:center; gap:7px; height:26px; padding:0 10px; border-radius:999px; background:color-mix(in srgb, var(--rank) 12%, transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--rank) 35%, transparent); color:var(--rank); font-size:12px; font-weight:700; letter-spacing:.04em; }
+.reg-rank i { width:7px; height:7px; border-radius:50%; background:var(--rank); }
+.reg-rank b { color:var(--aud-text); font:600 12px var(--font-geist-mono), ui-monospace, monospace; letter-spacing:0; }
 .reg-pill { display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 10px; border-radius:999px; background:var(--aud-chip); color:#A3ABB8; font-size:12px; font-weight:600; }
 .reg-pill.prem { background:#1A1F33; color:#B3C8FF; box-shadow:inset 0 0 0 1px rgba(138,180,255,.3); }
 .reg-pill svg { width:12px; height:12px; color:var(--aud-blue); fill:currentColor; stroke:none; }

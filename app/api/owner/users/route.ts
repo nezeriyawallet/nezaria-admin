@@ -6,6 +6,7 @@ type RawWalletUser = {
   name?: string;
   premium?: boolean;
   referralCount?: number;
+  rank?: { level?: number | string; name?: string; color?: string } | null;
   nzrPoints?: number | string;
   walletIds?: Array<number | string>;
   phoneCountry?: string;

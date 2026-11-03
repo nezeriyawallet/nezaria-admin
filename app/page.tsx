@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 type NavItem = "Огляд" | "Користувачі" | "Виграші" | "Магазин" | "Бізнес" | "Фінанси" | "Підтримка" | "Команда" | "Працівники" | "Медійка";
 type AccessRole = "owner" | "worker" | "media" | null;
@@ -25,7 +25,9 @@ type EmployeeProfile = {
 };
 type DailyOnlinePeak = { date: string; peakOnline: number };
 type WalletMetrics = Record<string, string | number | null> & { dailyOnlinePeaks?: DailyOnlinePeak[] };
-type WalletUser = { id: number; username: string; name: string; premium: boolean; nzrPoints: number; walletIds: number[]; referralCount?: number; phoneCountry?: string };
+type WalletUser = { id: number; username: string; name: string; premium: boolean; nzrPoints: number; walletIds: number[]; referralCount?: number; phoneCountry?: string; rank?: WalletRank | null };
+/** The wallet rank from the Nezeriya Wallet API: level 0–100 and its named rank, e.g. GOLD II · #21. */
+type WalletRank = { level?: number | string; name?: string; color?: string };
 type AcquiringBusiness = { account: string; name: string; type: string; ownership: string; assets: string[]; updatedAt: string | null };
 type AcquiringMetrics = { businesses: number; merchants: number; products: number; payments: number; paymentLinks: number; payouts: number };
 type WheelWin = { id: number; username: string; name: string; walletId: number; wheel: number; dropped: string; reward: string; createdAt: string; game?: string };
@@ -1704,7 +1706,7 @@ function CountryStats({ users }: { users: WalletUser[] }) {
   </article>;
 }
 
-type RegSort = "user" | "tgId" | "country" | "walletId" | "nzr" | "invited" | "premium";
+type RegSort = "user" | "tgId" | "country" | "walletId" | "rank" | "nzr" | "invited" | "premium";
 const regColors = ["#3DDC97", "#8AB4FF", "#F5C451", "#B794F6", "#FF9F7A", "#6ED3E0"];
 const regNumber = new Intl.NumberFormat("uk-UA");
 const regPercent = new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 1 });
@@ -1791,6 +1793,7 @@ function WalletRegistry({ users }: { users: WalletUser[] }) {
     country: countryLabel(user.phoneCountry),
     nzr: metricNumber(user.nzrPoints),
     invited: metricNumber(user.referralCount),
+    rank: user.rank?.name ? { level: metricNumber(user.rank.level), name: user.rank.name, color: user.rank.color || "#767676" } : null,
   }));
   const people = [...new Map(rows.map((row) => [row.user.id, row])).values()];
   const totalReferrals = people.reduce((sum, row) => sum + row.invited, 0);
@@ -1827,6 +1830,7 @@ function WalletRegistry({ users }: { users: WalletUser[] }) {
       if (sort.key === "premium") return row.user.premium ? 1 : 0;
       if (sort.key === "tgId") return row.user.id;
       if (sort.key === "walletId") return row.user.walletIds[0] || 0;
+      if (sort.key === "rank") return row.rank ? row.rank.level : -1;
       return row[sort.key];
     };
     const first = value(a), second = value(b);
@@ -1851,7 +1855,7 @@ function WalletRegistry({ users }: { users: WalletUser[] }) {
     else done();
   };
   const reset = () => { setQuery(""); setPremium("all"); setCountry("all"); setInvitedOnly(false); setPage(1); };
-  const header: [RegSort, string, boolean?][] = [["user", "Користувач"], ["tgId", "Telegram ID"], ["country", "Країна номера"], ["walletId", "Wallet ID"], ["nzr", "NZR-поінти", true], ["invited", "Реферали", true], ["premium", "Статус"]];
+  const header: [RegSort, string, boolean?][] = [["user", "Користувач"], ["tgId", "Telegram ID"], ["country", "Країна номера"], ["walletId", "Wallet ID"], ["rank", "Ранг"], ["nzr", "NZR-поінти", true], ["invited", "Реферали", true], ["premium", "Статус"]];
 
   return <section className="reg-card" aria-labelledby="regTitle">
     <div className="reg-head">
@@ -1892,6 +1896,7 @@ function WalletRegistry({ users }: { users: WalletUser[] }) {
             <td data-l="Telegram ID"><span className="reg-id"><RegHighlight text={String(row.user.id)} query={query} /><button className={`reg-cp${copied === `tg-${row.key}` ? " ok" : ""}`} aria-label="Копіювати Telegram ID" onClick={() => copy(String(row.user.id), `tg-${row.key}`)}>{copied === `tg-${row.key}` ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10" /></svg> : regCopyIcon}</button></span></td>
             <td data-l="Країна">{row.country ? <span className="reg-cc"><i>{row.country.code}</i>{row.country.name}</span> : <span className="reg-unv">Не підтверджено</span>}</td>
             <td data-l="Wallet ID">{row.walletId ? <span className="reg-id"><RegHighlight text={row.walletId} query={query} /><button className={`reg-cp${copied === `w-${row.key}` ? " ok" : ""}`} aria-label="Копіювати Wallet ID" onClick={() => copy(row.walletId, `w-${row.key}`)}>{copied === `w-${row.key}` ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10" /></svg> : regCopyIcon}</button></span> : "—"}</td>
+            <td data-l="Ранг">{row.rank ? <span className="reg-rank" style={{ "--rank": row.rank.color } as CSSProperties}><i />{row.rank.name}<b>#{row.rank.level}</b></span> : <span className="reg-zero">—</span>}</td>
             <td data-l="NZR-поінти" className="num"><div className="reg-pts"><span className="reg-bar"><i style={{ width: `${(row.nzr / maxNzr * 100).toFixed(1)}%` }} /></span><b className={row.nzr ? "" : "zero"}>{regNumber.format(row.nzr)} NZR</b></div></td>
             <td data-l="Реферали" className="num">{row.invited ? <div className="reg-pts ref"><span className="reg-bar"><i style={{ width: `${(row.invited / maxInvited * 100).toFixed(1)}%` }} /></span><b>{regNumber.format(row.invited)}</b><small>{regPercent.format(totalReferrals ? row.invited / totalReferrals * 100 : 0)}%</small></div> : <span className="reg-zero">0</span>}</td>
             <td data-l="Статус">{row.user.premium ? <span className="reg-pill prem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z" /></svg>Premium</span> : <span className="reg-pill">Звичайний</span>}</td>
