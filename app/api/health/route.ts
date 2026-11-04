@@ -37,6 +37,8 @@ export async function GET() {
       OWNER_ACCESS_CODE: Boolean(env("OWNER_ACCESS_CODE")),
       OWNER_2FA_TOTP_SECRET: Boolean(env("OWNER_2FA_TOTP_SECRET")),
       TELEGRAM_SESSION_STRING: Boolean(env("TELEGRAM_SESSION_STRING")),
+      TELEGRAM_API_ID: Boolean(env("TELEGRAM_API_ID")),
+      TELEGRAM_API_HASH: Boolean(env("TELEGRAM_API_HASH")),
     },
     walletHost: new URL(walletUrl).host,
     checks: { supabase, wallet },

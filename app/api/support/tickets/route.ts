@@ -22,15 +22,41 @@ let connectingTelegramClient: Promise<any | null> | null = null;
 // wiped by a second sync), so only one runs at a time and the rest share it.
 let supportSyncInFlight: Promise<void> | null = null;
 
+// What happened on the last attempt to reach the support Telegram account.
+// Errors used to be swallowed, so a missing or revoked session looked like
+// "nobody writes to support". It is now returned to the dashboard and logged.
+type TelegramState = { state: "unknown" | "ok" | "not_configured" | "error"; error?: string; checkedAt?: string };
+let telegramState: TelegramState = { state: "unknown" };
+function setTelegramState(state: TelegramState["state"], error?: string) {
+  if (state !== "ok" && (telegramState.state !== state || telegramState.error !== error)) console.error(`[support] Telegram ${state}${error ? `: ${error}` : ""}`);
+  telegramState = { state, error, checkedAt: new Date().toISOString() };
+}
+function describeTelegramError(error: unknown) {
+  const text = String((error as { errorMessage?: string })?.errorMessage || (error as Error)?.message || error).slice(0, 300);
+  if (/AUTH_KEY_UNREGISTERED|AUTH_KEY_DUPLICATED|SESSION_REVOKED|SESSION_EXPIRED|USER_DEACTIVATED|not authorized/i.test(text)) return `Telegram відхилив сесію акаунта підтримки (${text}). Потрібно згенерувати новий TELEGRAM_SESSION_STRING.`;
+  return text;
+}
+
+// Chats are also synced in the background, so new requests reach the queue
+// (and the owner's badge) even when nobody has the chat page open.
+const BACKGROUND_SYNC_MS = 20_000;
+let backgroundSyncStarted = false;
+function startBackgroundSync(config: Config) {
+  if (backgroundSyncStarted) return;
+  backgroundSyncStarted = true;
+  setInterval(() => { void runSupportSync(config); }, BACKGROUND_SYNC_MS).unref?.();
+}
+
 export async function GET(request: Request) {
   const access = await authorize(request);
   if (!access) return Response.json({ error: "Forbidden" }, { status: 403 });
   if (!access.owner && !access.canUseChats) return Response.json({ error: "Chat access is disabled by CEO" }, { status: 403 });
   const config = configForServer();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
+  startBackgroundSync(config);
   if (new URL(request.url).searchParams.get("sync") === "1") await runSupportSync(config);
   if (new URL(request.url).searchParams.get("operators") === "1") return Response.json({ operators: await onlineOperators(config, access.userId) });
-  return Response.json(await listTickets(config, access.userId, access.owner));
+  return Response.json({ ...await listTickets(config, access.userId, access.owner), telegram: telegramState });
 }
 
 export async function POST(request: Request) {
@@ -192,7 +218,11 @@ async function telegramClient() {
   const apiId = Number(process.env.TELEGRAM_API_ID);
   const apiHash = process.env.TELEGRAM_API_HASH;
   const session = process.env.TELEGRAM_SESSION_STRING;
-  if (!Number.isInteger(apiId) || !apiHash || !session) return null;
+  if (!Number.isInteger(apiId) || !apiHash || !session) {
+    const missing = [!Number.isInteger(apiId) && "TELEGRAM_API_ID", !apiHash && "TELEGRAM_API_HASH", !session && "TELEGRAM_SESSION_STRING"].filter(Boolean).join(", ");
+    setTelegramState("not_configured", `На сервері не задано: ${missing}.`);
+    return null;
+  }
   connectingTelegramClient = (async () => {
     // GramJS is Node-only. Loading it only when support sync is requested keeps
     // the Worker-compatible merchant and wallet pages available at startup.
@@ -202,6 +232,10 @@ async function telegramClient() {
     const { StringSession } = await import(sessionModule) as any;
     const client = new TelegramClient(new StringSession(session), apiId, apiHash, { connectionRetries: 2 });
     await client.connect();
+    if (!(await client.isUserAuthorized())) {
+      await client.disconnect().catch(() => undefined);
+      throw new Error("session is not authorized");
+    }
     cachedTelegramClient = client;
     return client;
   })();
@@ -302,18 +336,26 @@ async function assignQueuedTickets(config: Config) {
 const processedTopMessage = new Map<string, number>();
 
 async function syncTelegram(config: Config) {
-  const client = await telegramClient();
+  let client: any;
+  try {
+    client = await telegramClient();
+  } catch (error) {
+    setTelegramState("error", describeTelegramError(error));
+    return;
+  }
   if (!client) return;
   let dialogs: any[];
   try {
     dialogs = await client.getDialogs({ limit: 100 });
-  } catch {
+  } catch (error) {
+    setTelegramState("error", describeTelegramError(error));
     cachedTelegramClient = null;
     return;
   }
+  setTelegramState("ok");
   for (const dialog of dialogs) {
     // One broken chat must not stop the remaining chats from syncing.
-    try { await syncDialog(config, client, dialog); } catch { /* Retried on the next poll. */ }
+    try { await syncDialog(config, client, dialog); } catch (error) { console.error("[support] dialog sync failed:", describeTelegramError(error)); }
   }
 }
 
