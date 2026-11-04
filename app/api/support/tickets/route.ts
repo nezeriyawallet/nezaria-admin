@@ -79,7 +79,9 @@ export async function GET(request: Request) {
   const config = configForServer();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
   startBackgroundSync(config);
-  if (new URL(request.url).searchParams.get("sync") === "1") await runSupportSync(config);
+  // Wait for the Telegram sync for a few seconds at most; a slow sync keeps
+  // running and its results show on the next poll instead of freezing the page.
+  if (new URL(request.url).searchParams.get("sync") === "1") await Promise.race([runSupportSync(config), new Promise((resolve) => setTimeout(resolve, 8000))]);
   if (new URL(request.url).searchParams.get("operators") === "1") return Response.json({ operators: await onlineOperators(config, access.userId) });
   return Response.json({ ...await listTickets(config, access.userId, access.owner), telegram: telegramState });
 }
@@ -178,11 +180,12 @@ function rest(config: Config, path: string, init: RequestInit = {}) { return fet
 async function patch(config: Config, table: string, filter: string, data: Record<string, unknown>) { await rest(config, `/${table}?${filter}`, { method: "PATCH", headers: { "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify(data) }); }
 async function insertMessage(config: Config, data: Omit<Message, "id" | "sent_at">) {
   const response = await rest(config, "/support_messages?on_conflict=ticket_id,telegram_message_id", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify(data) });
+  if (!response.ok) console.error(`[support] saving a message failed: ${response.status} ${(await response.clone().text().catch(() => "")).slice(0, 300)}`);
   return response.ok && (await response.json().catch(() => []) as unknown[]).length > 0;
 }
 async function ticketById(config: Config, id: string) { const response = await rest(config, `/support_tickets?id=eq.${encodeURIComponent(id)}&select=*&limit=1`); return response.ok ? (await response.json() as Ticket[])[0] || null : null; }
 async function ticketByPeer(config: Config, peerId: string) { const response = await rest(config, `/support_tickets?telegram_peer_id=eq.${encodeURIComponent(peerId)}&select=*&limit=1`); return response.ok ? (await response.json() as Ticket[])[0] || null : null; }
-async function createTicket(config: Config, data: Record<string, unknown>) { const response = await rest(config, "/support_tickets", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "return=representation" }, body: JSON.stringify(data) }); return response.ok ? (await response.json() as Ticket[])[0] || null : null; }
+async function createTicket(config: Config, data: Record<string, unknown>) { const response = await rest(config, "/support_tickets", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "return=representation" }, body: JSON.stringify(data) }); if (!response.ok) console.error(`[support] creating a ticket failed: ${response.status} ${(await response.clone().text().catch(() => "")).slice(0, 300)}`); return response.ok ? (await response.json() as Ticket[])[0] || null : null; }
 async function removeTicketMessages(config: Config, ticketId: string) { await rest(config, `/support_messages?ticket_id=eq.${encodeURIComponent(ticketId)}`, { method: "DELETE" }); }
 async function removeTicketSkips(config: Config, ticketId: string) { await rest(config, `/support_ticket_skips?ticket_id=eq.${encodeURIComponent(ticketId)}`, { method: "DELETE" }); }
 async function latestTicketMessageId(config: Config, ticketId: string) {
@@ -392,6 +395,13 @@ async function syncDialog(config: Config, client: any, dialog: any) {
   if (!entity || entity.className !== "User" || entity.bot || !entity.accessHash || !peerId || peerId === "777000" || entity.username?.toLowerCase() === "telegram") return;
   const topMessageId: number | undefined = dialog.message?.id;
   if (topMessageId && processedTopMessage.get(peerId) === topMessageId) return;
+  // A chat whose last message is old cannot hold a new request: skip it without
+  // reading its messages (reading ~100 old chats one by one made the first sync
+  // take minutes and run into Telegram's flood limits).
+  if (dialog.message && !isFreshTelegramMessage(dialog.message)) {
+    if (topMessageId) processedTopMessage.set(peerId, topMessageId);
+    return;
+  }
   const clientName = [entity.firstName, entity.lastName].filter(Boolean).join(" ") || entity.username || "Клієнт";
   const messages = await client.getMessages(entity, { limit: 30 }) as any[];
   const incoming = messages
