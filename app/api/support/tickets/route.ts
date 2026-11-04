@@ -79,7 +79,9 @@ export async function GET(request: Request) {
   const config = configForServer();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
   startBackgroundSync(config);
-  if (new URL(request.url).searchParams.get("sync") === "1") await runSupportSync(config);
+  // Wait for the Telegram sync for a few seconds at most; a slow sync keeps
+  // running and its results show on the next poll instead of freezing the page.
+  if (new URL(request.url).searchParams.get("sync") === "1") await Promise.race([runSupportSync(config), new Promise((resolve) => setTimeout(resolve, 8000))]);
   if (new URL(request.url).searchParams.get("operators") === "1") return Response.json({ operators: await onlineOperators(config, access.userId) });
   return Response.json({ ...await listTickets(config, access.userId, access.owner), telegram: telegramState });
 }
@@ -392,6 +394,13 @@ async function syncDialog(config: Config, client: any, dialog: any) {
   if (!entity || entity.className !== "User" || entity.bot || !entity.accessHash || !peerId || peerId === "777000" || entity.username?.toLowerCase() === "telegram") return;
   const topMessageId: number | undefined = dialog.message?.id;
   if (topMessageId && processedTopMessage.get(peerId) === topMessageId) return;
+  // A chat whose last message is old cannot hold a new request: skip it without
+  // reading its messages (reading ~100 old chats one by one made the first sync
+  // take minutes and run into Telegram's flood limits).
+  if (dialog.message && !isFreshTelegramMessage(dialog.message)) {
+    if (topMessageId) processedTopMessage.set(peerId, topMessageId);
+    return;
+  }
   const clientName = [entity.firstName, entity.lastName].filter(Boolean).join(" ") || entity.username || "Клієнт";
   const messages = await client.getMessages(entity, { limit: 30 }) as any[];
   const incoming = messages
