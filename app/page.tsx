@@ -1833,6 +1833,171 @@ function LtvMethodology({ gamesSince }: { gamesSince?: string | number | null })
   </details>;
 }
 
+type WalletCardCredit = { creditId: string; amount: number; balance: number; actor: string; note: string; createdAt: string };
+type WalletCardDetails = {
+  id: number; username: string; name: string; premium: boolean; blocked: boolean; deactivated: boolean; language: string; phoneCountry: string;
+  countryVerifiedAt: string | null; registeredAt: string | null; displayId: number; activeWallet: boolean; nzrPoints: number; referralCount: number;
+  referralEarned: number; rank: (WalletRank & { xp?: number }) | null; gamesWagered: number; fiatCurrency: string;
+  otherWallets: { displayId: number; nzrPoints: number; active: boolean }[]; credits: WalletCardCredit[]; maxCredit: number;
+};
+
+function newCreditId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function walletCardDate(value: string | null | undefined, withTime = false) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("uk-UA", withTime ? { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" } : { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+const walletCardLanguages: Record<string, string> = { en: "English", ua: "Українська", uk: "Українська", ru: "Русский", pl: "Polski" };
+
+/** Owner's user card: everything about one wallet and crediting NZR points to it. */
+function WalletCardModal({ user, walletId, onClose, onCredited }: { user: WalletUser; walletId: number; onClose: () => void; onCredited: (walletId: number, balance: number) => void }) {
+  const [details, setDetails] = useState<WalletCardDetails | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [armed, setArmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const creditId = useRef(newCreditId());
+  const armTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch(`/api/owner/users/${walletId}?_=${Date.now()}`, { cache: "no-store", headers: tmOwnerHeaders() })
+      .then(async (response) => ({ ok: response.ok, status: response.status, body: await response.json().catch(() => ({})) }))
+      .then(({ ok, status, body }) => {
+        if (cancelled) return;
+        if (ok) setDetails(body as WalletCardDetails);
+        else setLoadError(status === 403 ? "Картка клієнта доступна лише власнику." : (body as { error?: string }).error || "Не вдалося завантажити дані гаманця.");
+      })
+      .catch(() => { if (!cancelled) setLoadError("Не вдалося завантажити дані гаманця."); });
+    return () => { cancelled = true; };
+  }, [walletId]);
+
+  useEffect(() => () => { if (armTimer.current) window.clearTimeout(armTimer.current); }, []);
+
+  const maxCredit = details?.maxCredit || 1_000_000;
+  const value = Number(amount);
+  const valid = Number.isInteger(value) && value >= 1 && value <= maxCredit;
+  const balance = details ? metricNumber(details.nzrPoints) : metricNumber(user.nzrPoints);
+  const displayName = user.username ? `@${user.username}` : user.name || "Без username";
+  const initials = displayName.replace(/^@/, "").slice(0, 2).toUpperCase();
+  const country = countryLabel(details?.phoneCountry || user.phoneCountry);
+  const rank = details?.rank || user.rank || null;
+
+  const changeAmount = (next: string) => {
+    setAmount(next.replace(/\D/g, "").slice(0, 7));
+    setArmed(false);
+    setMessage(null);
+    creditId.current = newCreditId();
+  };
+
+  const submit = async () => {
+    if (!valid || busy) return;
+    if (!armed) {
+      setArmed(true);
+      if (armTimer.current) window.clearTimeout(armTimer.current);
+      armTimer.current = window.setTimeout(() => setArmed(false), 5000);
+      return;
+    }
+    setArmed(false);
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/owner/users/${walletId}/credit`, {
+        method: "POST", cache: "no-store", headers: tmOwnerHeaders(true),
+        body: JSON.stringify({ amount: value, creditId: creditId.current, note: note.trim() || undefined }),
+      });
+      const body = await response.json().catch(() => ({})) as Partial<WalletCardCredit> & { success?: boolean; message?: string };
+      if (!response.ok || !body.success) {
+        setMessage({ kind: "err", text: body.message || "Не вдалося зарахувати. Спробуйте ще раз." });
+        return;
+      }
+      const credit: WalletCardCredit = { creditId: creditId.current, amount: metricNumber(body.amount), balance: metricNumber(body.balance), actor: body.actor || "", note: body.note || "", createdAt: body.createdAt || new Date().toISOString() };
+      setDetails((current) => current ? { ...current, nzrPoints: credit.balance, credits: [credit, ...current.credits.filter((item) => item.creditId !== credit.creditId)] } : current);
+      onCredited(walletId, credit.balance);
+      setMessage({ kind: "ok", text: `Зараховано ${regNumber.format(credit.amount)} NZR. Новий баланс: ${regNumber.format(credit.balance)} NZR.` });
+      setAmount("");
+      setNote("");
+      creditId.current = newCreditId();
+    } catch {
+      // Keep the same credit id: a retry after a network failure cannot credit twice.
+      setMessage({ kind: "err", text: "Немає відповіді від сервера. Натисніть ще раз — повтор не зарахує двічі." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const facts: [string, ReactNode][] = [
+    ["Telegram ID", String(user.id)],
+    ["Wallet ID", <>{walletId}{details && !details.activeWallet && <em className="wc-tag">неактивний</em>}</>],
+    ["Країна номера", country ? <span className="reg-cc"><i>{country.code}</i>{country.name}</span> : <span className="reg-unv">Не підтверджено</span>],
+    ["Мова", details ? walletCardLanguages[details.language] || details.language || "—" : "…"],
+    ["Реєстрація", details ? walletCardDate(details.registeredAt) : "…"],
+    ["Статус", details ? (details.blocked ? <span className="wc-bad">Заблокований</span> : details.deactivated ? <span className="wc-bad">Деактивований</span> : user.premium ? "Premium" : "Звичайний") : (user.premium ? "Premium" : "Звичайний")],
+    ["Реферали", regNumber.format(details ? metricNumber(details.referralCount) : metricNumber(user.referralCount))],
+    ["Зароблено з рефералів", details ? `${regNumber.format(metricNumber(details.referralEarned))} NZR` : "…"],
+    ["Поставлено в іграх", details ? `${regNumber.format(metricNumber(details.gamesWagered))} NZR` : "…"],
+    ["Інші гаманці", details ? (details.otherWallets.length ? details.otherWallets.map((other) => `${other.displayId} · ${regNumber.format(metricNumber(other.nzrPoints))} NZR${other.active ? " (активний)" : ""}`).join(", ") : "немає") : "…"],
+  ];
+
+  return <TmModal label={`Картка клієнта ${displayName}`} wide onClose={onClose}>
+    <div className="wc">
+      <header className="wc-head">
+        <span className="reg-av wc-av" style={{ background: regColors[regHash(String(user.id)) % regColors.length] }}>{initials}</span>
+        <div className="wc-who">
+          <h3>{displayName}{user.premium && <span className="reg-pill prem">Premium</span>}</h3>
+          {(details?.name || user.name) && user.username && <p>{details?.name || user.name}</p>}
+        </div>
+      </header>
+
+      <div className="wc-top">
+        <article className="wc-bal">
+          <span>Баланс NZR-поінтів</span>
+          <b>{regNumber.format(balance)} <small>NZR</small></b>
+        </article>
+        <article className="wc-rank" style={{ "--rank": rank?.color || "#767676" } as CSSProperties}>
+          <span>Рейтинг</span>
+          {rank?.name ? <b><i />{rank.name} <small>#{metricNumber(rank.level)}</small></b> : <b className="wc-dim">—</b>}
+          {details?.rank?.xp !== undefined && <em>{regNumber.format(metricNumber(details.rank.xp))} XP</em>}
+        </article>
+      </div>
+
+      {loadError && <p className="wc-msg err">{loadError}</p>}
+
+      <dl className="wc-facts">{facts.map(([label, item]) => <div key={label}><dt>{label}</dt><dd>{item}</dd></div>)}</dl>
+
+      <section className="wc-credit" aria-label="Зарахування поінтів">
+        <h4>Зарахування поінтів</h4>
+        <div className="wc-form">
+          <label className="wc-amount"><input inputMode="numeric" placeholder="Сума, напр. 1000" value={amount} onChange={(event) => changeAmount(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void submit(); }} aria-label="Сума NZR" /><span>NZR</span></label>
+          <button type="button" className={`tm-btn primary wc-go${armed ? " armed-ok" : ""}`} disabled={!valid || busy || Boolean(loadError)} onClick={() => void submit()}>
+            {busy ? "Зараховуємо…" : armed ? `Підтвердити +${regNumber.format(value)} NZR` : "Зарахувати"}
+          </button>
+        </div>
+        <input className="wc-note" placeholder="Коментар (необов'язково): за що нарахування" value={note} maxLength={240} onChange={(event) => setNote(event.target.value)} aria-label="Коментар" />
+        <p className="wc-hint">{armed ? "Натисніть ще раз, щоб підтвердити." : `Від 1 до ${regNumber.format(maxCredit)} NZR за раз. Кожне нарахування записується в журнал.`}</p>
+        {message && <p className={`wc-msg ${message.kind}`}>{message.text}</p>}
+      </section>
+
+      {details && details.credits.length > 0 && <section className="wc-log" aria-label="Журнал нарахувань">
+        <h4>Журнал нарахувань</h4>
+        <ul>{details.credits.map((credit) => <li key={credit.creditId}>
+          <b>+{regNumber.format(metricNumber(credit.amount))} NZR</b>
+          <span>{walletCardDate(credit.createdAt, true)} · {credit.actor.replace(/\s*\([^)]*\)$/, "")}{credit.note ? ` · ${credit.note}` : ""}</span>
+          <small>баланс після: {regNumber.format(metricNumber(credit.balance))}</small>
+        </li>)}</ul>
+      </section>}
+    </div>
+  </TmModal>;
+}
+
 function WalletRegistry({ users }: { users: WalletUser[] }) {
   const [query, setQuery] = useState("");
   const [premium, setPremium] = useState<"all" | "premium" | "regular">("all");
@@ -1849,6 +2014,8 @@ function WalletRegistry({ users }: { users: WalletUser[] }) {
   const [page, setPage] = useState(1);
   const [copied, setCopied] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const [opened, setOpened] = useState<{ user: WalletUser; walletId: number } | null>(null);
+  const [balances, setBalances] = useState<Record<number, number>>({});
 
   useEffect(() => {
     try { window.localStorage.setItem("nz-reg", JSON.stringify({ key: sort.key, dir: sort.dir, size })); } catch { /* storage unavailable */ }
@@ -1870,7 +2037,7 @@ function WalletRegistry({ users }: { users: WalletUser[] }) {
     sub: user.username && user.name ? user.name : "",
     walletId: user.walletIds.join(", "),
     country: countryLabel(user.phoneCountry),
-    nzr: metricNumber(user.nzrPoints),
+    nzr: balances[user.walletIds[0]] ?? metricNumber(user.nzrPoints),
     invited: metricNumber(user.referralCount),
     rank: user.rank?.name ? { level: metricNumber(user.rank.level), name: user.rank.name, color: user.rank.color || "#767676" } : null,
   }));
@@ -1970,7 +2137,8 @@ function WalletRegistry({ users }: { users: WalletUser[] }) {
         <thead><tr>{header.map(([key, label, numeric]) => <th key={key} className={numeric ? "num" : ""} aria-sort={sort.key === key ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}><button type="button" onClick={() => changeSort(key)}>{label}{regSortIcon}</button></th>)}</tr></thead>
         <tbody>{slice.map((row) => {
           const initials = row.name.replace(/^@/, "").slice(0, 2).toUpperCase();
-          return <tr key={row.key}>
+          const open = () => { if (row.user.walletIds[0]) setOpened({ user: row.user, walletId: row.user.walletIds[0] }); };
+          return <tr key={row.key} className="reg-row-open" tabIndex={0} aria-label={`Відкрити картку ${row.name}`} onClick={(event) => { if (!(event.target as HTMLElement).closest("button")) open(); }} onKeyDown={(event) => { if (event.key === "Enter" && event.target === event.currentTarget) open(); }}>
             <td><div className="reg-user"><span className="reg-av" style={{ background: regColors[regHash(String(row.user.id)) % regColors.length] }}>{initials}</span><div><span className="reg-name"><RegHighlight text={row.name} query={query} /></span>{row.sub && <span className="reg-sub"><RegHighlight text={row.sub} query={query} /></span>}</div></div></td>
             <td data-l="Telegram ID"><span className="reg-id"><RegHighlight text={String(row.user.id)} query={query} /><button className={`reg-cp${copied === `tg-${row.key}` ? " ok" : ""}`} aria-label="Копіювати Telegram ID" onClick={() => copy(String(row.user.id), `tg-${row.key}`)}>{copied === `tg-${row.key}` ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10" /></svg> : regCopyIcon}</button></span></td>
             <td data-l="Країна">{row.country ? <span className="reg-cc"><i>{row.country.code}</i>{row.country.name}</span> : <span className="reg-unv">Не підтверджено</span>}</td>
@@ -1994,6 +2162,7 @@ function WalletRegistry({ users }: { users: WalletUser[] }) {
         <button className="reg-pg" aria-label="Наступна сторінка" disabled={current >= pages} onClick={() => setPage(current + 1)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></button>
       </div>
     </div>
+    {opened && <WalletCardModal user={opened.user} walletId={opened.walletId} onClose={() => setOpened(null)} onCredited={(walletId, balance) => setBalances((current) => ({ ...current, [walletId]: balance }))} />}
   </section>;
 }
 
