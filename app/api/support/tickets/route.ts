@@ -7,8 +7,20 @@ const DEFAULT_ACTIVE_CHAT_LIMIT = 5;
 
 export const runtime = "nodejs";
 
+// A client who rated the chat may leave one short review within this window;
+// anything written later is a new request.
+const REVIEW_WINDOW_MS = 30 * 60 * 1000;
+// A chat left waiting for a rating this long is treated as finished, so any
+// new message from the client starts a new request.
+const AWAITING_RATING_TTL_MS = 24 * 60 * 60 * 1000;
+const OPERATOR_ONLINE_MS = 5 * 60 * 1000;
+
 let cachedTelegramClient: any = null;
 let connectingTelegramClient: Promise<any | null> | null = null;
+// Every open chat page polls with ?sync=1 every few seconds. Running those
+// syncs in parallel made them overwrite each other (a reopened chat could be
+// wiped by a second sync), so only one runs at a time and the rest share it.
+let supportSyncInFlight: Promise<void> | null = null;
 
 export async function GET(request: Request) {
   const access = await authorize(request);
@@ -16,11 +28,7 @@ export async function GET(request: Request) {
   if (!access.owner && !access.canUseChats) return Response.json({ error: "Chat access is disabled by CEO" }, { status: 403 });
   const config = configForServer();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
-  if (new URL(request.url).searchParams.get("sync") === "1") {
-    await syncTelegram(config);
-    await closeInactiveChats(config);
-    await markInactiveOperatorsOffline(config);
-  }
+  if (new URL(request.url).searchParams.get("sync") === "1") await runSupportSync(config);
   if (new URL(request.url).searchParams.get("operators") === "1") return Response.json({ operators: await onlineOperators(config, access.userId) });
   return Response.json(await listTickets(config, access.userId, access.owner));
 }
@@ -222,8 +230,25 @@ async function closeInactiveChats(config: Config) {
   }
 }
 
+async function runSupportSync(config: Config) {
+  if (!supportSyncInFlight) {
+    supportSyncInFlight = (async () => {
+      try {
+        await syncTelegram(config);
+        await closeInactiveChats(config);
+        await markInactiveOperatorsOffline(config);
+        await releaseChatsOfOfflineOperators(config);
+        await assignQueuedTickets(config);
+      } catch {
+        // The next poll retries.
+      }
+    })().finally(() => { supportSyncInFlight = null; });
+  }
+  await supportSyncInFlight;
+}
+
 async function markInactiveOperatorsOffline(config: Config) {
-  const cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  const cutoff = new Date(Date.now() - OPERATOR_ONLINE_MS).toISOString();
   await rest(config, `/worker_applications?status=eq.approved&operator_status=eq.online&last_active_at=lt.${encodeURIComponent(cutoff)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
@@ -231,46 +256,172 @@ async function markInactiveOperatorsOffline(config: Config) {
   });
 }
 
+async function lastTicketMessage(config: Config, ticketId: string) {
+  const response = await rest(config, `/support_messages?ticket_id=eq.${encodeURIComponent(ticketId)}&select=sender_type,sent_at&order=sent_at.desc&limit=1`);
+  const [message] = response.ok ? await response.json() as Pick<Message, "sender_type" | "sent_at">[] : [];
+  return message || null;
+}
+
+// A chat taken by an operator who went offline (ended the shift, switched to
+// offline or closed the dashboard) while the client waits for an answer goes
+// back to the shared queue, where other operators see it and it is
+// auto-assigned to whoever is online. The CEO's own chats are left alone.
+async function releaseChatsOfOfflineOperators(config: Config) {
+  const ticketsResponse = await rest(config, "/support_tickets?status=eq.in_progress&assigned_to=not.is.null&select=*");
+  const tickets = ticketsResponse.ok ? await ticketsResponse.json() as Ticket[] : [];
+  if (!tickets.length) return;
+  const ids = [...new Set(tickets.map((ticket) => ticket.assigned_to!))];
+  const workersResponse = await rest(config, `/worker_applications?user_id=in.(${ids.map(encodeURIComponent).join(",")})&status=eq.approved&select=user_id,full_name,operator_status,last_active_at`);
+  if (!workersResponse.ok) return;
+  const workers = await workersResponse.json() as { user_id: string; full_name: string | null; operator_status: string | null; last_active_at: string | null }[];
+  const cutoff = Date.now() - OPERATOR_ONLINE_MS;
+  const offline = new Map(workers
+    .filter((worker) => worker.operator_status !== "online" || !worker.last_active_at || Date.parse(worker.last_active_at) < cutoff)
+    .map((worker) => [worker.user_id, worker.full_name?.trim() || "Працівник"]));
+  for (const ticket of tickets) {
+    const name = offline.get(ticket.assigned_to!);
+    if (!name) continue;
+    const last = await lastTicketMessage(config, ticket.id);
+    if (last?.sender_type !== "client") continue;
+    await patch(config, "support_tickets", `id=eq.${ticket.id}&status=eq.in_progress&assigned_to=eq.${encodeURIComponent(ticket.assigned_to!)}`, { status: "new", assigned_to: null, assigned_at: null, updated_at: new Date().toISOString() });
+    await removeTicketSkips(config, ticket.id);
+    await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: null, sender_type: "system", body: `${name} не в мережі — чат повернуто в загальну чергу` });
+  }
+}
+
+async function assignQueuedTickets(config: Config) {
+  const response = await rest(config, "/support_tickets?status=eq.new&telegram_peer_id=neq.777000&select=*&order=updated_at.asc");
+  const tickets = response.ok ? await response.json() as Ticket[] : [];
+  for (const ticket of tickets) {
+    if (!(await autoAssignTicket(config, ticket))) break;
+  }
+}
+
+// Top message id of each Telegram dialog already handled, so unchanged
+// dialogs are skipped instead of re-reading their messages on every poll.
+const processedTopMessage = new Map<string, number>();
+
 async function syncTelegram(config: Config) {
   const client = await telegramClient();
   if (!client) return;
+  let dialogs: any[];
   try {
-    const dialogs = await client.getDialogs({ limit: 25 });
-    for (const dialog of dialogs) {
-      const entity = dialog.entity as any;
-      const peerId = entity?.id?.toString();
-      if (!entity || entity.className !== "User" || entity.bot || !entity.accessHash || !peerId || peerId === "777000" || entity.username?.toLowerCase() === "telegram") continue;
-      const clientName = [entity.firstName, entity.lastName].filter(Boolean).join(" ") || entity.username || "Клієнт";
-      const messages = await client.getMessages(entity, { limit: 15 });
-      const incomingMessages = messages.filter((message) => !message.out && !message.action && Boolean(message.message?.trim()));
-      if (incomingMessages.length === 0) continue;
-      const ticketData = { telegram_peer_id: peerId, telegram_access_hash: entity.accessHash.toString(), client_name: clientName, client_username: entity.username || null, updated_at: new Date().toISOString() };
-      let ticket = await ticketByPeer(config, peerId);
-      let messagesToSave = incomingMessages;
-      const lastMessageId = ticket ? await latestTicketMessageId(config, ticket.id) : 0;
-      const newTelegramMessages = incomingMessages.filter((message) => message.id > lastMessageId);
-      const startsNewRequest = ticket?.status === "awaiting_rating" && !ticket.rating && newTelegramMessages.length > 0 && !/^[1-5]$/.test(newTelegramMessages[0].message.trim());
-      if (ticket && (ticket.status === "closed" || startsNewRequest)) {
-        messagesToSave = newTelegramMessages;
-        if (messagesToSave.length === 0) continue;
-        await removeTicketMessages(config, ticket.id);
-        await removeTicketSkips(config, ticket.id);
-        await patch(config, "support_tickets", `id=eq.${ticket.id}`, { ...ticketData, status: "new", assigned_to: null, assigned_at: null, rating: null, review: null });
-        ticket = await ticketById(config, ticket.id);
-      } else if (!ticket) ticket = await createTicket(config, ticketData);
-      if (ticket?.status === "new") {
-        await sendAutomaticReply(config, ticket);
-        ticket = await autoAssignTicket(config, ticket);
-      }
-      if (!ticket) continue;
-      for (const message of messagesToSave) {
-        const text = message.message.trim();
-        if (await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: message.id, sender_type: "client", body: text })) await handleFeedback(config, ticket, text);
-      }
-    }
+    dialogs = await client.getDialogs({ limit: 100 });
   } catch {
     cachedTelegramClient = null;
+    return;
   }
+  for (const dialog of dialogs) {
+    // One broken chat must not stop the remaining chats from syncing.
+    try { await syncDialog(config, client, dialog); } catch { /* Retried on the next poll. */ }
+  }
+}
+
+async function syncDialog(config: Config, client: any, dialog: any) {
+  const entity = dialog.entity as any;
+  const peerId = entity?.id?.toString();
+  if (!entity || entity.className !== "User" || entity.bot || !entity.accessHash || !peerId || peerId === "777000" || entity.username?.toLowerCase() === "telegram") return;
+  const topMessageId: number | undefined = dialog.message?.id;
+  if (topMessageId && processedTopMessage.get(peerId) === topMessageId) return;
+  const clientName = [entity.firstName, entity.lastName].filter(Boolean).join(" ") || entity.username || "Клієнт";
+  const messages = await client.getMessages(entity, { limit: 30 }) as any[];
+  const incoming = messages
+    .filter((message) => !message.out && !message.action && Boolean(message.message?.trim()))
+    .sort((a, b) => a.id - b.id);
+  if (incoming.length) {
+    const ticketData = { telegram_peer_id: peerId, telegram_access_hash: entity.accessHash.toString(), client_name: clientName, client_username: entity.username || null, updated_at: new Date().toISOString() };
+    const ticket = await ticketByPeer(config, peerId);
+    if (!ticket) {
+      const created = await createTicket(config, ticketData);
+      if (!created) return;
+      await saveClientMessages(config, created, incoming);
+      await startRequest(config, created);
+    } else {
+      const lastMessageId = await latestTicketMessageId(config, ticket.id);
+      const fresh = incoming.filter((message) => message.id > lastMessageId);
+      if (ticket.status === "closed" || (ticket.status === "awaiting_rating" && Date.now() - Date.parse(ticket.updated_at) > AWAITING_RATING_TTL_MS)) {
+        if (fresh.length) await reopenTicket(config, ticket, ticketData, fresh);
+      } else if (ticket.status === "awaiting_rating") {
+        if (fresh.length) await handleAwaitingRating(config, ticket, ticketData, fresh);
+      } else {
+        // Open chat: store everything not saved yet, but never messages that
+        // belong to an earlier, already finished request.
+        const oldestMessageId = await oldestTicketMessageId(config, ticket.id);
+        const saved = await saveClientMessages(config, ticket, incoming.filter((message) => message.id >= oldestMessageId));
+        if (saved > 0) await patch(config, "support_tickets", `id=eq.${ticket.id}`, ticketData);
+        if (ticket.status === "new") await sendAutomaticReply(config, ticket);
+      }
+    }
+  }
+  if (topMessageId) processedTopMessage.set(peerId, topMessageId);
+}
+
+async function oldestTicketMessageId(config: Config, ticketId: string) {
+  const response = await rest(config, `/support_messages?ticket_id=eq.${encodeURIComponent(ticketId)}&telegram_message_id=not.is.null&select=telegram_message_id&order=telegram_message_id.asc&limit=1`);
+  const [message] = response.ok ? await response.json() as { telegram_message_id: number }[] : [];
+  return message?.telegram_message_id || 0;
+}
+
+async function saveClientMessages(config: Config, ticket: Ticket, messages: any[]) {
+  let saved = 0;
+  for (const message of messages) {
+    if (await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: message.id, sender_type: "client", body: message.message.trim() })) saved += 1;
+  }
+  return saved;
+}
+
+// The client messages are stored before the automatic reply, so they are never
+// filtered out as older than the request if the reply is sent first.
+async function startRequest(config: Config, ticket: Ticket) {
+  await sendAutomaticReply(config, ticket);
+  await autoAssignTicket(config, ticket);
+}
+
+async function reopenTicket(config: Config, ticket: Ticket, ticketData: Record<string, unknown>, messages: any[]) {
+  await removeTicketMessages(config, ticket.id);
+  await removeTicketSkips(config, ticket.id);
+  await patch(config, "support_tickets", `id=eq.${ticket.id}`, { ...ticketData, status: "new", assigned_to: null, assigned_at: null, rating: null, review: null });
+  const reopened = await ticketById(config, ticket.id);
+  if (!reopened) return;
+  await saveClientMessages(config, reopened, messages);
+  await startRequest(config, reopened);
+}
+
+// After "close" the client may send a rating (1-5) and then one short review.
+// Any other message, or a message after the review window, is a new request
+// and goes back to the queue instead of being swallowed as feedback.
+async function handleAwaitingRating(config: Config, ticket: Ticket, ticketData: Record<string, unknown>, messages: any[]) {
+  let current = ticket;
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index];
+    const text = message.message.trim();
+    if (!current.rating && /^[1-5]$/.test(text)) {
+      await insertMessage(config, { ticket_id: current.id, telegram_message_id: message.id, sender_type: "client", body: text });
+      const now = new Date().toISOString();
+      await patch(config, "support_tickets", `id=eq.${current.id}`, { rating: Number(text), updated_at: now });
+      current = { ...current, rating: Number(text), updated_at: now };
+      try { await sendTelegram(current, "Дякуємо за оцінку. За бажанням надішліть короткий відгук одним повідомленням."); } catch { /* The rating is saved anyway. */ }
+      continue;
+    }
+    const reviewWindowOpen = Boolean(current.rating) && !current.review && Date.now() - Date.parse(current.updated_at) < REVIEW_WINDOW_MS && text.length <= 2000;
+    if (reviewWindowOpen) {
+      await insertMessage(config, { ticket_id: current.id, telegram_message_id: message.id, sender_type: "client", body: text });
+      await saveReview(config, current, text);
+      const remaining = messages.slice(index + 1);
+      if (remaining.length) await reopenTicket(config, { ...current, status: "closed" }, ticketData, remaining);
+      return;
+    }
+    await reopenTicket(config, current, ticketData, messages.slice(index));
+    return;
+  }
+}
+
+async function saveReview(config: Config, ticket: Ticket, text: string) {
+  await patch(config, "support_tickets", `id=eq.${ticket.id}`, { status: "closed", review: text, updated_at: new Date().toISOString() });
+  if (!ticket.assigned_to) return;
+  const employeeResponse = await rest(config, `/worker_applications?user_id=eq.${encodeURIComponent(ticket.assigned_to)}&status=eq.approved&select=id&limit=1`);
+  const [employee] = employeeResponse.ok ? await employeeResponse.json() as { id: string }[] : [];
+  if (employee) await rest(config, "/employee_reviews", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify({ employee_application_id: employee.id, client_name: ticket.client_name, rating: ticket.rating, comment: text }) });
 }
 
 async function sendAutomaticReply(config: Config, ticket: Ticket) {
@@ -285,39 +436,31 @@ async function sendAutomaticReply(config: Config, ticket: Ticket) {
   }
 }
 
+// Returns false when nobody online can take another chat.
 async function autoAssignTicket(config: Config, ticket: Ticket) {
   const workersResponse = await rest(config, `/worker_applications?status=eq.approved&can_use_chats=eq.true&operator_status=eq.online&last_active_at=gte.${encodeURIComponent(new Date(Date.now() - 3 * 60 * 1000).toISOString())}&select=user_id,active_chat_limit&order=last_active_at.desc`);
   const workers = workersResponse.ok ? await workersResponse.json() as { user_id: string; active_chat_limit: number }[] : [];
-  if (!workers.length) return ticket;
+  if (!workers.length) return false;
   const activeResponse = await rest(config, "/support_tickets?status=eq.in_progress&assigned_to=not.is.null&select=assigned_to");
   const activeTickets = activeResponse.ok ? await activeResponse.json() as Pick<Ticket, "assigned_to">[] : [];
   const workloads = new Map(workers.map((worker) => [worker.user_id, 0]));
   const limits = new Map(workers.map((worker) => [worker.user_id, Number.isInteger(worker.active_chat_limit) ? worker.active_chat_limit : DEFAULT_ACTIVE_CHAT_LIMIT]));
   activeTickets.forEach((item) => { if (item.assigned_to && workloads.has(item.assigned_to)) workloads.set(item.assigned_to, (workloads.get(item.assigned_to) || 0) + 1); });
   const agentId = [...workloads.entries()].filter(([userId, count]) => count < (limits.get(userId) || DEFAULT_ACTIVE_CHAT_LIMIT)).sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))[0]?.[0];
-  if (!agentId) return ticket;
-  const greeting = "Вітаємо вас у технічній підтримці Nezeriya Wallet";
-  try {
-    const telegramMessageId = await sendTelegram(ticket, greeting);
-    await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: telegramMessageId, sender_type: "agent", body: greeting });
-  } catch { return ticket; }
+  if (!agentId) return false;
+  // A chat returned to the queue mid-conversation is not greeted a second time.
+  const agentMessages = await rest(config, `/support_messages?ticket_id=eq.${encodeURIComponent(ticket.id)}&sender_type=eq.agent&select=id&limit=1`);
+  const greeted = agentMessages.ok && (await agentMessages.json() as unknown[]).length > 0;
+  if (!greeted) {
+    const greeting = "Вітаємо вас у технічній підтримці Nezeriya Wallet";
+    try {
+      const telegramMessageId = await sendTelegram(ticket, greeting);
+      await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: telegramMessageId, sender_type: "agent", body: greeting });
+    } catch { return true; }
+  } else {
+    const names = await operatorNames(config, [agentId]);
+    await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: null, sender_type: "system", body: `Чат автоматично передано працівнику ${names.get(agentId) || "Працівник"}` });
+  }
   await patch(config, "support_tickets", `id=eq.${ticket.id}&status=eq.new`, { status: "in_progress", assigned_to: agentId, assigned_at: new Date().toISOString(), updated_at: new Date().toISOString() });
-  return await ticketById(config, ticket.id) || ticket;
-}
-
-async function handleFeedback(config: Config, ticket: Ticket, text: string) {
-  if (ticket.status !== "awaiting_rating") return;
-  if (!ticket.rating && /^[1-5]$/.test(text)) {
-    await patch(config, "support_tickets", `id=eq.${ticket.id}`, { rating: Number(text), updated_at: new Date().toISOString() });
-    await sendTelegram(ticket, "Дякуємо за оцінку. За бажанням надішліть короткий відгук одним повідомленням.");
-    return;
-  }
-  if (ticket.rating && text.length <= 2000) {
-    await patch(config, "support_tickets", `id=eq.${ticket.id}`, { status: "closed", review: text, updated_at: new Date().toISOString() });
-    if (ticket.assigned_to) {
-      const employeeResponse = await rest(config, `/worker_applications?user_id=eq.${encodeURIComponent(ticket.assigned_to)}&status=eq.approved&select=id&limit=1`);
-      const [employee] = employeeResponse.ok ? await employeeResponse.json() as { id: string }[] : [];
-      if (employee) await rest(config, "/employee_reviews", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify({ employee_application_id: employee.id, client_name: ticket.client_name, rating: ticket.rating, comment: text }) });
-    }
-  }
+  return true;
 }
