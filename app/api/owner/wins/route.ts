@@ -50,17 +50,39 @@ export async function GET(request: Request) {
     return Response.json({ error: "Wallet API is not configured" }, { status: 503 });
   }
 
+  if (winsCache && Date.now() - winsCache.at < WINS_CACHE_MS) return winsResponse(winsCache.body);
+  if (!winsInFlight) winsInFlight = loadWins(baseUrl, apiKey).finally(() => { winsInFlight = null; });
+  const body = await winsInFlight;
+  if (!body) return Response.json({ error: "Wallet API is unavailable" }, { status: 503 });
+  return winsResponse(body);
+}
+
+// The game journal is heavy for the wallet to build, so the result is shared
+// by concurrent requests and reused for a few minutes.
+const WINS_CACHE_MS = 5 * 60_000;
+let winsCache: { at: number; body: Record<string, unknown> } | null = null;
+let winsInFlight: Promise<Record<string, unknown> | null> | null = null;
+
+function winsResponse(body: Record<string, unknown>) {
+  return Response.json(body, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", Pragma: "no-cache" } });
+}
+
+async function loadWins(baseUrl: string, apiKey: string): Promise<Record<string, unknown> | null> {
   try {
     const fresh = Date.now();
     const response = await fetch(`${baseUrl}/admin/api/wheel/wins?page=0&size=100&_=${fresh}`, { headers: headersFor(apiKey), cache: "no-store" });
-    if (!response.ok) return Response.json({ error: "Wallet API is unavailable" }, { status: response.status });
+    if (!response.ok) return null;
     const firstPage = await response.json() as Record<string, unknown>;
     const totalPages = Math.min(Math.max(Number(firstPage.totalPages) || 1, 1), 50);
-    const otherPages = await Promise.all(Array.from({ length: totalPages - 1 }, async (_, index) => {
-      const page = await fetch(`${baseUrl}/admin/api/wheel/wins?page=${index + 1}&size=100&_=${fresh}`, { headers: headersFor(apiKey), cache: "no-store" });
-      return page.ok ? await page.json() as Record<string, unknown> : null;
-    }));
-    const allItems = [firstPage, ...otherPages.filter(Boolean)].flatMap((page) => Array.isArray(page.items) ? page.items as GameResult[] : []);
+    // Every page makes the wallet load all game rounds into memory, so the
+    // pages are fetched one at a time: dozens in parallel ran the wallet out
+    // of heap (OutOfMemoryError, 2026-11-04) and froze it for users.
+    const otherPages: (Record<string, unknown> | null)[] = [];
+    for (let index = 1; index < totalPages; index += 1) {
+      const page = await fetch(`${baseUrl}/admin/api/wheel/wins?page=${index}&size=100&_=${fresh}`, { headers: headersFor(apiKey), cache: "no-store", signal: AbortSignal.timeout(20_000) }).catch(() => null);
+      otherPages.push(page?.ok ? await page.json() as Record<string, unknown> : null);
+    }
+    const allItems = [firstPage, ...otherPages.filter((page): page is Record<string, unknown> => page !== null)].flatMap((page) => Array.isArray(page.items) ? page.items as GameResult[] : []);
     const calculated = buildMonthlyTotals(allItems);
     const officialCollected = numberFrom(firstPage.monthlyCollectedNzr);
     const officialWon = numberFrom(firstPage.monthlyWonNzr);
@@ -81,17 +103,17 @@ export async function GET(request: Request) {
       monthlyDoubleWonNzr: numberFrom(firstPage.monthlyDoubleWonNzr) ?? calculated.monthlyDoubleWonNzr,
       monthlyDoubleSpentNzr: numberFrom(firstPage.monthlyDoubleSpentNzr) ?? calculated.monthlyDoubleSpentNzr,
     } : calculated;
-    return Response.json({ ...firstPage, items: allItems, totalElements: allItems.length, totalPages: 1,
+    const body = { ...firstPage, items: allItems, totalElements: allItems.length, totalPages: 1,
       monthlyWonNzr: source.monthlyWonNzr ?? 0, monthlyCollectedNzr: source.monthlyCollectedNzr ?? 0,
       monthlyNetEarningsNzr: source.monthlyNetEarningsNzr ?? source.monthlyLostNzr ?? 0, monthlyLostNzr: source.monthlyNetEarningsNzr ?? source.monthlyLostNzr ?? 0,
       monthlyWheelWonNzr: source.monthlyWheelWonNzr ?? 0, monthlyPlinkoWonNzr: source.monthlyPlinkoWonNzr ?? 0,
       monthlyWheelSpentNzr: source.monthlyWheelSpentNzr ?? 0, monthlyPlinkoSpentNzr: source.monthlyPlinkoSpentNzr ?? 0,
       monthlySpinsWonNzr: source.monthlySpinsWonNzr ?? 0, monthlySpinsSpentNzr: source.monthlySpinsSpentNzr ?? 0,
-      monthlyDoubleWonNzr: source.monthlyDoubleWonNzr ?? 0, monthlyDoubleSpentNzr: source.monthlyDoubleSpentNzr ?? 0 }, {
-      headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", Pragma: "no-cache" },
-    });
+      monthlyDoubleWonNzr: source.monthlyDoubleWonNzr ?? 0, monthlyDoubleSpentNzr: source.monthlyDoubleSpentNzr ?? 0 };
+    winsCache = { at: Date.now(), body };
+    return body;
   } catch {
-    return Response.json({ error: "Wallet API is unavailable" }, { status: 503 });
+    return null;
   }
 }
 

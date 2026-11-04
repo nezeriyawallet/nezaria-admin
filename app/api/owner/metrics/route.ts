@@ -68,24 +68,7 @@ export async function GET(request: Request) {
     } catch {
       return [name, null] as const;
     }
-  })), (async () => {
-    try {
-      const response = await fetch(`${baseUrl}/admin/api/analytics?_=${fresh}`, {
-        headers: { "X-Admin-Key": apiKey, Accept: "application/json" },
-        cache: "no-store",
-      });
-      return response.ok ? await response.json() as Record<string, unknown> : {};
-    } catch {
-      return {};
-    }
-  })(), (async () => {
-    try {
-      const response = await fetch(`${baseUrl}/admin/api/users/revenue?_=${fresh}`, {
-        headers: { "X-Admin-Key": apiKey, Accept: "application/json" }, cache: "no-store",
-      });
-      return response.ok ? await response.json() as Record<string, unknown> : {};
-    } catch { return {}; }
-  })(), (async () => {
+  })), heavyWalletReports(baseUrl, apiKey).then((report) => report.analytics), heavyWalletReports(baseUrl, apiKey).then((report) => report.revenue), (async () => {
     try {
       const parameters = [monthQuery, `turnoverYear=${turnoverYear}`, `_=${fresh}`].filter(Boolean).join("&");
       const response = await fetch(`${baseUrl}/admin/api/finance/nzr-exchange?${parameters}`, {
@@ -112,6 +95,43 @@ export async function GET(request: Request) {
   return Response.json({ metrics: { ...Object.fromEntries(values), ...analytics, ...revenue, ...exchangeRevenue, ...monthStats, selectedYear: hasSelectedMonth ? selectedYear : null, selectedMonth: hasSelectedMonth ? selectedMonth : null, selectedTurnoverYear: turnoverYear }, updatedAt: new Date().toISOString() }, {
     headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", Pragma: "no-cache" },
   });
+}
+
+// /admin/api/analytics and /admin/api/users/revenue make the wallet load whole
+// game and NZR ledgers into memory. Fired in parallel on every 15-second poll
+// they ran the wallet out of heap (OutOfMemoryError, 2026-11-04) and froze it
+// for users. They change slowly, so fetch them one after another, at most once
+// per HEAVY_CACHE_MS, share the one request between concurrent polls and give
+// up after a timeout instead of piling up requests on a struggling wallet.
+const HEAVY_CACHE_MS = 10 * 60_000;
+const HEAVY_TIMEOUT_MS = 20_000;
+type HeavyReport = { analytics: Record<string, unknown>; revenue: Record<string, unknown> };
+let heavyCache: { at: number; report: HeavyReport } | null = null;
+let heavyInFlight: Promise<HeavyReport> | null = null;
+
+async function fetchHeavy(url: string, apiKey: string) {
+  try {
+    const response = await fetch(url, { headers: { "X-Admin-Key": apiKey, Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(HEAVY_TIMEOUT_MS) });
+    return response.ok ? await response.json() as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+function heavyWalletReports(baseUrl: string, apiKey: string): Promise<HeavyReport> {
+  if (heavyCache && Date.now() - heavyCache.at < HEAVY_CACHE_MS) return Promise.resolve(heavyCache.report);
+  if (!heavyInFlight) {
+    heavyInFlight = (async () => {
+      const analytics = await fetchHeavy(`${baseUrl}/admin/api/analytics`, apiKey);
+      const revenue = analytics ? await fetchHeavy(`${baseUrl}/admin/api/users/revenue`, apiKey) : null;
+      const report = { analytics: analytics || heavyCache?.report.analytics || {}, revenue: revenue || heavyCache?.report.revenue || {} };
+      // A failed fetch is remembered for two minutes (keeping the last good
+      // numbers), so a struggling wallet is not asked again on the next poll.
+      heavyCache = { at: analytics && revenue ? Date.now() : Date.now() - HEAVY_CACHE_MS + 2 * 60_000, report };
+      return report;
+    })().finally(() => { heavyInFlight = null; });
+  }
+  return heavyInFlight;
 }
 
 function metricValue(value: unknown, keys: readonly string[]): number | string | null {
