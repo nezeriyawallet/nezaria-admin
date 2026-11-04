@@ -14,6 +14,31 @@ const REVIEW_WINDOW_MS = 30 * 60 * 1000;
 // new message from the client starts a new request.
 const AWAITING_RATING_TTL_MS = 24 * 60 * 60 * 1000;
 const OPERATOR_ONLINE_MS = 5 * 60 * 1000;
+// Only client messages from this window count as requests. Older history in
+// the support account (e.g. after the session was offline for weeks) is never
+// imported and never answered automatically: on 2026-11-04 the first sync after
+// reconnecting greeted every old chat of the account.
+const FRESH_MESSAGE_MS = 6 * 60 * 60 * 1000;
+// Hard cap on automatic Telegram messages (auto-reply, greeting) per sync run,
+// so a bug or a backlog can never turn into a mass mailing.
+const AUTO_MESSAGES_PER_SYNC = 3;
+let autoMessageBudget = 0;
+// Telegram peers greeted by this server process, so a chat is never greeted
+// twice in a row even if saving the greeting to the database fails.
+const GREETING_COOLDOWN_MS = 12 * 60 * 60 * 1000;
+const greetedPeers = new Map<string, number>();
+function greetedRecently(peerId: string) { return Date.now() - (greetedPeers.get(peerId) || 0) < GREETING_COOLDOWN_MS; }
+function takeAutoMessageSlot() {
+  if (autoMessageBudget <= 0) return false;
+  autoMessageBudget -= 1;
+  return true;
+}
+const isFreshTelegramMessage = (message: any) => Number(message?.date) * 1000 > Date.now() - FRESH_MESSAGE_MS;
+async function lastClientMessageIsFresh(config: Config, ticketId: string) {
+  const response = await rest(config, `/support_messages?ticket_id=eq.${encodeURIComponent(ticketId)}&sender_type=eq.client&select=sent_at&order=sent_at.desc&limit=1`);
+  const [message] = response.ok ? await response.json() as { sent_at: string }[] : [];
+  return Boolean(message && Date.parse(message.sent_at) > Date.now() - FRESH_MESSAGE_MS);
+}
 
 let cachedTelegramClient: any = null;
 let connectingTelegramClient: Promise<any | null> | null = null;
@@ -22,15 +47,41 @@ let connectingTelegramClient: Promise<any | null> | null = null;
 // wiped by a second sync), so only one runs at a time and the rest share it.
 let supportSyncInFlight: Promise<void> | null = null;
 
+// What happened on the last attempt to reach the support Telegram account.
+// Errors used to be swallowed, so a missing or revoked session looked like
+// "nobody writes to support". It is now returned to the dashboard and logged.
+type TelegramState = { state: "unknown" | "ok" | "not_configured" | "error"; error?: string; checkedAt?: string };
+let telegramState: TelegramState = { state: "unknown" };
+function setTelegramState(state: TelegramState["state"], error?: string) {
+  if (state !== "ok" && (telegramState.state !== state || telegramState.error !== error)) console.error(`[support] Telegram ${state}${error ? `: ${error}` : ""}`);
+  telegramState = { state, error, checkedAt: new Date().toISOString() };
+}
+function describeTelegramError(error: unknown) {
+  const text = String((error as { errorMessage?: string })?.errorMessage || (error as Error)?.message || error).slice(0, 300);
+  if (/AUTH_KEY_UNREGISTERED|AUTH_KEY_DUPLICATED|SESSION_REVOKED|SESSION_EXPIRED|USER_DEACTIVATED|not authorized/i.test(text)) return `Telegram відхилив сесію акаунта підтримки (${text}). Потрібно згенерувати новий TELEGRAM_SESSION_STRING.`;
+  return text;
+}
+
+// Chats are also synced in the background, so new requests reach the queue
+// (and the owner's badge) even when nobody has the chat page open.
+const BACKGROUND_SYNC_MS = 20_000;
+let backgroundSyncStarted = false;
+function startBackgroundSync(config: Config) {
+  if (backgroundSyncStarted) return;
+  backgroundSyncStarted = true;
+  setInterval(() => { void runSupportSync(config); }, BACKGROUND_SYNC_MS).unref?.();
+}
+
 export async function GET(request: Request) {
   const access = await authorize(request);
   if (!access) return Response.json({ error: "Forbidden" }, { status: 403 });
   if (!access.owner && !access.canUseChats) return Response.json({ error: "Chat access is disabled by CEO" }, { status: 403 });
   const config = configForServer();
   if (!config) return Response.json({ error: "Server configuration is incomplete" }, { status: 500 });
+  startBackgroundSync(config);
   if (new URL(request.url).searchParams.get("sync") === "1") await runSupportSync(config);
   if (new URL(request.url).searchParams.get("operators") === "1") return Response.json({ operators: await onlineOperators(config, access.userId) });
-  return Response.json(await listTickets(config, access.userId, access.owner));
+  return Response.json({ ...await listTickets(config, access.userId, access.owner), telegram: telegramState });
 }
 
 export async function POST(request: Request) {
@@ -53,6 +104,7 @@ export async function POST(request: Request) {
     if (ticket.status !== "new") return Response.json({ error: "Ticket is already taken" }, { status: 409 });
     if (!access.owner && await activeChatCount(config, access.userId) >= await activeChatLimit(config, access.userId)) return Response.json({ error: "Досягнуто вашого ліміту активних чатів." }, { status: 409 });
     const greeting = "Вітаємо вас у технічній підтримці Nezeriya Wallet";
+    greetedPeers.set(ticket.telegram_peer_id, Date.now());
     const telegramMessageId = await sendTelegram(ticket, greeting);
     await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: telegramMessageId, sender_type: "agent", body: greeting });
     await patch(config, "support_tickets", `id=eq.${ticket.id}`, { status: "in_progress", assigned_to: access.userId, assigned_at: new Date().toISOString(), updated_at: new Date().toISOString() });
@@ -192,7 +244,11 @@ async function telegramClient() {
   const apiId = Number(process.env.TELEGRAM_API_ID);
   const apiHash = process.env.TELEGRAM_API_HASH;
   const session = process.env.TELEGRAM_SESSION_STRING;
-  if (!Number.isInteger(apiId) || !apiHash || !session) return null;
+  if (!Number.isInteger(apiId) || !apiHash || !session) {
+    const missing = [!Number.isInteger(apiId) && "TELEGRAM_API_ID", !apiHash && "TELEGRAM_API_HASH", !session && "TELEGRAM_SESSION_STRING"].filter(Boolean).join(", ");
+    setTelegramState("not_configured", `На сервері не задано: ${missing}.`);
+    return null;
+  }
   connectingTelegramClient = (async () => {
     // GramJS is Node-only. Loading it only when support sync is requested keeps
     // the Worker-compatible merchant and wallet pages available at startup.
@@ -202,6 +258,10 @@ async function telegramClient() {
     const { StringSession } = await import(sessionModule) as any;
     const client = new TelegramClient(new StringSession(session), apiId, apiHash, { connectionRetries: 2 });
     await client.connect();
+    if (!(await client.isUserAuthorized())) {
+      await client.disconnect().catch(() => undefined);
+      throw new Error("session is not authorized");
+    }
     cachedTelegramClient = client;
     return client;
   })();
@@ -233,6 +293,7 @@ async function closeInactiveChats(config: Config) {
 async function runSupportSync(config: Config) {
   if (!supportSyncInFlight) {
     supportSyncInFlight = (async () => {
+      autoMessageBudget = AUTO_MESSAGES_PER_SYNC;
       try {
         await syncTelegram(config);
         await closeInactiveChats(config);
@@ -302,18 +363,26 @@ async function assignQueuedTickets(config: Config) {
 const processedTopMessage = new Map<string, number>();
 
 async function syncTelegram(config: Config) {
-  const client = await telegramClient();
+  let client: any;
+  try {
+    client = await telegramClient();
+  } catch (error) {
+    setTelegramState("error", describeTelegramError(error));
+    return;
+  }
   if (!client) return;
   let dialogs: any[];
   try {
     dialogs = await client.getDialogs({ limit: 100 });
-  } catch {
+  } catch (error) {
+    setTelegramState("error", describeTelegramError(error));
     cachedTelegramClient = null;
     return;
   }
+  setTelegramState("ok");
   for (const dialog of dialogs) {
     // One broken chat must not stop the remaining chats from syncing.
-    try { await syncDialog(config, client, dialog); } catch { /* Retried on the next poll. */ }
+    try { await syncDialog(config, client, dialog); } catch (error) { console.error("[support] dialog sync failed:", describeTelegramError(error)); }
   }
 }
 
@@ -326,7 +395,7 @@ async function syncDialog(config: Config, client: any, dialog: any) {
   const clientName = [entity.firstName, entity.lastName].filter(Boolean).join(" ") || entity.username || "Клієнт";
   const messages = await client.getMessages(entity, { limit: 30 }) as any[];
   const incoming = messages
-    .filter((message) => !message.out && !message.action && Boolean(message.message?.trim()))
+    .filter((message) => !message.out && !message.action && Boolean(message.message?.trim()) && isFreshTelegramMessage(message))
     .sort((a, b) => a.id - b.id);
   if (incoming.length) {
     const ticketData = { telegram_peer_id: peerId, telegram_access_hash: entity.accessHash.toString(), client_name: clientName, client_username: entity.username || null, updated_at: new Date().toISOString() };
@@ -349,7 +418,6 @@ async function syncDialog(config: Config, client: any, dialog: any) {
         const oldestMessageId = await oldestTicketMessageId(config, ticket.id);
         const saved = await saveClientMessages(config, ticket, incoming.filter((message) => message.id >= oldestMessageId));
         if (saved > 0) await patch(config, "support_tickets", `id=eq.${ticket.id}`, ticketData);
-        if (ticket.status === "new") await sendAutomaticReply(config, ticket);
       }
     }
   }
@@ -372,8 +440,9 @@ async function saveClientMessages(config: Config, ticket: Ticket, messages: any[
 
 // The client messages are stored before the automatic reply, so they are never
 // filtered out as older than the request if the reply is sent first.
+// No automatic "request received" reply: the client hears from support only
+// when an operator takes the chat (by hand or by auto-assignment).
 async function startRequest(config: Config, ticket: Ticket) {
-  await sendAutomaticReply(config, ticket);
   await autoAssignTicket(config, ticket);
 }
 
@@ -424,17 +493,6 @@ async function saveReview(config: Config, ticket: Ticket, text: string) {
   if (employee) await rest(config, "/employee_reviews", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify({ employee_application_id: employee.id, client_name: ticket.client_name, rating: ticket.rating, comment: text }) });
 }
 
-async function sendAutomaticReply(config: Config, ticket: Ticket) {
-  const existing = await rest(config, `/support_messages?ticket_id=eq.${encodeURIComponent(ticket.id)}&sender_type=eq.system&select=id&limit=1`);
-  if (existing.ok && (await existing.json() as unknown[]).length > 0) return;
-  const text = "Дякуємо за звернення до підтримки Nezeriya Wallet. Ваш запит отримано — оператор відповість найближчим часом.";
-  try {
-    const telegramMessageId = await sendTelegram(ticket, text);
-    await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: telegramMessageId, sender_type: "system", body: text });
-  } catch {
-    // The chat remains in the queue if Telegram is temporarily unavailable.
-  }
-}
 
 // Returns false when nobody online can take another chat.
 async function autoAssignTicket(config: Config, ticket: Ticket) {
@@ -452,8 +510,11 @@ async function autoAssignTicket(config: Config, ticket: Ticket) {
   const agentMessages = await rest(config, `/support_messages?ticket_id=eq.${encodeURIComponent(ticket.id)}&sender_type=eq.agent&select=id&limit=1`);
   const greeted = agentMessages.ok && (await agentMessages.json() as unknown[]).length > 0;
   if (!greeted) {
+    // Old queued chats are never greeted automatically; an operator takes them by hand.
+    if (greetedRecently(ticket.telegram_peer_id) || !(await lastClientMessageIsFresh(config, ticket.id)) || !takeAutoMessageSlot()) return true;
     const greeting = "Вітаємо вас у технічній підтримці Nezeriya Wallet";
     try {
+      greetedPeers.set(ticket.telegram_peer_id, Date.now());
       const telegramMessageId = await sendTelegram(ticket, greeting);
       await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: telegramMessageId, sender_type: "agent", body: greeting });
     } catch { return true; }

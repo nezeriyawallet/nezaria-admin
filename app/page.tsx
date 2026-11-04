@@ -1016,6 +1016,7 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
   const [busy, setBusy] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmDismiss, setConfirmDismiss] = useState(false);
+  const [telegramIssue, setTelegramIssue] = useState("");
   const [transferOpen, setTransferOpen] = useState(false);
   const [operators, setOperators] = useState<SupportOperator[] | null>(null);
   const [transferError, setTransferError] = useState("");
@@ -1039,6 +1040,8 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
         const nextTickets: SupportTicket[] = result.tickets || [];
         setTickets(nextTickets);
         setError("");
+        const telegram = result.telegram as { state?: string; error?: string } | undefined;
+        setTelegramIssue(telegram && (telegram.state === "error" || telegram.state === "not_configured") ? telegram.error || "Немає зв'язку з Telegram-акаунтом підтримки." : "");
         setSelectedId((current) => current && nextTickets.some((ticket) => ticket.id === current) ? current : "");
       }
     } finally { setLoading(false); }
@@ -1165,6 +1168,7 @@ function SupportDesk({ available, onAvailability }: { available?: boolean; onAva
     </header>
 
     {error && <p className="sup-error">{error}</p>}
+    {telegramIssue && <p className="sup-error"><b>Нові повідомлення з Telegram не надходять.</b> {telegramIssue}</p>}
 
     <div className={`sup-body${selected ? " show-thread" : ""}${selected && showInfo ? "" : " no-info"}`}>
       <section className="sup-pane sup-list-pane" aria-label="Список чатів">
