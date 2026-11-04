@@ -349,7 +349,6 @@ async function syncDialog(config: Config, client: any, dialog: any) {
         const oldestMessageId = await oldestTicketMessageId(config, ticket.id);
         const saved = await saveClientMessages(config, ticket, incoming.filter((message) => message.id >= oldestMessageId));
         if (saved > 0) await patch(config, "support_tickets", `id=eq.${ticket.id}`, ticketData);
-        if (ticket.status === "new") await sendAutomaticReply(config, ticket);
       }
     }
   }
@@ -370,10 +369,11 @@ async function saveClientMessages(config: Config, ticket: Ticket, messages: any[
   return saved;
 }
 
-// The client messages are stored before the automatic reply, so they are never
-// filtered out as older than the request if the reply is sent first.
+// The client hears nothing until an operator takes the chat: the only message
+// sent then is the greeting (on "take", "transfer" from the queue or
+// auto-assignment). Sync itself never writes to the client, because it runs
+// on every dashboard poll and anything it sent would be repeated.
 async function startRequest(config: Config, ticket: Ticket) {
-  await sendAutomaticReply(config, ticket);
   await autoAssignTicket(config, ticket);
 }
 
@@ -422,18 +422,6 @@ async function saveReview(config: Config, ticket: Ticket, text: string) {
   const employeeResponse = await rest(config, `/worker_applications?user_id=eq.${encodeURIComponent(ticket.assigned_to)}&status=eq.approved&select=id&limit=1`);
   const [employee] = employeeResponse.ok ? await employeeResponse.json() as { id: string }[] : [];
   if (employee) await rest(config, "/employee_reviews", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify({ employee_application_id: employee.id, client_name: ticket.client_name, rating: ticket.rating, comment: text }) });
-}
-
-async function sendAutomaticReply(config: Config, ticket: Ticket) {
-  const existing = await rest(config, `/support_messages?ticket_id=eq.${encodeURIComponent(ticket.id)}&sender_type=eq.system&select=id&limit=1`);
-  if (existing.ok && (await existing.json() as unknown[]).length > 0) return;
-  const text = "Дякуємо за звернення до підтримки Nezeriya Wallet. Ваш запит отримано — оператор відповість найближчим часом.";
-  try {
-    const telegramMessageId = await sendTelegram(ticket, text);
-    await insertMessage(config, { ticket_id: ticket.id, telegram_message_id: telegramMessageId, sender_type: "system", body: text });
-  } catch {
-    // The chat remains in the queue if Telegram is temporarily unavailable.
-  }
 }
 
 // Returns false when nobody online can take another chat.
