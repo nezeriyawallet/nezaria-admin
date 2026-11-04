@@ -180,11 +180,12 @@ function rest(config: Config, path: string, init: RequestInit = {}) { return fet
 async function patch(config: Config, table: string, filter: string, data: Record<string, unknown>) { await rest(config, `/${table}?${filter}`, { method: "PATCH", headers: { "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify(data) }); }
 async function insertMessage(config: Config, data: Omit<Message, "id" | "sent_at">) {
   const response = await rest(config, "/support_messages?on_conflict=ticket_id,telegram_message_id", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify(data) });
+  if (!response.ok) console.error(`[support] saving a message failed: ${response.status} ${(await response.clone().text().catch(() => "")).slice(0, 300)}`);
   return response.ok && (await response.json().catch(() => []) as unknown[]).length > 0;
 }
 async function ticketById(config: Config, id: string) { const response = await rest(config, `/support_tickets?id=eq.${encodeURIComponent(id)}&select=*&limit=1`); return response.ok ? (await response.json() as Ticket[])[0] || null : null; }
 async function ticketByPeer(config: Config, peerId: string) { const response = await rest(config, `/support_tickets?telegram_peer_id=eq.${encodeURIComponent(peerId)}&select=*&limit=1`); return response.ok ? (await response.json() as Ticket[])[0] || null : null; }
-async function createTicket(config: Config, data: Record<string, unknown>) { const response = await rest(config, "/support_tickets", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "return=representation" }, body: JSON.stringify(data) }); return response.ok ? (await response.json() as Ticket[])[0] || null : null; }
+async function createTicket(config: Config, data: Record<string, unknown>) { const response = await rest(config, "/support_tickets", { method: "POST", headers: { "Content-Type": "application/json", Prefer: "return=representation" }, body: JSON.stringify(data) }); if (!response.ok) console.error(`[support] creating a ticket failed: ${response.status} ${(await response.clone().text().catch(() => "")).slice(0, 300)}`); return response.ok ? (await response.json() as Ticket[])[0] || null : null; }
 async function removeTicketMessages(config: Config, ticketId: string) { await rest(config, `/support_messages?ticket_id=eq.${encodeURIComponent(ticketId)}`, { method: "DELETE" }); }
 async function removeTicketSkips(config: Config, ticketId: string) { await rest(config, `/support_ticket_skips?ticket_id=eq.${encodeURIComponent(ticketId)}`, { method: "DELETE" }); }
 async function latestTicketMessageId(config: Config, ticketId: string) {
