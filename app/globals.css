@@ -4723,7 +4723,7 @@ html[data-theme="light"] .side2-item.active svg { color:#12755f; }
 }
 
 /* Wins · four games */
-.win { --win-spins:#F5C451; --win-double:#B794F6; }
+.win { --win-spins:#F5C451; --win-double:#B794F6; --win-slots:#FF8A5B; }
 .win-split-bar i.roulette, .win-split-leg i.roulette { background:var(--win-roulette); }
 .win-split-bar i.plinko, .win-split-leg i.plinko { background:var(--win-plinko); }
 .win-split-bar i.spins, .win-split-leg i.spins { background:var(--win-spins); }
@@ -4731,6 +4731,17 @@ html[data-theme="light"] .side2-item.active svg { color:#12755f; }
 .win-split-leg { flex-wrap:wrap; justify-content:flex-start; gap:4px 14px; }
 .win-game.spins { background:#231E12; color:var(--win-spins); }
 .win-game.double { background:#1E1829; color:var(--win-double); }
+.win-split-bar i.slots, .win-split-leg i.slots { background:var(--win-slots); }
+.win-game.slots { background:#2A1A14; color:var(--win-slots); }
+.win-slots .aud-label { display:flex; align-items:center; gap:8px; }
+.win-slots-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px 18px; margin:14px 0 0; }
+.win-slots-grid div { min-width:0; display:flex; flex-direction:column; gap:3px; padding:12px 14px; border-radius:12px; background:var(--aud-chip); }
+.win-slots-grid dt { font-size:12px; color:var(--aud-muted); }
+.win-slots-grid dd { margin:0; font:600 18px var(--font-geist-mono), ui-monospace, monospace; color:var(--aud-text, #fff); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.win-slots-grid small { font-size:11px; color:var(--aud-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.win-slot-out { display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.win-tag { font-style:normal; font-size:11px; font-weight:600; padding:2px 7px; border-radius:999px; background:#2A1A14; color:var(--win-slots); }
+@media (max-width: 1100px) { .win-slots-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 .win-double { display:inline-flex; align-items:center; gap:6px; font:600 13px var(--font-geist-mono), ui-monospace, monospace; color:var(--aud-muted); }
 .win-double i { width:12px; height:12px; border-radius:50%; background:var(--aud-chip); box-shadow:inset 0 0 0 1px rgba(255,255,255,.15); }
 .win-double i.red { background:#E5484D; }

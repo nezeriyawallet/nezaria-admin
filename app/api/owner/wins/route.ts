@@ -19,7 +19,7 @@ function plinkoStake(value: unknown) {
 function buildMonthlyTotals(items: GameResult[]) {
   const now = new Date();
   const monthStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
-  let wheelWon = 0, plinkoWon = 0, spinsWon = 0, doubleWon = 0, wheelCollected = 0, plinkoCollected = 0, spinsCollected = 0, doubleCollected = 0;
+  let wheelWon = 0, plinkoWon = 0, spinsWon = 0, doubleWon = 0, slotsWon = 0, wheelCollected = 0, plinkoCollected = 0, spinsCollected = 0, doubleCollected = 0, slotsCollected = 0;
   for (const item of items) {
     const createdAt = Date.parse(item.createdAt ?? "");
     if (!Number.isFinite(createdAt) || createdAt < monthStart) continue;
@@ -28,12 +28,13 @@ function buildMonthlyTotals(items: GameResult[]) {
     if (/^plinko/i.test(dropped)) { plinkoWon += prize; plinkoCollected += plinkoStake(dropped); continue; }
     if (/^spins/i.test(dropped)) { spinsWon += prize; spinsCollected += plinkoStake(dropped); continue; }
     if (/^double/i.test(dropped)) { doubleWon += prize; doubleCollected += plinkoStake(dropped); continue; }
+    if (/^slots/i.test(dropped)) { slotsWon += prize; slotsCollected += plinkoStake(dropped); continue; }
     const wheel = Number(item.wheel);
     if (wheel === 1 || wheel === 2) { wheelWon += prize; wheelCollected += wheel === 1 ? 10 : 30; }
   }
-  const monthlyWonNzr = wheelWon + plinkoWon + spinsWon + doubleWon;
-  const monthlyCollectedNzr = wheelCollected + plinkoCollected + spinsCollected + doubleCollected;
-  return { monthlyWonNzr, monthlyCollectedNzr, monthlyNetEarningsNzr: monthlyCollectedNzr - monthlyWonNzr, monthlyWheelWonNzr: wheelWon, monthlyPlinkoWonNzr: plinkoWon, monthlyWheelSpentNzr: wheelCollected, monthlyPlinkoSpentNzr: plinkoCollected, monthlySpinsWonNzr: spinsWon, monthlySpinsSpentNzr: spinsCollected, monthlyDoubleWonNzr: doubleWon, monthlyDoubleSpentNzr: doubleCollected };
+  const monthlyWonNzr = wheelWon + plinkoWon + spinsWon + doubleWon + slotsWon;
+  const monthlyCollectedNzr = wheelCollected + plinkoCollected + spinsCollected + doubleCollected + slotsCollected;
+  return { monthlyWonNzr, monthlyCollectedNzr, monthlyNetEarningsNzr: monthlyCollectedNzr - monthlyWonNzr, monthlyWheelWonNzr: wheelWon, monthlyPlinkoWonNzr: plinkoWon, monthlyWheelSpentNzr: wheelCollected, monthlyPlinkoSpentNzr: plinkoCollected, monthlySpinsWonNzr: spinsWon, monthlySpinsSpentNzr: spinsCollected, monthlyDoubleWonNzr: doubleWon, monthlyDoubleSpentNzr: doubleCollected, monthlySlotsWonNzr: slotsWon, monthlySlotsSpentNzr: slotsCollected };
 }
 
 export async function GET(request: Request) {
@@ -102,6 +103,8 @@ async function loadWins(baseUrl: string, apiKey: string): Promise<Record<string,
       monthlySpinsSpentNzr: numberFrom(firstPage.monthlySpinsSpentNzr) ?? calculated.monthlySpinsSpentNzr,
       monthlyDoubleWonNzr: numberFrom(firstPage.monthlyDoubleWonNzr) ?? calculated.monthlyDoubleWonNzr,
       monthlyDoubleSpentNzr: numberFrom(firstPage.monthlyDoubleSpentNzr) ?? calculated.monthlyDoubleSpentNzr,
+      monthlySlotsWonNzr: numberFrom(firstPage.monthlySlotsWonNzr) ?? calculated.monthlySlotsWonNzr,
+      monthlySlotsSpentNzr: numberFrom(firstPage.monthlySlotsSpentNzr) ?? calculated.monthlySlotsSpentNzr,
     } : calculated;
     const body = { ...firstPage, items: allItems, totalElements: allItems.length, totalPages: 1,
       monthlyWonNzr: source.monthlyWonNzr ?? 0, monthlyCollectedNzr: source.monthlyCollectedNzr ?? 0,
@@ -109,7 +112,8 @@ async function loadWins(baseUrl: string, apiKey: string): Promise<Record<string,
       monthlyWheelWonNzr: source.monthlyWheelWonNzr ?? 0, monthlyPlinkoWonNzr: source.monthlyPlinkoWonNzr ?? 0,
       monthlyWheelSpentNzr: source.monthlyWheelSpentNzr ?? 0, monthlyPlinkoSpentNzr: source.monthlyPlinkoSpentNzr ?? 0,
       monthlySpinsWonNzr: source.monthlySpinsWonNzr ?? 0, monthlySpinsSpentNzr: source.monthlySpinsSpentNzr ?? 0,
-      monthlyDoubleWonNzr: source.monthlyDoubleWonNzr ?? 0, monthlyDoubleSpentNzr: source.monthlyDoubleSpentNzr ?? 0 };
+      monthlyDoubleWonNzr: source.monthlyDoubleWonNzr ?? 0, monthlyDoubleSpentNzr: source.monthlyDoubleSpentNzr ?? 0,
+      monthlySlotsWonNzr: source.monthlySlotsWonNzr ?? 0, monthlySlotsSpentNzr: source.monthlySlotsSpentNzr ?? 0 };
     winsCache = { at: Date.now(), body };
     return body;
   } catch {
