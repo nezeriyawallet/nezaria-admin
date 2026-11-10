@@ -76,11 +76,15 @@
   }
 
   // Phone screen: scale the 390px-wide app layout to the phone's screen
-  const fitApp = () => document.querySelectorAll(".screen.app").forEach((sc) => {
-    sc.style.setProperty("--k", sc.clientWidth / 390);
-  });
-  addEventListener("resize", fitApp);
-  fitApp();
+  const fitOne = (sc) => { const w = sc.clientWidth; if (w > 0) sc.style.setProperty("--k", (w / 390).toFixed(5)); };
+  const screens = document.querySelectorAll(".screen.app");
+  if ("ResizeObserver" in window) {
+    const ro = new ResizeObserver((es) => es.forEach((e) => fitOne(e.target)));
+    screens.forEach((sc) => ro.observe(sc));
+  } else {
+    addEventListener("resize", () => screens.forEach(fitOne));
+    screens.forEach(fitOne);
+  }
 
   // Tabs
   document.querySelectorAll("[data-tabs]").forEach((root) => {

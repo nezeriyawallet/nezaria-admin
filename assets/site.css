@@ -673,3 +673,12 @@ h1, h2 { overflow-wrap: break-word; hyphens: auto; }
 .phone-stage { overflow-x: clip; overflow-y: visible; }
 .phone { width: 320px; }
 @media (max-width: 720px) { .phone { width: 280px; } }
+
+/* Phone mockup: fixed sizes so the app layout never depends on JS or cached scripts */
+.phone { box-sizing: border-box; width: 320px; height: auto; padding: 11px; }
+.screen.app { box-sizing: border-box; display: block; gap: 0; width: 298px; height: 646px; aspect-ratio: auto; padding: 0; --k: .76410; }
+.screen.app .app-ui { transform: scale(var(--k)); transform-origin: 0 0; }
+@media (max-width: 720px) {
+  .phone { width: 280px; }
+  .screen.app { width: 258px; height: 559px; --k: .66154; }
+}
