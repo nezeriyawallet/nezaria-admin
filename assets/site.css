@@ -682,3 +682,14 @@ h1, h2 { overflow-wrap: break-word; hyphens: auto; }
   .phone { width: 280px; }
   .screen.app { width: 258px; height: 559px; --k: .66154; }
 }
+
+/* CARD EUROPE: top-up networks */
+.nets { display: grid; gap: 8px; margin: 4px 0 18px; }
+.nets-h { font: 600 11px/1 "JetBrains Mono", monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.net { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 14px; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .08); font-size: 14px; transition: background .25s, border-color .25s, transform .25s; }
+.net:hover { background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .18); transform: translateX(4px); }
+.net b { font-family: "Unbounded", sans-serif; font-size: 13px; }
+.net span { color: var(--muted); flex: 1; min-width: 0; }
+.net em { font: 600 10px/1 "JetBrains Mono", monospace; letter-spacing: .12em; text-transform: uppercase; font-style: normal; padding: 5px 8px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, .14); color: var(--muted); }
+.net.soon { opacity: .5; }
+.product { align-content: start; }
