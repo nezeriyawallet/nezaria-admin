@@ -559,3 +559,14 @@ h1, h2 { overflow-wrap: break-word; hyphens: auto; }
 .step::before { background: #0b0d13; border-color: rgba(255,255,255,.3); }
 .site-header.scrolled { background: rgba(5, 5, 5, .78); }
 .stat { background: #0b0d13; }
+
+/* White card design (user's artwork) */
+.bank-card.white { background: none; padding: 0; color: #0b0c10; container-type: inline-size; border-radius: 3.5% / 6.2%; display: block; box-shadow: 0 40px 80px -24px rgba(0, 0, 0, .9), 0 0 0 1px rgba(255, 255, 255, .1); }
+.bank-card.white img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.bank-card.white::before { mix-blend-mode: soft-light; opacity: .55; }
+.bank-card.white .bc-title { position: absolute; left: 5.3%; top: 7.6%; font: 700 7.4cqw/1 "Onest", Arial, sans-serif; letter-spacing: -.01em; color: #0b0c10; }
+.bank-card.white .bc-holder { position: absolute; left: 5.3%; bottom: 9.4%; font: 600 3.7cqw/1 "Onest", Arial, sans-serif; letter-spacing: .2em; color: #0b0c10; }
+.spin-card .bank-card.white.back { background: linear-gradient(135deg, #f4f5f7, #c9ccd4); position: absolute; inset: 0; transform: rotateY(180deg); display: flex; flex-direction: column; justify-content: center; gap: 18px; padding: 0; }
+.avatar.img { padding: 0; overflow: hidden; background: #000; border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 16px 40px -10px rgba(0, 0, 0, .7); }
+.avatar.img img { width: 100%; height: 100%; object-fit: cover; }
+.bank-card.white { aspect-ratio: 1200 / 675; }
