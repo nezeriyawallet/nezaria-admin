@@ -152,14 +152,14 @@
           const a = pts[i], b = pts[j];
           const d = Math.hypot(a.x - b.x, a.y - b.y);
           if (d < 130) {
-            ctx.strokeStyle = `rgba(198,244,50,${(1 - d / 130) * 0.18})`;
+            ctx.strokeStyle = `rgba(59,123,255,${(1 - d / 130) * 0.18})`;
             ctx.lineWidth = 1;
             ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
           }
         }
       }
       for (const p of pts) {
-        ctx.fillStyle = p.lime ? "rgba(198,244,50,.9)" : "rgba(255,255,255,.55)";
+        ctx.fillStyle = p.lime ? "rgba(90,143,255,.95)" : "rgba(174,190,235,.5)";
         ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
       }
       requestAnimationFrame(tick);
