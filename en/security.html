@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>Security · Nezeriya</title>
+<meta content="How Nezeriya protects keys, PIN and transactions." name="description"/>
+<meta content="#050505" name="theme-color"/>
+<meta content="Security · Nezeriya" property="og:title"/>
+<meta content="How Nezeriya protects keys, PIN and transactions." property="og:description"/>
+<meta content="website" property="og:type"/>
+<link href="../assets/favicon.svg" rel="icon" type="image/svg+xml"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&amp;family=JetBrains+Mono:wght@500;600;700&amp;family=Onest:wght@400;500;600;700;800&amp;family=Unbounded:wght@500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="../assets/site.css?v=1794315284" rel="stylesheet"/>
+<link href="../security.html" hreflang="uk" rel="alternate"/><link href="../en/security.html" hreflang="en" rel="alternate"/><link href="../pl/security.html" hreflang="pl" rel="alternate"/><link href="../be/security.html" hreflang="be" rel="alternate"/><link href="../ru/security.html" hreflang="ru" rel="alternate"/></head>
+<body>
+<div class="progress"></div>
+<div class="bg-grid"></div><div class="bg-glow g1"></div><div class="bg-glow g2"></div>
+<header class="site-header">
+<nav aria-label="Main menu" class="nav wrap">
+<a class="brand" href="index.html">NEZERIYA</a>
+<ul class="nav-links"><li><a href="index.html">Home</a></li>
+<li><a href="wallet.html">Wallet</a></li>
+<li><a href="card.html">Nezeriya Card</a></li>
+<li><a href="tariffs.html">Fees</a></li>
+<li><a class="active" href="security.html">Security</a></li>
+<li><a href="company.html">Company</a></li>
+<li><a href="faq.html">FAQ</a></li>
+<li><a href="contacts.html">Contacts</a></li></ul>
+<div class="nav-cta"><details class="lang"><summary aria-label="Language"><svg viewbox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"></path></svg>EN</summary><div class="lang-menu"><a href="../security.html" hreflang="uk" lang="uk"><b>UA</b>Українська</a><a class="on" href="../en/security.html" hreflang="en" lang="en"><b>EN</b>English</a><a href="../pl/security.html" hreflang="pl" lang="pl"><b>PL</b>Polski</a><a href="../be/security.html" hreflang="be" lang="be"><b>BY</b>Беларуская</a><a href="../ru/security.html" hreflang="ru" lang="ru"><b>RU</b>Русский</a></div></details>
+<a class="btn btn-ghost btn-sm" href="https://t.me/NezeriyaWallet" rel="noopener" target="_blank">Channel</a>
+<a class="btn btn-lime btn-sm" href="https://t.me/NezeriyaWalletApp" rel="noopener" target="_blank">Open wallet</a>
+<button aria-expanded="false" aria-label="Menu" class="burger"><span></span><span></span><span></span></button>
+</div>
+</nav>
+</header>
+<main>
+<section class="page-hero"><div class="wrap">
+<div class="crumbs reveal"><a href="index.html">Home</a> / Security</div>
+<span class="eyebrow reveal d1">Security</span>
+<h1 class="reveal d2">Your funds are <span class="grad">protected</span></h1>
+<p class="lead reveal d3">What we do to protect the wallet, keys and transactions.</p>
+</div></section>
+<section style="padding-top:0"><div class="wrap">
+<div class="grid g3">
+<div class="tile big reveal"><div class="ico"><svg viewbox="0 0 24 24"><circle cx="8" cy="15" r="4"></circle><path d="m11 12 9-9M17 6l3 3M14 9l2 2"></path></svg></div><h3>Key encryption</h3><p>Wallet keys are stored on the server only in encrypted form (AES-256-GCM) and decrypted for a moment when you sign a transaction.</p></div>
+<div class="tile big reveal d1"><div class="ico blue"><svg viewbox="0 0 24 24"><rect height="11" rx="2" width="16" x="4" y="10"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg></div><h3>PIN</h3><p>We do not store your PIN, only its bcrypt hash. After several failed attempts, access is temporarily blocked.</p></div>
+<div class="tile big reveal d2"><div class="ico violet"><svg viewbox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3Z"></path><path d="m9 12 2 2 4-4"></path></svg></div><h3>Sign-in via Telegram</h3><p>Every mini app request is verified with Telegram's signature, so nobody can open your wallet from another account.</p></div>
+<div class="tile big reveal"><div class="ico"><svg viewbox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"></path></svg></div><h3>Bot protection</h3><p>The number of server requests is limited so bots cannot brute-force PINs or overload the service.</p></div>
+<div class="tile big reveal d1"><div class="ico blue"><svg viewbox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg></div><h3>Card data</h3><p>We do not store the card number or CVV. The card issuer shows them on request, and our database keeps only the last 4 digits.</p></div>
+<div class="tile big reveal d2"><div class="ico violet"><svg viewbox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"></path></svg></div><h3>Secure infrastructure</h3><p>Servers and the database are located in a data center in Frankfurt (EU), and connections are encrypted with HTTPS.</p></div>
+</div>
+<div class="note warn reveal" style="margin-top:40px"><strong>Important.</strong> Nezeriya staff will never ask for your PIN, secret phrase or SMS code. Support works only through <a href="https://t.me/Nezeriya_Support" rel="noopener" style="color:var(--lime)" target="_blank">@Nezeriya_Support</a>, and any other account claiming to be us is a scam.</div>
+</div></section>
+<section><div class="wrap"><div class="cta reveal">
+<span class="eyebrow">Start now</span>
+<h2>Open Nezeriya in a minute</h2>
+<p class="lead">The wallet works right in Telegram, so there is nothing to install. Open the official app and create a wallet.</p>
+<div class="btns"><a class="btn btn-lime" href="https://t.me/NezeriyaWalletApp" rel="noopener" target="_blank">Open @NezeriyaWalletApp</a>
+<a class="btn btn-ghost" href="https://t.me/NezeriyaWallet" rel="noopener" target="_blank">Subscribe to the channel</a></div>
+</div></div></section>
+</main>
+<footer class="site-footer">
+<div class="wrap">
+<div class="foot-grid">
+<div>
+<a class="brand" href="index.html">NEZERIYA</a>
+<p>Crypto wallet in Telegram, Nezeriya Card and Nezeriya Pay payment acceptance.</p>
+</div>
+<div><h5>Products</h5><ul>
+<li><a href="wallet.html">Nezeriya Wallet</a></li>
+<li><a href="card.html">Nezeriya Card</a></li>
+<li><a href="https://nezeriyapay.com" rel="noopener" target="_blank">Nezeriya Pay</a></li>
+<li><a href="tariffs.html">Fees and charges</a></li>
+</ul></div>
+<div><h5>Company</h5><ul>
+<li><a href="company.html">About the company</a></li>
+<li><a href="security.html">Security</a></li>
+<li><a href="faq.html">Questions and answers</a></li>
+<li><a href="contacts.html">Contacts</a></li>
+</ul></div>
+<div><h5>Documents</h5><ul>
+<li><a href="privacy.html">Privacy policy</a></li>
+<li><a href="data.html">What data the bot collects</a></li>
+<li><a href="https://t.me/Nezeriya_Support" rel="noopener" target="_blank">Support @Nezeriya_Support</a></li>
+<li><a href="https://t.me/NezeriyaWallet" rel="noopener" target="_blank">Channel @NezeriyaWallet</a></li>
+<li><a href="https://t.me/NezeriyaWalletApp" rel="noopener" target="_blank">App @NezeriyaWalletApp</a></li>
+</ul></div>
+</div>
+<div class="foot-bottom"><span>© <span data-year="">2026</span> Nezeriya. All rights reserved.</span><span>Founder: <a href="https://t.me/FounderTemshchik" rel="noopener" target="_blank">@FounderTemshchik</a> · Co-Founder: <a href="https://t.me/rolex_durov" rel="noopener" target="_blank">@rolex_durov</a></span></div>
+</div>
+</footer>
+<script defer="" src="../assets/site.js?v=1794315284"></script>
+</body>
+</html>

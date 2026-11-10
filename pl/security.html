@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>Bezpieczeństwo · Nezeriya</title>
+<meta content="Jak Nezeriya chroni klucze, kod PIN i operacje." name="description"/>
+<meta content="#050505" name="theme-color"/>
+<meta content="Bezpieczeństwo · Nezeriya" property="og:title"/>
+<meta content="Jak Nezeriya chroni klucze, kod PIN i operacje." property="og:description"/>
+<meta content="website" property="og:type"/>
+<link href="../assets/favicon.svg" rel="icon" type="image/svg+xml"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&amp;family=JetBrains+Mono:wght@500;600;700&amp;family=Onest:wght@400;500;600;700;800&amp;family=Unbounded:wght@500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="../assets/site.css?v=1794315284" rel="stylesheet"/>
+<link href="../security.html" hreflang="uk" rel="alternate"/><link href="../en/security.html" hreflang="en" rel="alternate"/><link href="../pl/security.html" hreflang="pl" rel="alternate"/><link href="../be/security.html" hreflang="be" rel="alternate"/><link href="../ru/security.html" hreflang="ru" rel="alternate"/></head>
+<body>
+<div class="progress"></div>
+<div class="bg-grid"></div><div class="bg-glow g1"></div><div class="bg-glow g2"></div>
+<header class="site-header">
+<nav aria-label="Menu główne" class="nav wrap">
+<a class="brand" href="index.html">NEZERIYA</a>
+<ul class="nav-links"><li><a href="index.html">Strona główna</a></li>
+<li><a href="wallet.html">Portfel</a></li>
+<li><a href="card.html">Nezeriya Card</a></li>
+<li><a href="tariffs.html">Opłaty</a></li>
+<li><a class="active" href="security.html">Bezpieczeństwo</a></li>
+<li><a href="company.html">Firma</a></li>
+<li><a href="faq.html">FAQ</a></li>
+<li><a href="contacts.html">Kontakt</a></li></ul>
+<div class="nav-cta"><details class="lang"><summary aria-label="Language"><svg viewbox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"></path></svg>PL</summary><div class="lang-menu"><a href="../security.html" hreflang="uk" lang="uk"><b>UA</b>Українська</a><a href="../en/security.html" hreflang="en" lang="en"><b>EN</b>English</a><a class="on" href="../pl/security.html" hreflang="pl" lang="pl"><b>PL</b>Polski</a><a href="../be/security.html" hreflang="be" lang="be"><b>BY</b>Беларуская</a><a href="../ru/security.html" hreflang="ru" lang="ru"><b>RU</b>Русский</a></div></details>
+<a class="btn btn-ghost btn-sm" href="https://t.me/NezeriyaWallet" rel="noopener" target="_blank">Kanał</a>
+<a class="btn btn-lime btn-sm" href="https://t.me/NezeriyaWalletApp" rel="noopener" target="_blank">Otwórz portfel</a>
+<button aria-expanded="false" aria-label="Menu" class="burger"><span></span><span></span><span></span></button>
+</div>
+</nav>
+</header>
+<main>
+<section class="page-hero"><div class="wrap">
+<div class="crumbs reveal"><a href="index.html">Strona główna</a> / Bezpieczeństwo</div>
+<span class="eyebrow reveal d1">Bezpieczeństwo</span>
+<h1 class="reveal d2">Twoje środki są <span class="grad">chronione</span></h1>
+<p class="lead reveal d3">Co robimy, aby chronić portfel, klucze i operacje.</p>
+</div></section>
+<section style="padding-top:0"><div class="wrap">
+<div class="grid g3">
+<div class="tile big reveal"><div class="ico"><svg viewbox="0 0 24 24"><circle cx="8" cy="15" r="4"></circle><path d="m11 12 9-9M17 6l3 3M14 9l2 2"></path></svg></div><h3>Szyfrowanie kluczy</h3><p>Klucze portfeli są przechowywane na serwerze tylko w postaci zaszyfrowanej (AES-256-GCM) i odszyfrowywane na chwilę, gdy podpisujesz operację.</p></div>
+<div class="tile big reveal d1"><div class="ico blue"><svg viewbox="0 0 24 24"><rect height="11" rx="2" width="16" x="4" y="10"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg></div><h3>Kod PIN</h3><p>Nie przechowujemy Twojego PIN, tylko jego hash bcrypt. Po kilku nieudanych próbach dostęp jest tymczasowo blokowany.</p></div>
+<div class="tile big reveal d2"><div class="ico violet"><svg viewbox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3Z"></path><path d="m9 12 2 2 4-4"></path></svg></div><h3>Logowanie przez Telegram</h3><p>Każde zapytanie mini aplikacji jest weryfikowane podpisem Telegrama, więc nie da się otworzyć Twojego portfela z cudzego konta.</p></div>
+<div class="tile big reveal"><div class="ico"><svg viewbox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"></path></svg></div><h3>Ochrona przed botami</h3><p>Liczba zapytań do serwera jest ograniczona, aby boty nie mogły odgadywać kodów PIN ani przeciążać usługi.</p></div>
+<div class="tile big reveal d1"><div class="ico blue"><svg viewbox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg></div><h3>Dane karty</h3><p>Numeru karty i CVV nie przechowujemy. Pokazuje je wydawca karty na Twoje żądanie, a w naszej bazie zostają tylko ostatnie 4 cyfry.</p></div>
+<div class="tile big reveal d2"><div class="ico violet"><svg viewbox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"></path></svg></div><h3>Bezpieczna infrastruktura</h3><p>Serwery i baza danych znajdują się w centrum danych we Frankfurcie (UE), a połączenia są szyfrowane przez HTTPS.</p></div>
+</div>
+<div class="note warn reveal" style="margin-top:40px"><strong>Ważne.</strong> Pracownicy Nezeriya nigdy nie proszą o PIN, frazę odzyskiwania ani kod SMS. Wsparcie działa tylko przez <a href="https://t.me/Nezeriya_Support" rel="noopener" style="color:var(--lime)" target="_blank">@Nezeriya_Support</a>, a każde inne konto podające się za nas to oszustwo.</div>
+</div></section>
+<section><div class="wrap"><div class="cta reveal">
+<span class="eyebrow">Zacznij teraz</span>
+<h2>Otwórz Nezeriya w minutę</h2>
+<p class="lead">Portfel działa bezpośrednio w Telegramie, więc nic nie trzeba instalować. Otwórz oficjalną aplikację i utwórz portfel.</p>
+<div class="btns"><a class="btn btn-lime" href="https://t.me/NezeriyaWalletApp" rel="noopener" target="_blank">Otwórz @NezeriyaWalletApp</a>
+<a class="btn btn-ghost" href="https://t.me/NezeriyaWallet" rel="noopener" target="_blank">Subskrybuj kanał</a></div>
+</div></div></section>
+</main>
+<footer class="site-footer">
+<div class="wrap">
+<div class="foot-grid">
+<div>
+<a class="brand" href="index.html">NEZERIYA</a>
+<p>Portfel kryptowalutowy w Telegramie, karty Nezeriya Card i przyjmowanie płatności Nezeriya Pay.</p>
+</div>
+<div><h5>Produkty</h5><ul>
+<li><a href="wallet.html">Nezeriya Wallet</a></li>
+<li><a href="card.html">Nezeriya Card</a></li>
+<li><a href="https://nezeriyapay.com" rel="noopener" target="_blank">Nezeriya Pay</a></li>
+<li><a href="tariffs.html">Opłaty i prowizje</a></li>
+</ul></div>
+<div><h5>Firma</h5><ul>
+<li><a href="company.html">O firmie</a></li>
+<li><a href="security.html">Bezpieczeństwo</a></li>
+<li><a href="faq.html">Pytania i odpowiedzi</a></li>
+<li><a href="contacts.html">Kontakt</a></li>
+</ul></div>
+<div><h5>Dokumenty</h5><ul>
+<li><a href="privacy.html">Polityka prywatności</a></li>
+<li><a href="data.html">Jakie dane zbiera bot</a></li>
+<li><a href="https://t.me/Nezeriya_Support" rel="noopener" target="_blank">Wsparcie @Nezeriya_Support</a></li>
+<li><a href="https://t.me/NezeriyaWallet" rel="noopener" target="_blank">Kanał @NezeriyaWallet</a></li>
+<li><a href="https://t.me/NezeriyaWalletApp" rel="noopener" target="_blank">Aplikacja @NezeriyaWalletApp</a></li>
+</ul></div>
+</div>
+<div class="foot-bottom"><span>© <span data-year="">2026</span> Nezeriya. Wszelkie prawa zastrzeżone.</span><span>Założyciel: <a href="https://t.me/FounderTemshchik" rel="noopener" target="_blank">@FounderTemshchik</a> · Co-Founder: <a href="https://t.me/rolex_durov" rel="noopener" target="_blank">@rolex_durov</a></span></div>
+</div>
+</footer>
+<script defer="" src="../assets/site.js?v=1794315284"></script>
+</body>
+</html>

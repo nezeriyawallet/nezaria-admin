@@ -182,3 +182,11 @@
   const year = document.querySelector("[data-year]");
   year && (year.textContent = new Date().getFullYear());
 })();
+
+// Language switcher: close on outside click / Escape
+(() => {
+  const d = document.querySelector("details.lang");
+  if (!d) return;
+  document.addEventListener("click", (e) => { if (d.open && !d.contains(e.target)) d.open = false; });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") d.open = false; });
+})();
