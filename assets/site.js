@@ -75,17 +75,12 @@
     });
   }
 
-  // Phone rotates with scroll
-  const phone = document.querySelector(".phone");
-  if (phone && !reduce) {
-    const turn = () => {
-      const r = phone.getBoundingClientRect();
-      const p = Math.max(-1, Math.min(1, (r.top + r.height / 2 - innerHeight / 2) / innerHeight));
-      phone.style.transform = `rotateY(${-18 + p * 30}deg) rotateX(${8 - p * 6}deg) rotateZ(${2 + p * 3}deg)`;
-    };
-    addEventListener("scroll", turn, { passive: true });
-    turn();
-  }
+  // Phone screen: scale the 390px-wide app layout to the phone's screen
+  const fitApp = () => document.querySelectorAll(".screen.app").forEach((sc) => {
+    sc.style.setProperty("--k", sc.clientWidth / 390);
+  });
+  addEventListener("resize", fitApp);
+  fitApp();
 
   // Tabs
   document.querySelectorAll("[data-tabs]").forEach((root) => {
