@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Які дані збирає бот · Nezeriya</title>
+<meta name="description" content="Повний перелік даних, які зберігає бот Nezeriya, і сервіси, яким вони передаються.">
+<meta name="theme-color" content="#050505">
+<meta property="og:title" content="Які дані збирає бот · Nezeriya">
+<meta property="og:description" content="Повний перелік даних, які зберігає бот Nezeriya, і сервіси, яким вони передаються.">
+<meta property="og:type" content="website">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<div class="progress"></div>
+<div class="bg-grid"></div><div class="bg-glow g1"></div><div class="bg-glow g2"></div>
+<header class="site-header">
+  <nav class="nav wrap" aria-label="Головне меню">
+    <a class="brand" href="index.html"><span class="brand-mark">N</span>NEZERIYA</a>
+    <ul class="nav-links"><li><a href="index.html">Головна</a></li>
+<li><a href="wallet.html">Гаманець</a></li>
+<li><a href="card.html">Nezeriya Card</a></li>
+<li><a href="tariffs.html">Тарифи</a></li>
+<li><a href="security.html">Безпека</a></li>
+<li><a href="company.html">Компанія</a></li>
+<li><a href="faq.html">FAQ</a></li>
+<li><a href="contacts.html">Контакти</a></li></ul>
+    <div class="nav-cta">
+      <a class="btn btn-ghost btn-sm" href="https://t.me/NezeriyaWallet" target="_blank" rel="noopener">Канал</a>
+      <a class="btn btn-lime btn-sm" href="https://t.me/Nezeriya_Wallet_Bot" target="_blank" rel="noopener">Відкрити гаманець</a>
+      <button class="burger" aria-label="Меню" aria-expanded="false"><span></span><span></span><span></span></button>
+    </div>
+  </nav>
+</header>
+<main>
+<section class="page-hero"><div class="wrap">
+  <div class="crumbs reveal"><a href="index.html">Головна</a> / Які дані збирає бот</div>
+  <span class="eyebrow reveal d1">Прозорість</span>
+  <h1 class="reveal d2">Які дані збирає <span class="grad">бот</span></h1>
+  <p class="lead reveal d3">Ми перевірили код бота, сервер і підключені сервіси. Нижче наведено все, що бот зберігає і кому передає. Станом на 10 листопада 2026.</p>
+  
+</div></section>
+<section style="padding-top:0"><div class="wrap">
+  <div class="grid g4" style="margin-bottom:48px">
+    <div class="tile reveal"><div class="ico "><svg viewBox="0 0 24 24"><path d="M9 11V5a3 3 0 0 1 6 0v6"/><rect x="4" y="11" width="16" height="10" rx="2"/></svg></div><h3>Повідомлення</h3><p>Повідомлення боту не зберігаються в базі, але потрапляють у технічні логи.</p></div>
+    <div class="tile reveal d1"><div class="ico blue"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14.8c1.6.8 2.6 2.6 3 5.2"/></svg></div><h3>Telegram ID</h3><p>Записується. Без нього акаунт неможливо прив'язати до гаманця.</p></div>
+    <div class="tile reveal d2"><div class="ico violet"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></div><h3>Ім'я та контакти</h3><p>Ім'я й username зберігаються, телефон та email тільки якщо ви їх надали.</p></div>
+    <div class="tile reveal d3"><div class="ico "><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></div><h3>Інші сервіси</h3><p>Частина даних передається емітенту карти й блокчейн-сервісам (див. нижче).</p></div>
+  </div>
+  <h2 class="reveal" style="font-size:clamp(28px,3.4vw,40px);margin-bottom:24px">Що зберігається</h2>
+  <div class="table-wrap reveal"><table>
+    <thead><tr><th>Дані</th><th>Зберігається?</th><th>Навіщо</th></tr></thead>
+    <tbody><tr><td>Telegram ID</td><td><b>Так</b></td><td>Ідентифікує ваш акаунт і прив'язує до нього гаманці. Без нього бот не працює.</td></tr><tr><td>Username та ім'я в Telegram</td><td><b>Так</b></td><td>Показуються друзям, у переказах і для підтримки. Беруться з вашого профілю Telegram.</td></tr><tr><td>Фото профілю Telegram</td><td><b>Так, копія</b></td><td>Показується у гаманці й друзям.</td></tr><tr><td>Мова та часовий пояс</td><td><b>Так</b></td><td>Потрібні для інтерфейсу, сповіщень і щоденного скидання ігор.</td></tr><tr><td>Номер телефону</td><td><b>Лише якщо ви ним поділились</b></td><td>Номер приходить через кнопку Telegram «Поділитися контактом». Він визначає країну і підставляється у форму карти.</td></tr><tr><td>Email</td><td><b>Лише для карти</b></td><td>Потрібен емітенту для реєстрації Nezeriya Card.</td></tr><tr><td>Ім'я та прізвище латиницею</td><td><b>Лише для карти</b></td><td>Друкуються на карті (передаються емітенту як ім'я власника).</td></tr><tr><td>Дані карти</td><td><b>Частково</b></td><td>Ми зберігаємо статус, останні 4 цифри та термін дії. Повний номер і CVV не зберігаються.</td></tr><tr><td>Адреси гаманців і публічні ключі</td><td><b>Так</b></td><td>Потрібні для балансів, переказів та історії.</td></tr><tr><td>Приватні ключі гаманця</td><td><b>Так, зашифровано</b></td><td>Зберігаються в зашифрованому вигляді (AES-256-GCM) і розшифровуються лише для підпису операції.</td></tr><tr><td>PIN-код</td><td><b>Лише хеш</b></td><td>Ми зберігаємо bcrypt-хеш, а сам PIN не зберігається.</td></tr><tr><td>Історія операцій</td><td><b>Так</b></td><td>Суми, адреси, хеші транзакцій, обміни та ігри. Вона потрібна для історії, підтримки і звітності.</td></tr><tr><td>Список друзів і реферали</td><td><b>Так</b></td><td>Кого ви додали в друзі, хто вас запросив, а також нараховані бонуси.</td></tr><tr><td>Сесії в міні-застосунку</td><td><b>Так</b></td><td>Час відкриття й останньої активності потрібен для статистики онлайну та безпеки.</td></tr><tr><td>Повідомлення боту</td><td><b>Ні, у базі даних не зберігаються</b></td><td>Текст команд короткочасно потрапляє в технічні логи сервера і видаляється разом із ними.</td></tr><tr><td>Чати з підтримкою</td><td><b>Так</b></td><td>Переписка з @Nezeriya_Support, оцінка та відгук зберігаються, щоб оператори бачили історію звернення.</td></tr><tr><td>IP-адреса</td><td><b>Ні, у базі даних не зберігається</b></td><td>Використовується в пам'яті сервера для обмеження кількості запитів і може потрапляти в логи хостингу.</td></tr></tbody>
+  </table></div>
+
+  <h2 class="reveal" style="font-size:clamp(28px,3.4vw,40px);margin:64px 0 24px">Кому передаються</h2>
+  <div class="table-wrap reveal"><table>
+    <thead><tr><th>Сервіс</th><th>Які дані</th><th>Навіщо</th></tr></thead>
+    <tbody><tr><td>Telegram</td><td>Telegram ID, повідомлення, контакт</td><td>Працює бот, вхід у міні-застосунок і платежі Stars</td></tr><tr><td>Render (Франкфурт, ЄС)</td><td>Усі дані з таблиці вище</td><td>Хостинг серверів і бази даних PostgreSQL</td></tr><tr><td>Supabase</td><td>Чати з підтримкою, акаунти співробітників</td><td>База даних панелі підтримки</td></tr><tr><td>cryptoinfra</td><td>Email, ім'я на карті, внутрішній ID користувача, TRON-адреса</td><td>Емітент Nezeriya Card і зберігання USDT TRC20</td></tr><tr><td>TonAPI, Toncenter, GetBlock</td><td>Адреси гаманців, підписані транзакції</td><td>Баланси, історія і відправка транзакцій у мережі TON</td></tr><tr><td>STON.fi, DeDust</td><td>Адреса гаманця, сума обміну</td><td>Обмін активів у мережі TON</td></tr><tr><td>BSC-ноди, Etherscan, NodeReal, PancakeSwap</td><td>Адреси BSC, підписані транзакції</td><td>Баланси, історія, перекази та обмін у BNB Smart Chain</td></tr><tr><td>Fragment</td><td>Username Telegram отримувача</td><td>Купівля й виведення Telegram Stars</td></tr><tr><td>Nezeriya Pay</td><td>ID платежу, сума, адреса</td><td>Підтвердження оплат у магазинах Nezeriya Pay</td></tr></tbody>
+  </table></div>
+  <p class="updated reveal" style="margin-top:14px">Транзакції в блокчейні публічні за своєю природою: адреси та суми видно будь-кому в оглядачі мережі.</p>
+
+  <h2 class="reveal" style="font-size:clamp(28px,3.4vw,40px);margin:64px 0 24px">Хто має доступ</h2>
+  <div class="grid g3">
+    <div class="tile reveal"><div class="ico "><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M14 9l2 2"/></svg></div><h3>Власник</h3><p>Має доступ до серверів, бази даних і панелі керування (Render, Supabase).</p></div>
+    <div class="tile reveal d1"><div class="ico blue"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14.8c1.6.8 2.6 2.6 3 5.2"/></svg></div><h3>Підтримка</h3><p>Оператори бачать тільки свої чати з клієнтами й ті дані, які потрібні, щоб допомогти.</p></div>
+    <div class="tile reveal d2"><div class="ico violet"><svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div><h3>Ніхто інший</h3><p>Ми не продаємо дані й не передаємо їх рекламним мережам.</p></div>
+  </div>
+  <div class="note reveal" style="margin-top:40px">Детальні правила, терміни зберігання та порядок видалення описано в <a href="privacy.html" style="color:var(--lime)">Політиці конфіденційності</a>.</div>
+</div></section>
+
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <a class="brand" href="index.html"><span class="brand-mark">N</span>NEZERIYA</a>
+        <p>Криптогаманець у Telegram, карти Nezeriya Card і приймання платежів Nezeriya Pay.</p>
+      </div>
+      <div><h5>Продукти</h5><ul>
+        <li><a href="wallet.html">Nezeriya Wallet</a></li>
+        <li><a href="card.html">Nezeriya Card</a></li>
+        <li><a href="https://nezeriyapay.com" target="_blank" rel="noopener">Nezeriya Pay</a></li>
+        <li><a href="tariffs.html">Тарифи і комісії</a></li>
+      </ul></div>
+      <div><h5>Компанія</h5><ul>
+        <li><a href="company.html">Про компанію</a></li>
+        <li><a href="security.html">Безпека</a></li>
+        <li><a href="faq.html">Питання і відповіді</a></li>
+        <li><a href="contacts.html">Контакти</a></li>
+      </ul></div>
+      <div><h5>Документи</h5><ul>
+        <li><a href="privacy.html">Політика конфіденційності</a></li>
+        <li><a href="data.html">Які дані збирає бот</a></li>
+        <li><a href="https://t.me/Nezeriya_Support" target="_blank" rel="noopener">Підтримка @Nezeriya_Support</a></li>
+        <li><a href="https://t.me/NezeriyaWallet" target="_blank" rel="noopener">Канал @NezeriyaWallet</a></li>
+      </ul></div>
+    </div>
+    <div class="foot-bottom"><span>© <span data-year>2026</span> Nezeriya. Усі права захищено.</span><span>Офіційний бот: <a href="https://t.me/Nezeriya_Wallet_Bot" target="_blank" rel="noopener">@Nezeriya_Wallet_Bot</a></span></div>
+  </div>
+</footer>
+<script src="assets/site.js" defer></script>
+</body>
+</html>
