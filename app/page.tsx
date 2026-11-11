@@ -25,7 +25,7 @@ type EmployeeProfile = {
 };
 type DailyOnlinePeak = { date: string; peakOnline: number };
 type WalletMetrics = Record<string, string | number | null> & { dailyOnlinePeaks?: DailyOnlinePeak[] };
-type WalletUser = { id: number; username: string; name: string; premium: boolean; nzrPoints: number; walletIds: number[]; referralCount?: number; phoneCountry?: string; rank?: WalletRank | null; lastSeenAt?: string | null; online?: boolean };
+type WalletUser = { id: number; username: string; name: string; premium: boolean; nzrPoints: number; walletIds: number[]; referralCount?: number; phoneCountry?: string; rank?: WalletRank | null; lastSeenAt?: string | null; online?: boolean; registeredAt?: string | null };
 /** The wallet rank from the Nezeriya Wallet API: level 0–100 and its named rank, e.g. GOLD II · #21. */
 type WalletRank = { level?: number | string; name?: string; color?: string };
 type AcquiringBusiness = { account: string; name: string; type: string; ownership: string; assets: string[]; updatedAt: string | null };
@@ -1793,6 +1793,8 @@ type RegSort = "user" | "tgId" | "country" | "walletId" | "rank" | "nzr" | "invi
 
 const regSeenTime = new Intl.DateTimeFormat("uk-UA", { hour: "2-digit", minute: "2-digit" });
 const regSeenDate = new Intl.DateTimeFormat("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric" });
+/** Mini App sessions (and so the last-visit time) are recorded from this date. */
+const regSeenSince = "01.09.2026";
 const regSeenFull = new Intl.DateTimeFormat("uk-UA", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
 /** "5 хв тому", "сьогодні о 14:32", "вчора о 09:10", "3 дн. тому", or a date for older visits. */
@@ -1895,6 +1897,7 @@ function WalletRegistry({ users }: { users: WalletUser[] }) {
     invited: metricNumber(user.referralCount),
     rank: user.rank?.name ? { level: metricNumber(user.rank.level), name: user.rank.name, color: user.rank.color || "#767676" } : null,
     lastSeen: user.lastSeenAt ? Date.parse(user.lastSeenAt) || 0 : 0,
+    registered: user.registeredAt ? Date.parse(user.registeredAt) || 0 : 0,
   }));
   const seenNow = Date.now();
   const people = [...new Map(rows.map((row) => [row.user.id, row])).values()];
@@ -1933,7 +1936,8 @@ function WalletRegistry({ users }: { users: WalletUser[] }) {
       if (sort.key === "tgId") return row.user.id;
       if (sort.key === "walletId") return row.user.walletIds[0] || 0;
       if (sort.key === "rank") return row.rank ? row.rank.level : -1;
-      if (sort.key === "lastSeen") return row.user.online ? Number.MAX_SAFE_INTEGER : row.lastSeen;
+      // Users without a session sort by registration date, below everyone with a real visit.
+      if (sort.key === "lastSeen") return row.user.online ? Number.MAX_SAFE_INTEGER : row.lastSeen || (row.registered ? row.registered / 1e6 : 0);
       return row[sort.key];
     };
     const first = value(a), second = value(b);
@@ -2002,7 +2006,7 @@ function WalletRegistry({ users }: { users: WalletUser[] }) {
             <td data-l="Ранг">{row.rank ? <span className="reg-rank" style={{ "--rank": row.rank.color } as CSSProperties}><i />{row.rank.name}<b>#{row.rank.level}</b></span> : <span className="reg-zero">—</span>}</td>
             <td data-l="NZR-поінти" className="num"><div className="reg-pts"><span className="reg-bar"><i style={{ width: `${(row.nzr / maxNzr * 100).toFixed(1)}%` }} /></span><b className={row.nzr ? "" : "zero"}>{regNumber.format(row.nzr)} NZR</b></div></td>
             <td data-l="Реферали" className="num">{row.invited ? <div className="reg-pts ref"><span className="reg-bar"><i style={{ width: `${(row.invited / maxInvited * 100).toFixed(1)}%` }} /></span><b>{regNumber.format(row.invited)}</b><small>{regPercent.format(totalReferrals ? row.invited / totalReferrals * 100 : 0)}%</small></div> : <span className="reg-zero">0</span>}</td>
-            <td data-l="Останній вхід">{row.user.online ? <span className="reg-seen on"><i />Онлайн</span> : row.lastSeen ? <span className="reg-seen" title={regSeenFull.format(row.lastSeen)}><i />{lastSeenLabel(row.lastSeen, seenNow)}</span> : <span className="reg-zero" title="Ще не відкривав Mini App після запуску обліку сесій">—</span>}</td>
+            <td data-l="Останній вхід">{row.user.online ? <span className="reg-seen on"><i />Онлайн</span> : row.lastSeen ? <span className="reg-seen" title={regSeenFull.format(row.lastSeen)}><i />{lastSeenLabel(row.lastSeen, seenNow)}</span> : row.registered ? <span className="reg-seen old" title={`Mini App не відкривав з ${regSeenSince} (тоді почався облік входів). Реєстрація: ${regSeenFull.format(row.registered)}`}><i /><span>до {regSeenSince}<small>реєстрація {regSeenDate.format(row.registered)}</small></span></span> : <span className="reg-zero" title="Ще не відкривав Mini App після запуску обліку сесій">—</span>}</td>
             <td data-l="Статус">{row.user.premium ? <span className="reg-pill prem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z" /></svg>Premium</span> : <span className="reg-pill">Звичайний</span>}</td>
           </tr>;
         })}</tbody>
