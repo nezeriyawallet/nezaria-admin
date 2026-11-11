@@ -4411,6 +4411,11 @@ html[data-theme="light"] .side2-item.active svg { color:#12755f; }
 .reg-rank { --rank:#767676; display:inline-flex; align-items:center; gap:7px; height:26px; padding:0 10px; border-radius:999px; background:color-mix(in srgb, var(--rank) 12%, transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--rank) 35%, transparent); color:var(--rank); font-size:12px; font-weight:700; letter-spacing:.04em; }
 .reg-rank i { width:7px; height:7px; border-radius:50%; background:var(--rank); }
 .reg-rank b { color:var(--aud-text); font:600 12px var(--font-geist-mono), ui-monospace, monospace; letter-spacing:0; }
+.reg-seen { display:inline-flex; align-items:center; gap:7px; color:var(--aud-text); font-size:12px; font-weight:600; white-space:nowrap; }
+.reg-seen i { width:7px; height:7px; border-radius:50%; background:#767676; flex-shrink:0; }
+.reg-seen.on { color:#22c55e; }
+.reg-seen.on i { background:#22c55e; box-shadow:0 0 0 3px color-mix(in srgb, #22c55e 22%, transparent); animation:reg-seen-pulse 1.8s ease-in-out infinite; }
+@keyframes reg-seen-pulse { 50% { box-shadow:0 0 0 5px color-mix(in srgb, #22c55e 0%, transparent); } }
 .reg-pill { display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 10px; border-radius:999px; background:var(--aud-chip); color:#A3ABB8; font-size:12px; font-weight:600; }
 .reg-pill.prem { background:#1A1F33; color:#B3C8FF; box-shadow:inset 0 0 0 1px rgba(138,180,255,.3); }
 .reg-pill svg { width:12px; height:12px; color:var(--aud-blue); fill:currentColor; stroke:none; }
