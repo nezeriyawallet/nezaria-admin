@@ -204,8 +204,9 @@
   });
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let ay = 0, ax = -0.28, vy = 0.0026, target = 0.0026, R = 300, RX = 300, running = false;
-  const size = () => { const w = root.clientWidth, h = root.clientHeight; R = Math.min(h * 0.44, 380); RX = Math.min(w * 0.44, R * 1.45); };
+  const size = () => { const box = root.parentElement, w = root.clientWidth || box.clientWidth, h = root.clientHeight || box.clientHeight || 600; R = Math.min(h * 0.44, 380); RX = Math.min(w * 0.44, R * 1.45); };
   size(); addEventListener("resize", size);
+  if ("ResizeObserver" in window) new ResizeObserver(() => { size(); draw(); }).observe(root);
   root.parentElement.addEventListener("pointermove", (e) => {
     const r = root.getBoundingClientRect();
     target = 0.0026 + ((e.clientX - r.left) / r.width - 0.5) * 0.012;

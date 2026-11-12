@@ -711,7 +711,7 @@ h1, h2 { overflow-wrap: break-word; hyphens: auto; }
 /* Card page: rotating sphere of services */
 .sphere-sec { position: relative; overflow: hidden; }
 .sphere-sec .wrap { position: relative; min-height: 760px; display: grid; place-items: center; }
-.sphere { position: absolute; inset: 0; pointer-events: none; }
+.sphere { position: absolute; inset: 0; width: 100%; height: 100%; justify-self: stretch; align-self: stretch; pointer-events: none; }
 .sphere span { position: absolute; left: 50%; top: 50%; white-space: nowrap; padding: .62em 1.25em; border-radius: 999px; font: 600 15px/1 "Onest", sans-serif; color: #e9eaee; background: linear-gradient(180deg, #1f2127, #111216); border: 1px solid rgba(255, 255, 255, .1); box-shadow: 0 14px 34px -12px rgba(0, 0, 0, .9), inset 0 1px 0 rgba(255, 255, 255, .08); will-change: transform, opacity; }
 .sphere-text { position: relative; z-index: 2; text-align: center; max-width: 640px; padding: 34px 26px; border-radius: 32px; background: radial-gradient(closest-side, rgba(5, 5, 5, .92), rgba(5, 5, 5, .6) 70%, transparent); }
 .sphere-text h2 { font-size: clamp(32px, 5vw, 60px); line-height: 1.05; }
