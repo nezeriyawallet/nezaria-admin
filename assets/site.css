@@ -725,3 +725,5 @@ h1, h2 { overflow-wrap: break-word; hyphens: auto; }
   .sphere-text { margin-top: 8px; padding: 0 4px; background: none; }
 }
 .sphere-text h2 { hyphens: none; -webkit-hyphens: none; }
+.stats.s3 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 720px) { .stats.s3 { grid-template-columns: 1fr; } }
