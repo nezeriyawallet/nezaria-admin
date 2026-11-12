@@ -190,3 +190,41 @@
   document.addEventListener("click", (e) => { if (d.open && !d.contains(e.target)) d.open = false; });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") d.open = false; });
 })();
+
+// Card page: rotating sphere of service pills
+(() => {
+  const root = document.querySelector(".sphere");
+  if (!root) return;
+  const names = root.dataset.items.split("|");
+  const n = names.length, golden = Math.PI * (3 - Math.sqrt(5));
+  const pts = names.map((name, i) => {
+    const y = 1 - ((i + 0.5) / n) * 2, r = Math.sqrt(1 - y * y), th = golden * i;
+    const el = document.createElement("span"); el.textContent = name; root.appendChild(el);
+    return { el, x: Math.cos(th) * r, y, z: Math.sin(th) * r };
+  });
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let ay = 0, ax = -0.28, vy = 0.0026, target = 0.0026, R = 300, RX = 300, running = false;
+  const size = () => { const w = root.clientWidth, h = root.clientHeight; R = Math.min(h * 0.44, 380); RX = Math.min(w * 0.44, R * 1.45); };
+  size(); addEventListener("resize", size);
+  root.parentElement.addEventListener("pointermove", (e) => {
+    const r = root.getBoundingClientRect();
+    target = 0.0026 + ((e.clientX - r.left) / r.width - 0.5) * 0.012;
+  });
+  root.parentElement.addEventListener("pointerleave", () => { target = 0.0026; });
+  const draw = () => {
+    const cy = Math.cos(ay), sy = Math.sin(ay), cx = Math.cos(ax), sx = Math.sin(ax);
+    for (const p of pts) {
+      const x1 = p.x * cy + p.z * sy, z1 = -p.x * sy + p.z * cy;
+      const y2 = p.y * cx - z1 * sx, z2 = p.y * sx + z1 * cx;
+      const d = (z2 + 1) / 2, s = 0.55 + d * 0.75;
+      p.el.style.transform = `translate(-50%,-50%) translate3d(${x1 * RX}px,${y2 * R}px,0) scale(${s})`;
+      p.el.style.opacity = (0.18 + d * 0.82).toFixed(3);
+      p.el.style.filter = d < 0.45 ? `blur(${((0.45 - d) * 4).toFixed(2)}px)` : "none";
+      p.el.style.zIndex = Math.round(d * 100);
+    }
+  };
+  const tick = () => { if (!running) return; vy += (target - vy) * 0.04; ay += vy; draw(); requestAnimationFrame(tick); };
+  draw();
+  if (reduce) return;
+  new IntersectionObserver(([e]) => { const was = running; running = e.isIntersecting; if (running && !was) requestAnimationFrame(tick); }).observe(root);
+})();

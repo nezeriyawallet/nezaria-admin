@@ -707,3 +707,21 @@ h1, h2 { overflow-wrap: break-word; hyphens: auto; }
 .lang-menu a:hover { background: rgba(255, 255, 255, .07); color: #fff; }
 .lang-menu a.on { background: rgba(255, 255, 255, .1); color: #fff; }
 @media (max-width: 720px) { .lang summary { height: 34px; padding: 0 10px; } .lang summary svg { display: none; } }
+
+/* Card page: rotating sphere of services */
+.sphere-sec { position: relative; overflow: hidden; }
+.sphere-sec .wrap { position: relative; min-height: 760px; display: grid; place-items: center; }
+.sphere { position: absolute; inset: 0; pointer-events: none; }
+.sphere span { position: absolute; left: 50%; top: 50%; white-space: nowrap; padding: .62em 1.25em; border-radius: 999px; font: 600 15px/1 "Onest", sans-serif; color: #e9eaee; background: linear-gradient(180deg, #1f2127, #111216); border: 1px solid rgba(255, 255, 255, .1); box-shadow: 0 14px 34px -12px rgba(0, 0, 0, .9), inset 0 1px 0 rgba(255, 255, 255, .08); will-change: transform, opacity; }
+.sphere-text { position: relative; z-index: 2; text-align: center; max-width: 640px; padding: 34px 26px; border-radius: 32px; background: radial-gradient(closest-side, rgba(5, 5, 5, .92), rgba(5, 5, 5, .6) 70%, transparent); }
+.sphere-text h2 { font-size: clamp(32px, 5vw, 60px); line-height: 1.05; }
+.sphere-text p { margin-top: 16px; color: var(--muted); font-size: 17px; }
+@media (max-width: 720px) { .sphere-sec .wrap { min-height: 560px; } .sphere span { font-size: 12px; } }
+.sphere { z-index: 1; }
+.sphere-text { z-index: 3; background: radial-gradient(closest-side, rgba(5, 5, 5, .96), rgba(5, 5, 5, .82) 60%, rgba(5, 5, 5, 0)); padding: 48px 56px; }
+@media (max-width: 720px) {
+  .sphere-sec .wrap { display: block; min-height: 0; }
+  .sphere { position: relative; inset: auto; width: 100%; height: 420px; }
+  .sphere-text { margin-top: 8px; padding: 0 4px; background: none; }
+}
+.sphere-text h2 { hyphens: none; -webkit-hyphens: none; }
