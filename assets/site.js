@@ -86,6 +86,12 @@
     screens.forEach(fitOne);
   }
 
+  // MacBook screen: scale the 1440px-wide desktop layout to the lid
+  const macs = document.querySelectorAll(".mac-screen");
+  const fitMac = (sc) => { const w = sc.clientWidth; if (w > 0) sc.style.setProperty("--k", (w / 1440).toFixed(5)); };
+  if ("ResizeObserver" in window) { const mro = new ResizeObserver((es) => es.forEach((e) => fitMac(e.target))); macs.forEach((sc) => mro.observe(sc)); }
+  else { addEventListener("resize", () => macs.forEach(fitMac)); macs.forEach(fitMac); }
+
   // Tabs
   document.querySelectorAll("[data-tabs]").forEach((root) => {
     const buttons = root.querySelectorAll(".tabs button");
