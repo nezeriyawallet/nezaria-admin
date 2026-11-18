@@ -889,7 +889,7 @@ function OverviewPanel({ walletMetrics, metricsError, fallbackFeature, fallbackF
       <article className="ov-card ov-earn">
         <div><p className="ov-eyebrow">Заробіток · {periodLabel}</p><h2>{monthly ? "Дохід за місяць" : "Загальна сума доходу"}</h2></div>
         <strong>{totalIncome}</strong>
-        <p className="ov-note">{monthly ? "Комісії + Stars за курсом Fragment + продаж NZR − викупи NZR за місяць" : "Комісії + Stars за курсом Fragment − успішні викупи NZR"}</p>
+        <p className="ov-note">{monthly ? "Комісії + Stars за ціною продажу + продаж NZR − викупи NZR за місяць" : "Комісії + Stars за ціною продажу − успішні викупи NZR"}</p>
       </article>
     </section>
 
@@ -1551,7 +1551,7 @@ function FinancePanel({ walletMetrics, selectedMonth, onSelectedMonthChange, onS
   const onHold = year === today.getFullYear() && monthIndex === today.getMonth();
 
   const steps = selected && selectedCalc ? [
-    { label: "Stars → Fragment", value: selected.starsPayoutUsd, type: "in" },
+    { label: "Продаж Stars", value: selected.starsPayoutUsd, type: "in" },
     { label: "Продаж NZR", value: selected.nzrSalesUsd, type: "in" },
     { label: "Викуп NZR", value: -selected.nzrBuybackUsd, type: "out" },
     { label: "Чистий прибуток", value: selectedCalc.net, type: "sum" },
@@ -1659,15 +1659,15 @@ function FinancePanel({ walletMetrics, selectedMonth, onSelectedMonthChange, onS
     <section className="fin-cards">
       <article className="aud-card fin-card">
         <div className="fin-card-head"><span className="aud-icon aud-gold"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z" /></svg></span>
-          <div><p className="aud-crumbs reg-eyebrow">Telegram Stars · Fragment</p><h3>Дохід зі Stars</h3></div>
+          <div><p className="aud-crumbs reg-eyebrow">Telegram Stars</p><h3>Дохід зі Stars</h3></div>
           {onHold && <span className="fin-hold">Утримання Telegram</span>}</div>
         <div className="fin-conv">
           <div><b>{selected ? finCount.format(selected.stars) : "—"}</b><span>Stars</span></div>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-          <div><b className="win-accent">{selected ? finUsd(selected.starsPayoutUsd) : "—"}</b><span>очікувана виплата</span></div>
+          <div><b className="win-accent">{selected ? finUsd(selected.starsPayoutUsd) : "—"}</b><span>дохід від продажу</span></div>
         </div>
         <dl className="fin-kv">
-          <div><dt>Курс виплати</dt><dd>1 Star = {m ? finUsd(fragRate, 4) : "—"}</dd></div>
+          <div><dt>Ціна продажу</dt><dd>1 Star = {m ? finUsd(fragRate, 4) : "—"}</dd></div>
           <div><dt>Статус</dt><dd className="muted">Дохід доступний після періоду утримання Telegram</dd></div>
         </dl>
       </article>
@@ -1676,13 +1676,13 @@ function FinancePanel({ walletMetrics, selectedMonth, onSelectedMonthChange, onS
         <div className="fin-card-head"><span className="aud-icon aud-blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3" /></svg></span>
           <div><p className="aud-crumbs reg-eyebrow">Спред NZR</p><h3>Маржа Stars → викуп NZR</h3></div></div>
         <div className="fin-spread">
-          <div className="fin-sp-row"><span>Виплата Fragment за Star</span><b>{m ? finUsd(fragRate, 4) : "—"}</b></div>
+          <div className="fin-sp-row"><span>Ціна продажу Star</span><b>{m ? finUsd(fragRate, 4) : "—"}</b></div>
           <div className="fin-sp-bar"><i className="frag" style={{ width: `${fragRate / rateMax * 100}%` }} /></div>
           <div className="fin-sp-row"><span>Курс викупу NZR</span><b>{m ? finUsd(buyRate, 4) : "—"}</b></div>
           <div className="fin-sp-bar"><i className="buy" style={{ width: `${buyRate / rateMax * 100}%` }} /><em style={{ left: `${buyRate / rateMax * 100}%`, width: `${Math.max(perNzr, 0) / rateMax * 100}%` }} /></div>
         </div>
         <div className="fin-formula"><span>{m ? `${finUsd(perNzr, 4)} / NZR` : "—"}</span><span>×</span><span>{m ? `${finCount.format(spreadQty)} NZR` : "—"}</span><span>=</span><b className="win-accent">{m ? finUsd(spreadTotal) : "—"}</b></div>
-        <p className="aud-hint win-small">Загальна маржа за весь час: різниця між виплатою Fragment за Star і курсом викупу NZR, помножена на викуплені NZR.</p>
+        <p className="aud-hint win-small">Загальна маржа за весь час: різниця між ціною продажу Star і курсом викупу NZR, помножена на викуплені NZR.</p>
       </article>
 
       <article className="aud-card fin-card">
