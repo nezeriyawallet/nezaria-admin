@@ -1,6 +1,6 @@
 import { verifyGoogleUser, verifyOwnerSession } from "../../auth";
 
-type MonthFinance = { month: number; stars: number; starsPayoutUsd: number; nzrSalesUsd: number; nzrBuybackUsd: number; feesUsd: number; turnoverUsd: number };
+type MonthFinance = { month: number; stars: number; starsPayoutUsd: number; nzrSalesUsd: number; nzrBuybackUsd: number; fragmentBuyUsd: number; feesUsd: number; turnoverUsd: number };
 
 const number = (value: unknown) => {
   const parsed = Number(value);
@@ -45,6 +45,7 @@ export async function GET(request: Request) {
       starsPayoutUsd: number(exchange.monthlyTelegramStarsFragmentRevenueUsd),
       nzrSalesUsd: number(exchange.monthlyNzrSoldToUsers) * number(exchange.nzrSaleRateUsd),
       nzrBuybackUsd: number(exchange.monthlyNzrBoughtFromUsers) * number(exchange.nzrBuybackRateUsd),
+      fragmentBuyUsd: number(exchange.monthlyFragmentStarsBuyCostUsd),
       feesUsd: number(commission?.netCommissionUsdt ?? commission?.monthlyCommission),
       turnoverUsd: number(exchange.monthlyCompanyTurnoverUsd),
     };

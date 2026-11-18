@@ -763,9 +763,9 @@ function OverviewPanel({ walletMetrics, metricsError, fallbackFeature, fallbackF
   const monthly = period === "Цей місяць";
   const monthName = m && Number(m.selectedMonth) >= 1 ? `${finMonths[Number(m.selectedMonth) - 1]} ${m.selectedYear}` : finMonths[new Date().getMonth()];
   const monthValue = (key: string) => m?.[key] ?? null;
-  // Same formula as the Finance page: net = Stars payout + NZR sales − buybacks, income = net + fees.
+  // Same formula as the Finance page: net = Stars payout + NZR sales − buybacks − Fragment Stars purchases, income = net + fees.
   const monthNet = m ? metricNumber(m.monthlyTelegramStarsFragmentRevenueUsd) + metricNumber(m.monthlyNzrSoldToUsers) * metricNumber(m.nzrSaleRateUsd)
-    - metricNumber(m.monthlyNzrBoughtFromUsers) * metricNumber(m.nzrBuybackRateUsd) : 0;
+    - metricNumber(m.monthlyNzrBoughtFromUsers) * metricNumber(m.nzrBuybackRateUsd) - metricNumber(m.monthlyFragmentStarsBuyCostUsd) : 0;
   const monthIncome = m ? monthNet + metricNumber(m.monthlyCommission) : 0;
   const kpis = monthly ? [
     { icon: "box" as const, tone: "mint", label: "Чистий прибуток за місяць", value: m ? displayMetric(monthNet, "$") : "—", unit: "" },
@@ -889,7 +889,7 @@ function OverviewPanel({ walletMetrics, metricsError, fallbackFeature, fallbackF
       <article className="ov-card ov-earn">
         <div><p className="ov-eyebrow">Заробіток · {periodLabel}</p><h2>{monthly ? "Дохід за місяць" : "Загальна сума доходу"}</h2></div>
         <strong>{totalIncome}</strong>
-        <p className="ov-note">{monthly ? "Комісії + Stars за ціною продажу + продаж NZR − викупи NZR за місяць" : "Комісії + Stars за ціною продажу − успішні викупи NZR"}</p>
+        <p className="ov-note">{monthly ? "Комісії + вивід Stars з бота + продаж NZR − викупи NZR − закупка Stars на Fragment за місяць" : "Комісії + вивід Stars з бота + продаж NZR − викупи NZR − закупка Stars на Fragment"}</p>
       </article>
     </section>
 
@@ -1472,7 +1472,7 @@ function BusinessPanel({ metrics, businesses, refreshing, onRefresh, onRemove }:
   </section>;
 }
 
-type FinMonth = { month: number; stars: number; starsPayoutUsd: number; nzrSalesUsd: number; nzrBuybackUsd: number; feesUsd: number; turnoverUsd: number };
+type FinMonth = { month: number; stars: number; starsPayoutUsd: number; nzrSalesUsd: number; nzrBuybackUsd: number; fragmentBuyUsd: number; feesUsd: number; turnoverUsd: number };
 const finMonths = ["Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень", "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень"];
 const finShort = ["Січ", "Лют", "Бер", "Кві", "Тра", "Чер", "Лип", "Сер", "Вер", "Жов", "Лис", "Гру"];
 const finPercent = new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 1 });
@@ -1483,7 +1483,7 @@ function finUsd(value: number, digits = 2) {
 }
 
 function finIncome(month: FinMonth) {
-  const net = month.starsPayoutUsd + month.nzrSalesUsd - month.nzrBuybackUsd;
+  const net = month.starsPayoutUsd + month.nzrSalesUsd - month.nzrBuybackUsd - (month.fragmentBuyUsd || 0);
   return { net, income: net + month.feesUsd };
 }
 
@@ -1530,6 +1530,7 @@ function FinancePanel({ walletMetrics, selectedMonth, onSelectedMonthChange, onS
   const fragRate = value("telegramStarsFragmentRateUsd");
   const buyRate = value("nzrBuybackRateUsd");
   const saleRate = value("nzrSaleRateUsd");
+  const fragmentBuyRate = value("fragmentStarsBuyRateUsd");
   // Right after a month is picked the metrics still describe the previous
   // month until they reload; use them only when they match the selection and
   // fall back to the year figures meanwhile.
@@ -1541,6 +1542,7 @@ function FinancePanel({ walletMetrics, selectedMonth, onSelectedMonthChange, onS
     starsPayoutUsd: value("monthlyTelegramStarsFragmentRevenueUsd"),
     nzrSalesUsd: value("monthlyNzrSoldToUsers") * saleRate,
     nzrBuybackUsd: value("monthlyNzrBoughtFromUsers") * buyRate,
+    fragmentBuyUsd: value("monthlyFragmentStarsBuyCostUsd"),
     feesUsd: value("monthlyCommission"),
     turnoverUsd: value("monthlyCompanyTurnoverUsd"),
   } : months.find((item) => item.month === monthIndex + 1) || null;
@@ -1551,9 +1553,10 @@ function FinancePanel({ walletMetrics, selectedMonth, onSelectedMonthChange, onS
   const onHold = year === today.getFullYear() && monthIndex === today.getMonth();
 
   const steps = selected && selectedCalc ? [
-    { label: "Продаж Stars", value: selected.starsPayoutUsd, type: "in" },
+    { label: "Вивід Stars з бота", value: selected.starsPayoutUsd, type: "in" },
     { label: "Продаж NZR", value: selected.nzrSalesUsd, type: "in" },
     { label: "Викуп NZR", value: -selected.nzrBuybackUsd, type: "out" },
+    { label: "Закупка Stars (Fragment)", value: -(selected.fragmentBuyUsd || 0), type: "out" },
     { label: "Чистий прибуток", value: selectedCalc.net, type: "sum" },
     { label: "Комісії", value: selected.feesUsd, type: "in" },
     { label: "Загальний дохід", value: selectedCalc.income, type: "sum" },
@@ -1664,10 +1667,14 @@ function FinancePanel({ walletMetrics, selectedMonth, onSelectedMonthChange, onS
         <div className="fin-conv">
           <div><b>{selected ? finCount.format(selected.stars) : "—"}</b><span>Stars</span></div>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-          <div><b className="win-accent">{selected ? finUsd(selected.starsPayoutUsd) : "—"}</b><span>дохід від продажу</span></div>
+          <div><b className="win-accent">{selected ? finUsd(selected.starsPayoutUsd) : "—"}</b><span>вивід з бота</span></div>
         </div>
         <dl className="fin-kv">
-          <div><dt>Ціна продажу</dt><dd>1 Star = {m ? finUsd(fragRate, 4) : "—"}</dd></div>
+          <div><dt>Курс виводу з бота</dt><dd>1 Star = {m ? finUsd(fragRate, 4) : "—"}</dd></div>
+          <div><dt>Курс закупки Fragment</dt><dd>1 Star = {m ? finUsd(fragmentBuyRate, 4) : "—"}</dd></div>
+          <div><dt>Курс продажу</dt><dd>1 Star = {m ? finUsd(saleRate, 4) : "—"}</dd></div>
+          <div><dt>Курс викупу</dt><dd>1 Star = {m ? finUsd(buyRate, 4) : "—"}</dd></div>
+          <div><dt>Закупка на Fragment</dt><dd>{metricsMatch ? `${finCount.format(value("monthlyFragmentStarsWithdrawn"))} ★ · ${finUsd(value("monthlyFragmentStarsBuyCostUsd"))}` : "—"}</dd></div>
           <div><dt>Статус</dt><dd className="muted">Дохід доступний після періоду утримання Telegram</dd></div>
         </dl>
       </article>
@@ -1676,13 +1683,13 @@ function FinancePanel({ walletMetrics, selectedMonth, onSelectedMonthChange, onS
         <div className="fin-card-head"><span className="aud-icon aud-blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3" /></svg></span>
           <div><p className="aud-crumbs reg-eyebrow">Спред NZR</p><h3>Маржа Stars → викуп NZR</h3></div></div>
         <div className="fin-spread">
-          <div className="fin-sp-row"><span>Ціна продажу Star</span><b>{m ? finUsd(fragRate, 4) : "—"}</b></div>
+          <div className="fin-sp-row"><span>Вивід Star з бота</span><b>{m ? finUsd(fragRate, 4) : "—"}</b></div>
           <div className="fin-sp-bar"><i className="frag" style={{ width: `${fragRate / rateMax * 100}%` }} /></div>
           <div className="fin-sp-row"><span>Курс викупу NZR</span><b>{m ? finUsd(buyRate, 4) : "—"}</b></div>
           <div className="fin-sp-bar"><i className="buy" style={{ width: `${buyRate / rateMax * 100}%` }} /><em style={{ left: `${buyRate / rateMax * 100}%`, width: `${Math.max(perNzr, 0) / rateMax * 100}%` }} /></div>
         </div>
         <div className="fin-formula"><span>{m ? `${finUsd(perNzr, 4)} / NZR` : "—"}</span><span>×</span><span>{m ? `${finCount.format(spreadQty)} NZR` : "—"}</span><span>=</span><b className="win-accent">{m ? finUsd(spreadTotal) : "—"}</b></div>
-        <p className="aud-hint win-small">Загальна маржа за весь час: різниця між ціною продажу Star і курсом викупу NZR, помножена на викуплені NZR.</p>
+        <p className="aud-hint win-small">Загальна маржа за весь час: різниця між курсом виводу Star з бота і курсом викупу NZR, помножена на викуплені NZR.</p>
       </article>
 
       <article className="aud-card fin-card">
