@@ -235,3 +235,54 @@
   if (reduce) return;
   new IntersectionObserver(([e]) => { const was = running; running = e.isIntersecting; if (running && !was) requestAnimationFrame(tick); }).observe(root);
 })();
+
+// TON Connect demo "video": five scenes with chapters, play/pause and autoplay while visible.
+(() => {
+  const root = document.querySelector("[data-tcv]");
+  if (!root) return;
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const SCENE = 5200, N = 5;
+  const chapters = [...root.querySelectorAll(".tcv-chapters button")];
+  const bars = chapters.map((b) => b.querySelector("u"));
+  const time = root.querySelector(".tcv-time");
+  const playBtn = root.querySelector(".tcv-play");
+  let scene = 0, elapsed = 0, last = 0, playing = !reduce, visible = false, raf = 0;
+
+  const fmt = (ms) => { const s = Math.floor(ms / 1000); return `00:${String(s).padStart(2, "0")}`; };
+  const paint = () => {
+    chapters.forEach((b, i) => {
+      b.classList.toggle("on", i === scene);
+      b.classList.toggle("done", i < scene);
+      bars[i].style.width = i < scene ? "100%" : i === scene ? `${(elapsed / SCENE) * 100}%` : "0%";
+    });
+    time.textContent = fmt(scene * SCENE + elapsed);
+  };
+  const go = (i) => {
+    scene = (i + N) % N; elapsed = 0;
+    root.removeAttribute("data-scene");
+    void root.offsetWidth; // restart the scene's CSS animations
+    root.dataset.scene = scene;
+    paint();
+  };
+  const tick = (t) => {
+    raf = 0;
+    if (!playing || !visible) return;
+    elapsed += Math.min(100, t - (last || t)); last = t;
+    if (elapsed >= SCENE) go(scene + 1); else paint();
+    raf = requestAnimationFrame(tick);
+  };
+  const run = () => { if (playing && visible && !raf) { last = 0; raf = requestAnimationFrame(tick); } };
+  const setPlaying = (p) => {
+    playing = p;
+    root.classList.toggle("paused", !p);
+    playBtn.setAttribute("aria-label", p ? "Pause" : "Play");
+    run();
+  };
+
+  playBtn.addEventListener("click", () => setPlaying(!playing));
+  chapters.forEach((b, i) => b.addEventListener("click", () => { go(i); run(); }));
+  root.querySelector(".tcv-screen").addEventListener("click", () => setPlaying(!playing));
+  new IntersectionObserver((es) => { visible = es[0].isIntersecting; run(); }, { threshold: 0.35 }).observe(root);
+  setPlaying(playing);
+  go(0);
+})();
