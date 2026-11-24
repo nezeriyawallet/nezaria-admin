@@ -1280,4 +1280,4 @@ h1, h2 { overflow-wrap: break-word; hyphens: auto; }
 }
 .tc-hero h1 { hyphens: manual; -webkit-hyphens: manual; font-size: clamp(38px, 4.8vw, 70px); }
 .tcv-subs p { align-self: end; }
-@media (min-width: 1241px) and (max-width: 1440px) { .nav-links { gap: 0; } .nav-links a { padding: 8px 8px; } .nav-cta .btn-ghost { display: none; } }
+
