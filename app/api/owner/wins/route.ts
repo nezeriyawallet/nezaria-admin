@@ -19,7 +19,7 @@ function plinkoStake(value: unknown) {
 function buildMonthlyTotals(items: GameResult[]) {
   const now = new Date();
   const monthStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
-  let wheelWon = 0, plinkoWon = 0, spinsWon = 0, doubleWon = 0, slotsWon = 0, wheelCollected = 0, plinkoCollected = 0, spinsCollected = 0, doubleCollected = 0, slotsCollected = 0;
+  let wheelWon = 0, plinkoWon = 0, spinsWon = 0, doubleWon = 0, slotsWon = 0, cosmoWon = 0, sunMoonWon = 0, cosmoCollected = 0, sunMoonCollected = 0, wheelCollected = 0, plinkoCollected = 0, spinsCollected = 0, doubleCollected = 0, slotsCollected = 0;
   for (const item of items) {
     const createdAt = Date.parse(item.createdAt ?? "");
     if (!Number.isFinite(createdAt) || createdAt < monthStart) continue;
@@ -29,12 +29,15 @@ function buildMonthlyTotals(items: GameResult[]) {
     if (/^spins/i.test(dropped)) { spinsWon += prize; spinsCollected += plinkoStake(dropped); continue; }
     if (/^double/i.test(dropped)) { doubleWon += prize; doubleCollected += plinkoStake(dropped); continue; }
     if (/^slots/i.test(dropped)) { slotsWon += prize; slotsCollected += plinkoStake(dropped); continue; }
+    // Only winning COSMO and SUNMOON rounds are journalled, so these stakes are a lower bound.
+    if (/^cosmo/i.test(dropped)) { cosmoWon += prize; cosmoCollected += plinkoStake(dropped); continue; }
+    if (/^sunmoon/i.test(dropped)) { sunMoonWon += prize; sunMoonCollected += plinkoStake(dropped); continue; }
     const wheel = Number(item.wheel);
     if (wheel === 1 || wheel === 2) { wheelWon += prize; wheelCollected += wheel === 1 ? 10 : 30; }
   }
-  const monthlyWonNzr = wheelWon + plinkoWon + spinsWon + doubleWon + slotsWon;
-  const monthlyCollectedNzr = wheelCollected + plinkoCollected + spinsCollected + doubleCollected + slotsCollected;
-  return { monthlyWonNzr, monthlyCollectedNzr, monthlyNetEarningsNzr: monthlyCollectedNzr - monthlyWonNzr, monthlyWheelWonNzr: wheelWon, monthlyPlinkoWonNzr: plinkoWon, monthlyWheelSpentNzr: wheelCollected, monthlyPlinkoSpentNzr: plinkoCollected, monthlySpinsWonNzr: spinsWon, monthlySpinsSpentNzr: spinsCollected, monthlyDoubleWonNzr: doubleWon, monthlyDoubleSpentNzr: doubleCollected, monthlySlotsWonNzr: slotsWon, monthlySlotsSpentNzr: slotsCollected };
+  const monthlyWonNzr = wheelWon + plinkoWon + spinsWon + doubleWon + slotsWon + cosmoWon + sunMoonWon;
+  const monthlyCollectedNzr = wheelCollected + plinkoCollected + spinsCollected + doubleCollected + slotsCollected + cosmoCollected + sunMoonCollected;
+  return { monthlyWonNzr, monthlyCollectedNzr, monthlyNetEarningsNzr: monthlyCollectedNzr - monthlyWonNzr, monthlyWheelWonNzr: wheelWon, monthlyPlinkoWonNzr: plinkoWon, monthlyWheelSpentNzr: wheelCollected, monthlyPlinkoSpentNzr: plinkoCollected, monthlySpinsWonNzr: spinsWon, monthlySpinsSpentNzr: spinsCollected, monthlyDoubleWonNzr: doubleWon, monthlyDoubleSpentNzr: doubleCollected, monthlySlotsWonNzr: slotsWon, monthlySlotsSpentNzr: slotsCollected, monthlyCosmoWonNzr: cosmoWon, monthlyCosmoSpentNzr: cosmoCollected, monthlySunMoonWonNzr: sunMoonWon, monthlySunMoonSpentNzr: sunMoonCollected };
 }
 
 export async function GET(request: Request) {
@@ -105,6 +108,10 @@ async function loadWins(baseUrl: string, apiKey: string): Promise<Record<string,
       monthlyDoubleSpentNzr: numberFrom(firstPage.monthlyDoubleSpentNzr) ?? calculated.monthlyDoubleSpentNzr,
       monthlySlotsWonNzr: numberFrom(firstPage.monthlySlotsWonNzr) ?? calculated.monthlySlotsWonNzr,
       monthlySlotsSpentNzr: numberFrom(firstPage.monthlySlotsSpentNzr) ?? calculated.monthlySlotsSpentNzr,
+      monthlyCosmoWonNzr: numberFrom(firstPage.monthlyCosmoWonNzr) ?? calculated.monthlyCosmoWonNzr,
+      monthlyCosmoSpentNzr: numberFrom(firstPage.monthlyCosmoSpentNzr) ?? calculated.monthlyCosmoSpentNzr,
+      monthlySunMoonWonNzr: numberFrom(firstPage.monthlySunMoonWonNzr) ?? calculated.monthlySunMoonWonNzr,
+      monthlySunMoonSpentNzr: numberFrom(firstPage.monthlySunMoonSpentNzr) ?? calculated.monthlySunMoonSpentNzr,
     } : calculated;
     const body = { ...firstPage, items: allItems, totalElements: allItems.length, totalPages: 1,
       monthlyWonNzr: source.monthlyWonNzr ?? 0, monthlyCollectedNzr: source.monthlyCollectedNzr ?? 0,
@@ -113,7 +120,9 @@ async function loadWins(baseUrl: string, apiKey: string): Promise<Record<string,
       monthlyWheelSpentNzr: source.monthlyWheelSpentNzr ?? 0, monthlyPlinkoSpentNzr: source.monthlyPlinkoSpentNzr ?? 0,
       monthlySpinsWonNzr: source.monthlySpinsWonNzr ?? 0, monthlySpinsSpentNzr: source.monthlySpinsSpentNzr ?? 0,
       monthlyDoubleWonNzr: source.monthlyDoubleWonNzr ?? 0, monthlyDoubleSpentNzr: source.monthlyDoubleSpentNzr ?? 0,
-      monthlySlotsWonNzr: source.monthlySlotsWonNzr ?? 0, monthlySlotsSpentNzr: source.monthlySlotsSpentNzr ?? 0 };
+      monthlySlotsWonNzr: source.monthlySlotsWonNzr ?? 0, monthlySlotsSpentNzr: source.monthlySlotsSpentNzr ?? 0,
+      monthlyCosmoWonNzr: source.monthlyCosmoWonNzr ?? 0, monthlyCosmoSpentNzr: source.monthlyCosmoSpentNzr ?? 0,
+      monthlySunMoonWonNzr: source.monthlySunMoonWonNzr ?? 0, monthlySunMoonSpentNzr: source.monthlySunMoonSpentNzr ?? 0 };
     winsCache = { at: Date.now(), body };
     return body;
   } catch {

@@ -4728,7 +4728,7 @@ html[data-theme="light"] .side2-item.active svg { color:#12755f; }
 }
 
 /* Wins · four games */
-.win { --win-spins:#F5C451; --win-double:#B794F6; --win-slots:#FF8A5B; }
+.win { --win-spins:#F5C451; --win-double:#B794F6; --win-slots:#FF8A5B; --win-cosmo:#6FD3FF; --win-sunmoon:#F2E3B3; }
 .win-split-bar i.roulette, .win-split-leg i.roulette { background:var(--win-roulette); }
 .win-split-bar i.plinko, .win-split-leg i.plinko { background:var(--win-plinko); }
 .win-split-bar i.spins, .win-split-leg i.spins { background:var(--win-spins); }
@@ -4746,6 +4746,13 @@ html[data-theme="light"] .side2-item.active svg { color:#12755f; }
 .win-slots-grid small { font-size:11px; color:var(--aud-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .win-slot-out { display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .win-tag { font-style:normal; font-size:11px; font-weight:600; padding:2px 7px; border-radius:999px; background:#2A1A14; color:var(--win-slots); }
+.win-split-bar i.cosmo, .win-split-leg i.cosmo { background:var(--win-cosmo); }
+.win-game.cosmo { background:#0F2230; color:var(--win-cosmo); }
+.win-split-bar i.sunmoon, .win-split-leg i.sunmoon { background:var(--win-sunmoon); }
+.win-game.sunmoon { background:#26231A; color:var(--win-sunmoon); }
+.win-duo { display:grid; grid-template-columns:minmax(0,1fr); gap:inherit; }
+.win-duo > .aud-card { margin:0; }
+@media (min-width: 2200px) { .win-duo { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width: 1100px) { .win-slots-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 .win-double { display:inline-flex; align-items:center; gap:6px; font:600 13px var(--font-geist-mono), ui-monospace, monospace; color:var(--aud-muted); }
 .win-double i { width:12px; height:12px; border-radius:50%; background:var(--aud-chip); box-shadow:inset 0 0 0 1px rgba(255,255,255,.15); }
