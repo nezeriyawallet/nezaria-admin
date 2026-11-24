@@ -31,7 +31,7 @@ type WalletRank = { level?: number | string; name?: string; color?: string };
 type AcquiringBusiness = { account: string; name: string; type: string; ownership: string; assets: string[]; updatedAt: string | null };
 type AcquiringMetrics = { businesses: number; merchants: number; products: number; payments: number; paymentLinks: number; payouts: number };
 type WheelWin = { id: number; username: string; name: string; walletId: number; wheel: number; dropped: string; reward: string; createdAt: string; game?: string };
-type WheelWinSummary = { monthlyWonNzr: number; monthlyLostNzr: number; monthlyCollectedNzr: number; monthlyNetEarningsNzr: number; monthlyWheelSpentNzr: number; monthlyPlinkoSpentNzr: number; monthlyWheelWonNzr: number; monthlyPlinkoWonNzr: number; monthlySpinsSpentNzr: number; monthlySpinsWonNzr: number; monthlyDoubleSpentNzr: number; monthlyDoubleWonNzr: number; monthlySlotsSpentNzr: number; monthlySlotsWonNzr: number; monthlySlotsRounds: number; monthlySlotsBonusBuys: number; monthlySlotsFreeSpins: number };
+type WheelWinSummary = { monthlyWonNzr: number; monthlyLostNzr: number; monthlyCollectedNzr: number; monthlyNetEarningsNzr: number; monthlyWheelSpentNzr: number; monthlyPlinkoSpentNzr: number; monthlyWheelWonNzr: number; monthlyPlinkoWonNzr: number; monthlySpinsSpentNzr: number; monthlySpinsWonNzr: number; monthlyDoubleSpentNzr: number; monthlyDoubleWonNzr: number; monthlySlotsSpentNzr: number; monthlySlotsWonNzr: number; monthlySlotsRounds: number; monthlySlotsBonusBuys: number; monthlySlotsFreeSpins: number; monthlyCosmoSpentNzr: number; monthlyCosmoWonNzr: number; monthlyCosmoRounds: number | null; monthlyCosmoWins: number | null; monthlyCosmoPlayers: number | null; monthlyCosmoTopPrize: number | null; monthlyCosmoTopMult: number | null; monthlySunMoonSpentNzr: number; monthlySunMoonWonNzr: number; monthlySunMoonRounds: number | null; monthlySunMoonWins: number | null; monthlySunMoonPlayers: number | null; monthlySunMoonMoonPicks: number | null; monthlySunMoonMoonResults: number | null };
 type SupportMessage = { id: string; sender_type: "client" | "agent" | "system"; body: string; sent_at: string };
 type SupportTicket = { id: string; client_name: string; client_username: string | null; status: "new" | "in_progress" | "awaiting_rating" | "closed"; assigned_to: string | null; assigned_name?: string | null; rating: number | null; review: string | null; created_at: string; updated_at: string; messages: SupportMessage[] };
 type SupportOperator = { user_id: string; full_name: string; active_chats: number; active_chat_limit: number };
@@ -132,7 +132,7 @@ export default function Home() {
   const [acquiringBusinesses, setAcquiringBusinesses] = useState<AcquiringBusiness[]>([]);
   const [acquiringRefreshing, setAcquiringRefreshing] = useState(false);
   const [wheelWins, setWheelWins] = useState<WheelWin[]>([]);
-  const [wheelWinSummary, setWheelWinSummary] = useState<WheelWinSummary>({ monthlyWonNzr: 0, monthlyLostNzr: 0, monthlyCollectedNzr: 0, monthlyNetEarningsNzr: 0, monthlyWheelSpentNzr: 0, monthlyPlinkoSpentNzr: 0, monthlyWheelWonNzr: 0, monthlyPlinkoWonNzr: 0, monthlySpinsSpentNzr: 0, monthlySpinsWonNzr: 0, monthlyDoubleSpentNzr: 0, monthlyDoubleWonNzr: 0, monthlySlotsSpentNzr: 0, monthlySlotsWonNzr: 0, monthlySlotsRounds: 0, monthlySlotsBonusBuys: 0, monthlySlotsFreeSpins: 0 });
+  const [wheelWinSummary, setWheelWinSummary] = useState<WheelWinSummary>({ monthlyWonNzr: 0, monthlyLostNzr: 0, monthlyCollectedNzr: 0, monthlyNetEarningsNzr: 0, monthlyWheelSpentNzr: 0, monthlyPlinkoSpentNzr: 0, monthlyWheelWonNzr: 0, monthlyPlinkoWonNzr: 0, monthlySpinsSpentNzr: 0, monthlySpinsWonNzr: 0, monthlyDoubleSpentNzr: 0, monthlyDoubleWonNzr: 0, monthlySlotsSpentNzr: 0, monthlySlotsWonNzr: 0, monthlySlotsRounds: 0, monthlySlotsBonusBuys: 0, monthlySlotsFreeSpins: 0, monthlyCosmoSpentNzr: 0, monthlyCosmoWonNzr: 0, monthlyCosmoRounds: null, monthlyCosmoWins: null, monthlyCosmoPlayers: null, monthlyCosmoTopPrize: null, monthlyCosmoTopMult: null, monthlySunMoonSpentNzr: 0, monthlySunMoonWonNzr: 0, monthlySunMoonRounds: null, monthlySunMoonWins: null, monthlySunMoonPlayers: null, monthlySunMoonMoonPicks: null, monthlySunMoonMoonResults: null });
   const [winsRefreshing, setWinsRefreshing] = useState(false);
   const [usersRefreshing, setUsersRefreshing] = useState(false);
   const [metricsError, setMetricsError] = useState("");
@@ -354,7 +354,7 @@ export default function Home() {
       const monthlyNetEarningsNzr = body.monthlyNetEarningsNzr === undefined || body.monthlyNetEarningsNzr === null
         ? monthlyCollectedNzr - monthlyWonNzr
         : Number(body.monthlyNetEarningsNzr) || 0;
-      setWheelWinSummary({ monthlyWonNzr, monthlyLostNzr: monthlyNetEarningsNzr, monthlyCollectedNzr, monthlyNetEarningsNzr, monthlyWheelSpentNzr: monthlyWheelCollectedNzr, monthlyPlinkoSpentNzr: monthlyPlinkoCollectedNzr, monthlyWheelWonNzr: Number(body.monthlyWheelWonNzr ?? monthlyWonNzr) || 0, monthlyPlinkoWonNzr: Number(body.monthlyPlinkoWonNzr) || 0, monthlySpinsSpentNzr: Number(body.monthlySpinsSpentNzr) || 0, monthlySpinsWonNzr: Number(body.monthlySpinsWonNzr) || 0, monthlyDoubleSpentNzr: Number(body.monthlyDoubleSpentNzr) || 0, monthlyDoubleWonNzr: Number(body.monthlyDoubleWonNzr) || 0, monthlySlotsSpentNzr: Number(body.monthlySlotsSpentNzr) || 0, monthlySlotsWonNzr: Number(body.monthlySlotsWonNzr) || 0, monthlySlotsRounds: Number(body.monthlySlotsRounds) || 0, monthlySlotsBonusBuys: Number(body.monthlySlotsBonusBuys) || 0, monthlySlotsFreeSpins: Number(body.monthlySlotsFreeSpins) || 0 });
+      setWheelWinSummary({ monthlyWonNzr, monthlyLostNzr: monthlyNetEarningsNzr, monthlyCollectedNzr, monthlyNetEarningsNzr, monthlyWheelSpentNzr: monthlyWheelCollectedNzr, monthlyPlinkoSpentNzr: monthlyPlinkoCollectedNzr, monthlyWheelWonNzr: Number(body.monthlyWheelWonNzr ?? monthlyWonNzr) || 0, monthlyPlinkoWonNzr: Number(body.monthlyPlinkoWonNzr) || 0, monthlySpinsSpentNzr: Number(body.monthlySpinsSpentNzr) || 0, monthlySpinsWonNzr: Number(body.monthlySpinsWonNzr) || 0, monthlyDoubleSpentNzr: Number(body.monthlyDoubleSpentNzr) || 0, monthlyDoubleWonNzr: Number(body.monthlyDoubleWonNzr) || 0, monthlySlotsSpentNzr: Number(body.monthlySlotsSpentNzr) || 0, monthlySlotsWonNzr: Number(body.monthlySlotsWonNzr) || 0, monthlySlotsRounds: Number(body.monthlySlotsRounds) || 0, monthlySlotsBonusBuys: Number(body.monthlySlotsBonusBuys) || 0, monthlySlotsFreeSpins: Number(body.monthlySlotsFreeSpins) || 0, monthlyCosmoSpentNzr: Number(body.monthlyCosmoSpentNzr) || 0, monthlyCosmoWonNzr: Number(body.monthlyCosmoWonNzr) || 0, monthlyCosmoRounds: optionalCount(body.monthlyCosmoRounds), monthlyCosmoWins: optionalCount(body.monthlyCosmoWins), monthlyCosmoPlayers: optionalCount(body.monthlyCosmoPlayers), monthlyCosmoTopPrize: optionalCount(body.monthlyCosmoTopPrize), monthlyCosmoTopMult: optionalCount(body.monthlyCosmoTopMult), monthlySunMoonSpentNzr: Number(body.monthlySunMoonSpentNzr) || 0, monthlySunMoonWonNzr: Number(body.monthlySunMoonWonNzr) || 0, monthlySunMoonRounds: optionalCount(body.monthlySunMoonRounds), monthlySunMoonWins: optionalCount(body.monthlySunMoonWins), monthlySunMoonPlayers: optionalCount(body.monthlySunMoonPlayers), monthlySunMoonMoonPicks: optionalCount(body.monthlySunMoonMoonPicks), monthlySunMoonMoonResults: optionalCount(body.monthlySunMoonMoonResults) });
       if (showNotice) { setNotice("Дані виграшів оновлено"); window.setTimeout(() => setNotice(null), 2200); }
     } catch {
       if (showNotice) { setNotice("Не вдалося оновити дані. Спробуйте ще раз."); window.setTimeout(() => setNotice(null), 2600); }
@@ -2095,17 +2095,26 @@ function UsersPanel({ walletMetrics, users, refreshing, onRefresh }: { walletMet
   </section>;
 }
 
-type WinGame = "roulette" | "plinko" | "spins" | "double" | "slots";
+// Counts that older wallet versions do not send stay null, so the card shows "—" instead of a wrong 0.
+function optionalCount(value: unknown) {
+  if (value === undefined || value === null || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+type WinGame = "roulette" | "plinko" | "spins" | "double" | "slots" | "cosmo" | "sunmoon";
 type WinRow = { bonus: boolean; freeSpins: number; key: string; ts: number; tgId: string; name: string; sub: string; walletId: string; game: WinGame; stake: number; payout: number; payoutLabel: string; outcome: string; picked: string; result: string; mult: number | null; net: number };
 type WinSort = "ts" | "user" | "game" | "stake" | "outcome" | "payout" | "net";
-const winGames: WinGame[] = ["roulette", "plinko", "spins", "double", "slots"];
-const winGameLabel: Record<WinGame, string> = { roulette: "Рулетка", plinko: "Plinko", spins: "Spins", double: "Double", slots: "Slots" };
+const winGames: WinGame[] = ["roulette", "plinko", "spins", "double", "slots", "cosmo", "sunmoon"];
+const winGameLabel: Record<WinGame, string> = { roulette: "Рулетка", plinko: "Plinko", spins: "Spins", double: "Double", slots: "Slots", cosmo: "COSMO", sunmoon: "SUNMOON" };
 const winGameIcon: Record<WinGame, ReactNode> = {
   roulette: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" /><path d="M12 3v6M12 15v6M3 12h6M15 12h6" /></svg>,
   plinko: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.5" /><circle cx="8" cy="10" r="1.5" /><circle cx="16" cy="10" r="1.5" /><circle cx="5" cy="15" r="1.5" /><circle cx="12" cy="15" r="1.5" /><circle cx="19" cy="15" r="1.5" /><path d="M4 20h16" /></svg>,
   spins: <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3" /><path d="M9 5v14M15 5v14" /><path d="M5.5 12h1M11.5 12h1M17.5 12h1" /></svg>,
   double: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="6" /><circle cx="15" cy="12" r="6" /></svg>,
   slots: <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M3 9.5h18M3 14.5h18M9 4v16M15 4v16" /></svg>,
+  cosmo: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5" /><path d="M3.5 15.5c-1.4 2 .3 3 4 2.2 3-.7 6.6-2.4 9.6-4.6 3.7-2.7 5.4-5.4 3.6-6.3-.9-.4-2.4-.2-4.2.5" /></svg>,
+  sunmoon: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0 0 18z" /><circle cx="12" cy="12" r="9" /></svg>,
 };
 const winDoubleColor: Record<string, string> = { червоне: "red", чорне: "black", зелене: "green" };
 const winNumber = new Intl.NumberFormat("uk-UA", { maximumFractionDigits: 2 });
@@ -2129,16 +2138,18 @@ function winRelative(ts: number, now: number) {
   return new Date(ts).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-// Turns a wallet game record into a row. Plinko, Spins, Double and Slots come as
+// Turns a wallet game record into a row. Plinko, Spins, Double, Slots, COSMO and SUNMOON come as
 // "<Game> · ставка N NZR" (Double adds "· обраний → що випало", Slots may add
-// "· бонус" for a bought bonus and "· FS n" for the free spins played); Roulette
+// "· бонус" for a bought bonus and "· FS n" for the free spins played, COSMO adds
+// "· ×M", SUNMOON adds the side that fell: "· Місяць" or "· Сонце"; only winning
+// COSMO and SUNMOON rounds are in the journal); Roulette
 // comes with the wheel number (wheel 1 costs 10 NZR, wheel 2 costs 30 NZR);
 // old USDT prizes have no known stake.
 function winRow(win: WheelWin): WinRow {
   const dropped = String(win.dropped || "");
   const reward = String(win.reward || "");
   const label = String(win.game || dropped).toLowerCase();
-  const game: WinGame = label.startsWith("plinko") ? "plinko" : label.startsWith("spins") ? "spins" : label.startsWith("double") ? "double" : label.startsWith("slots") ? "slots" : "roulette";
+  const game: WinGame = label.startsWith("plinko") ? "plinko" : label.startsWith("spins") ? "spins" : label.startsWith("double") ? "double" : label.startsWith("slots") ? "slots" : label.startsWith("cosmo") ? "cosmo" : label.startsWith("sunmoon") ? "sunmoon" : "roulette";
   const roundGame = game !== "roulette";
   const stake = roundGame ? Number(dropped.match(/ставка\s*(\d+(?:[.,]\d+)?)/i)?.[1]?.replace(",", ".") || 0) : Number(win.wheel) === 1 ? 10 : Number(win.wheel) === 2 ? 30 : 0;
   const nzr = winNzr(reward);
@@ -2162,10 +2173,10 @@ function winRow(win: WheelWin): WinRow {
     stake,
     payout,
     payoutLabel: unknownPrize ? reward : `${winNumber.format(payout)} NZR`,
-    outcome: roundGame ? "" : dropped || "—",
+    outcome: game === "sunmoon" ? (/сонце/i.test(dropped) ? "☀ Сонце" : /місяць/i.test(dropped) ? "☾ Місяць" : "") : roundGame ? "" : dropped || "—",
     picked: colors.length === 2 ? colors[0] : "",
     result: colors.length === 2 ? colors[1] : "",
-    mult: (game === "plinko" || game === "spins" || game === "slots") && stake ? payout / stake : null,
+    mult: (game === "plinko" || game === "spins" || game === "slots" || game === "cosmo") && stake ? payout / stake : null,
     net: unknownPrize ? 0 : payout - stake,
   };
 }
@@ -2206,6 +2217,65 @@ function SlotsStats({ summary, rows }: { summary: WheelWinSummary; rows: WinRow[
     <div className="aud-row"><p className="aud-label"><span className="win-game slots">Slots</span> Статистика</p><span className="aud-chip">за місяць</span></div>
     <dl className="win-slots-grid">{stats.map(([label, value, hint]) => <div key={label}><dt>{label}</dt><dd>{value}</dd>{hint && <small>{hint}</small>}</div>)}</dl>
   </section>;
+}
+
+const winMonthStart = () => { const now = new Date(); return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1); };
+const winPercent = (part: number | null, whole: number | null) => part !== null && whole ? `${winOne.format(part / whole * 100)}%` : "—";
+const winCount = (value: number | null) => value === null ? "—" : winNumber.format(value);
+
+function WinGameCard({ game, stats }: { game: WinGame; stats: [string, string, string?][] }) {
+  return <section className={`aud-card win-slots win-card-${game}`} aria-label={`Статистика ${winGameLabel[game]}`}>
+    <div className="aud-row"><p className="aud-label"><span className={`win-game ${game}`}>{winGameLabel[game]}</span> Статистика</p><span className="aud-chip">за місяць</span></div>
+    <dl className="win-slots-grid">{stats.map(([label, value, hint]) => <div key={label}><dt>{label}</dt><dd>{value}</dd>{hint && <small>{hint}</small>}</div>)}</dl>
+  </section>;
+}
+
+// COSMO this month. Stakes and payouts come from the wallet's own totals; rounds,
+// players and the hit rate need a wallet version that reports them (else "—"),
+// because the journal keeps winning rounds only. The odds are fixed: RTP 98%,
+// about 40% of rounds pay something.
+function CosmoStats({ summary, rows }: { summary: WheelWinSummary; rows: WinRow[] }) {
+  const spent = summary.monthlyCosmoSpentNzr, won = summary.monthlyCosmoWonNzr;
+  const monthStart = winMonthStart();
+  const month = rows.filter((row) => row.game === "cosmo" && row.ts >= monthStart);
+  const rounds = summary.monthlyCosmoRounds;
+  const wins = summary.monthlyCosmoWins ?? month.length;
+  const best = month.reduce<WinRow | null>((top, row) => !top || row.payout > top.payout ? row : top, null);
+  const topPrize = summary.monthlyCosmoTopPrize ?? best?.payout ?? 0;
+  const topMult = summary.monthlyCosmoTopMult ?? (best?.mult ? Math.round(best.mult) : 0);
+  const rtp = spent ? won / spent * 100 : 0;
+  return <WinGameCard game="cosmo" stats={[
+    ["Раундів", winCount(rounds), rounds ? `у середньому ${winNumber.format(spent / rounds)} NZR` : undefined],
+    ["Гравців", winCount(summary.monthlyCosmoPlayers), summary.monthlyCosmoPlayers ? `${winOne.format((rounds || 0) / summary.monthlyCosmoPlayers)} раунду на гравця` : undefined],
+    ["Ставки", `${winNumber.format(spent)} NZR`],
+    ["Виплачено", `${winNumber.format(won)} NZR`],
+    ["Чистий дохід", `${winSigned(spent - won)} NZR`, spent ? `маржа ${winOne.format(100 - rtp)}%` : undefined],
+    ["RTP", spent ? `${winOne.format(rtp)}%` : "—", "ціль 98%"],
+    ["Виграшні раунди", winPercent(wins, rounds), `${winNumber.format(wins)} виграшів · очікувано ~40%`],
+    ["Найбільший виграш", topPrize ? `${winNumber.format(topPrize)} NZR` : "—", topMult ? `×${winNumber.format(topMult)}${best && best.payout === topPrize ? ` · ${best.name}` : ""}` : undefined],
+  ]} />;
+}
+
+// SUNMOON this month: a coin flip, Moon or Sun. Prizes 19/57/90 NZR for 10/30/50 NZR,
+// chances set so every stake returns exactly 98%.
+function SunMoonStats({ summary, rows }: { summary: WheelWinSummary; rows: WinRow[] }) {
+  const spent = summary.monthlySunMoonSpentNzr, won = summary.monthlySunMoonWonNzr;
+  const monthStart = winMonthStart();
+  const month = rows.filter((row) => row.game === "sunmoon" && row.ts >= monthStart);
+  const rounds = summary.monthlySunMoonRounds;
+  const wins = summary.monthlySunMoonWins ?? month.length;
+  const moonPicks = summary.monthlySunMoonMoonPicks, moonResults = summary.monthlySunMoonMoonResults;
+  const rtp = spent ? won / spent * 100 : 0;
+  return <WinGameCard game="sunmoon" stats={[
+    ["Раундів", winCount(rounds), rounds ? `у середньому ${winNumber.format(spent / rounds)} NZR` : undefined],
+    ["Гравців", winCount(summary.monthlySunMoonPlayers), summary.monthlySunMoonPlayers ? `${winOne.format((rounds || 0) / summary.monthlySunMoonPlayers)} раунду на гравця` : undefined],
+    ["Ставки", `${winNumber.format(spent)} NZR`],
+    ["Виплачено", `${winNumber.format(won)} NZR`],
+    ["Чистий дохід", `${winSigned(spent - won)} NZR`, spent ? `маржа ${winOne.format(100 - rtp)}%` : undefined],
+    ["RTP", spent ? `${winOne.format(rtp)}%` : "—", "ціль 98%"],
+    ["Виграшні раунди", winPercent(wins, rounds), `${winNumber.format(wins)} виграшів · очікувано ~52%`],
+    ["Обирають Місяць", winPercent(moonPicks, rounds), moonResults !== null && rounds ? `випадав Місяць у ${winPercent(moonResults, rounds)}` : undefined],
+  ]} />;
 }
 
 function WinsPanel({ wins, summary, refreshing, onRefresh, onSilentRefresh }: { wins: WheelWin[]; summary: WheelWinSummary; refreshing: boolean; onRefresh: () => void; onSilentRefresh: () => void }) {
@@ -2260,8 +2330,8 @@ function WinsPanel({ wins, summary, refreshing, onRefresh, onSilentRefresh }: { 
   const won = summary.monthlyWonNzr;
   const collected = summary.monthlyCollectedNzr;
   const rtp = collected ? won / collected * 100 : 0;
-  const wonByGame: Record<WinGame, number> = { roulette: summary.monthlyWheelWonNzr, plinko: summary.monthlyPlinkoWonNzr, spins: summary.monthlySpinsWonNzr, double: summary.monthlyDoubleWonNzr, slots: summary.monthlySlotsWonNzr };
-  const spentByGame: Record<WinGame, number> = { roulette: summary.monthlyWheelSpentNzr, plinko: summary.monthlyPlinkoSpentNzr, spins: summary.monthlySpinsSpentNzr, double: summary.monthlyDoubleSpentNzr, slots: summary.monthlySlotsSpentNzr };
+  const wonByGame: Record<WinGame, number> = { roulette: summary.monthlyWheelWonNzr, plinko: summary.monthlyPlinkoWonNzr, spins: summary.monthlySpinsWonNzr, double: summary.monthlyDoubleWonNzr, slots: summary.monthlySlotsWonNzr, cosmo: summary.monthlyCosmoWonNzr, sunmoon: summary.monthlySunMoonWonNzr };
+  const spentByGame: Record<WinGame, number> = { roulette: summary.monthlyWheelSpentNzr, plinko: summary.monthlyPlinkoSpentNzr, spins: summary.monthlySpinsSpentNzr, double: summary.monthlyDoubleSpentNzr, slots: summary.monthlySlotsSpentNzr, cosmo: summary.monthlyCosmoSpentNzr, sunmoon: summary.monthlySunMoonSpentNzr };
   const netByGame = Object.fromEntries(winGames.map((item) => [item, spentByGame[item] - wonByGame[item]])) as Record<WinGame, number>;
   const rtpText = winGames.filter((item) => spentByGame[item]).map((item) => `${winGameLabel[item]} ${winOne.format(wonByGame[item] / spentByGame[item] * 100)}%`).join(", ");
 
@@ -2313,7 +2383,7 @@ function WinsPanel({ wins, summary, refreshing, onRefresh, onSilentRefresh }: { 
 
   return <section className="win aud">
     <header className="aud-head">
-      <div><p className="aud-crumbs reg-eyebrow">Рулетка, Plinko, Spins, Double і Slots</p><h1>Виграші <span>користувачів</span></h1><p className="aud-hint">Реєстр призів, отриманих в іграх Nezeriya Wallet</p></div>
+      <div><p className="aud-crumbs reg-eyebrow">Рулетка, Plinko, Spins, Double, Slots, COSMO і SUNMOON</p><h1>Виграші <span>користувачів</span></h1><p className="aud-hint">Реєстр призів, отриманих в іграх Nezeriya Wallet</p></div>
       <button className={`aud-live${refreshing ? " loading" : ""}`} type="button" onClick={onRefresh} disabled={refreshing} title="Оновити зараз"><i />{refreshing ? "Оновлення…" : seconds < 5 ? "Live · щойно" : `Live · ${seconds} с тому`}</button>
     </header>
 
@@ -2342,6 +2412,10 @@ function WinsPanel({ wins, summary, refreshing, onRefresh, onSilentRefresh }: { 
     </section>
 
     <SlotsStats summary={summary} rows={rows} />
+    <div className="win-duo">
+      <CosmoStats summary={summary} rows={rows} />
+      <SunMoonStats summary={summary} rows={rows} />
+    </div>
 
     <section className="win-grid">
       <article className="reg-card win-history" ref={historyRef} aria-labelledby="winHistoryTitle">
