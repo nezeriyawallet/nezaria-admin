@@ -1336,6 +1336,13 @@ h1, h2 { overflow-wrap: break-word; hyphens: auto; }
 .screen.app.lg .ap-nav .n4 { width: 36px; height: 36px; }
 .screen.app.lg .ap-nav .n5 { width: 30px; height: 30px; mix-blend-mode: normal; opacity: .55; }
 
-/* Cursor FX v2: liquid chrome (2026-11-26) */
+/* Cursor FX v3: spotlight grid + ring (2026-11-26) */
 .cfx-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9998; mix-blend-mode: screen; }
-@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) { .cfx-canvas { display: none; } }
+.cfx-ring {
+  position: fixed; left: 0; top: 0; width: 34px; height: 34px; border-radius: 50%;
+  border: 1.5px solid #fff; pointer-events: none; z-index: 9999; mix-blend-mode: difference;
+  opacity: 0; transition: opacity .3s, background-color .25s, border-width .25s; will-change: transform;
+}
+.cfx-ring.on { opacity: 1; }
+.cfx-ring.hot { background: #fff; border-width: 0; }
+@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) { .cfx-canvas, .cfx-ring { display: none; } }

@@ -287,9 +287,9 @@
   go(0);
 })();
 
-// Cursor FX v2 (2026-11-26): "liquid chrome". A drop of mercury follows the pointer on a spring,
-// stretches into a tail when you move, throws off droplets that merge back, splashes on click.
-// Rendered as metaballs at 1/3 resolution only around the drop. Desktop only.
+// Cursor FX v3 (2026-11-26): spotlight that reveals a dot grid around the pointer (dots swell and
+// part like under a lens), a soft light that trails the pointer, a ring cursor that inverts what it
+// hovers, and a light wave across the grid on click. Desktop only.
 (() => {
   const fine = matchMedia("(hover: hover) and (pointer: fine)").matches;
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -298,12 +298,13 @@
   const cv = document.createElement("canvas");
   cv.className = "cfx-canvas";
   cv.setAttribute("aria-hidden", "true");
-  document.body.append(cv);
+  const ring = document.createElement("div");
+  ring.className = "cfx-ring";
+  ring.setAttribute("aria-hidden", "true");
+  document.body.append(cv, ring);
   const ctx = cv.getContext("2d");
-  const off = document.createElement("canvas");
-  const octx = off.getContext("2d");
-  const S = 1.5;                       // field resolution in CSS px
 
+  const GAP = 24, R = 260;                // grid step and spotlight radius
   let W = 0, H = 0, dpr = 1;
   const resize = () => {
     dpr = Math.min(devicePixelRatio || 1, 2);
@@ -314,170 +315,114 @@
   resize();
   addEventListener("resize", resize);
 
-  const P = { x: -999, y: -999, in: false, hot: 0, th: 0 };
-  const N = 9;                                  // spine of the drop
-  const spine = Array.from({ length: N }, (_, i) => ({ x: -999, y: -999, vx: 0, vy: 0, r: 13 - i * 1.05 }));
-  const drops = [];                              // loose droplets {x,y,vx,vy,r,life}
-  const waves = [];                              // click ripples
-  let raf = 0, last = 0, energy = 0;
-  const rand = (a, b) => a + Math.random() * (b - a);
+  const P = { x: W / 2, y: H / 2, in: false };
+  const S = { x: W / 2, y: H / 2, a: 0 };     // smoothed spotlight
+  const G = { x: W / 2, y: H / 2 };           // slower glow
+  const C = { x: W / 2, y: H / 2, s: 1, ts: 1 }; // ring
+  const waves = [];
+  let raf = 0, last = 0, hot = false;
 
   addEventListener("pointermove", (e) => {
     if (e.pointerType !== "mouse") return;
-    if (!P.in) { P.in = true; spine.forEach((s) => { s.x = e.clientX; s.y = e.clientY; s.vx = s.vy = 0; }); }
-    const dx = e.clientX - P.x, dy = e.clientY - P.y, sp = Math.hypot(dx, dy);
     P.x = e.clientX; P.y = e.clientY;
-    if (sp > 28 && sp < 400 && drops.length < 40 && Math.random() < .5) {
-      const t = spine[N - 2 - ((Math.random() * 3) | 0)];
-      drops.push({ x: t.x, y: t.y, vx: -dx * .06 + rand(-1.5, 1.5), vy: -dy * .06 + rand(-1.5, 1.5), r: rand(3, 6.5), life: 1 });
-    }
-    const t = e.target.closest && e.target.closest("a, button, [role=button], input, select, textarea, label, .btn");
-    P.th = t ? 1 : 0;
-    energy = 1;
+    if (!P.in) { P.in = true; S.x = G.x = C.x = P.x; S.y = G.y = C.y = P.y; ring.classList.add("on"); }
+    const t = e.target.closest && e.target.closest("a, button, [role=button], input, select, textarea, label, summary");
+    if (!!t !== hot) { hot = !!t; ring.classList.toggle("hot", hot); }
+    C.ts = hot ? 1.9 : 1;
     wake();
   }, { passive: true });
-
-  const leave = () => { P.in = false; };
+  const leave = () => { P.in = false; ring.classList.remove("on"); wake(); };
   document.documentElement.addEventListener("pointerleave", leave);
   addEventListener("blur", leave);
+  addEventListener("scroll", wake, { passive: true });
 
   addEventListener("pointerdown", (e) => {
     if (e.pointerType !== "mouse") return;
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2 + rand(-.25, .25), v = rand(3, 7);
-      drops.push({ x: e.clientX, y: e.clientY, vx: Math.cos(a) * v, vy: Math.sin(a) * v, r: rand(2.5, 6), life: 1 });
-    }
-    waves.push({ x: e.clientX, y: e.clientY, life: 1 });
-    spine[0].r = 6;  // the head "squishes" and refills
-    energy = 1;
+    waves.push({ x: e.clientX, y: e.clientY, r: 0 });
+    C.s *= .7;
     wake();
   }, { passive: true });
 
-  // chrome palette: reflection of a dark studio with a bright horizon
-  const shade = (nx, ny, nz) => {
-    // reflect the view ray (0,0,-1) about the normal; ry > 0 looks at the floor, ry < 0 at the sky
-    const up = -2 * nz * ny;                                            // reflected ray height: sky > 0 > floor
-    const k = Math.min(1, Math.max(0, (up + .06) / .3)), sm = k * k * (3 - 2 * k);
-    let c = 14 + 225 * sm * (.75 + .25 * Math.min(1, up + .5));
-    c += 45 * Math.exp(-Math.pow((up - .5) * 3, 2));                    // soft horizon glow
-    const spec = Math.pow(Math.max(0, -nx * .5 - ny * .55 + nz * .67), 60) * 255;  // key light, top-left
-    c = c * (.6 + .4 * nz) + spec + (1 - nz) * 25;                       // a little rim light
-    return c > 255 ? 255 : c;
-  };
-
-  let img = null, hf = null, ff = null, tf = null;
-  function render() {
-    const balls = [];
-    for (let i = 0; i < N; i++) {          // spine plus midpoints, so the tail is a smooth tube, not beads
-      const s = spine[i];
-      if (s.r > .5) balls.push(s);
-      const t = spine[i + 1];
-      if (t && t.r > .5) balls.push({ x: (s.x + t.x) / 2, y: (s.y + t.y) / 2, r: (s.r + t.r) / 2 });
-    }
-    for (const d of drops) balls.push({ x: d.x, y: d.y, r: d.r * Math.min(1, d.life * 2) });
-    if (!balls.length || !P.in && !drops.length && energy < .02) return;
-
-    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-    for (const b of balls) {
-      x0 = Math.min(x0, b.x - b.r * 1.5); y0 = Math.min(y0, b.y - b.r * 1.5);
-      x1 = Math.max(x1, b.x + b.r * 1.5); y1 = Math.max(y1, b.y + b.r * 1.5);
-    }
-    x0 = Math.max(0, Math.floor(x0)); y0 = Math.max(0, Math.floor(y0));
-    x1 = Math.min(W, Math.ceil(x1)); y1 = Math.min(H, Math.ceil(y1));
-    const gw = Math.ceil((x1 - x0) / S), gh = Math.ceil((y1 - y0) / S);
-    if (gw <= 0 || gh <= 0 || gw * gh > 160000) return;
-    if (off.width !== gw || off.height !== gh) { off.width = gw; off.height = gh; img = octx.createImageData(gw, gh); }
-    const data = img.data;
-    const n = balls.length, bx = new Float32Array(n), by = new Float32Array(n), br = new Float32Array(n);
-    for (let i = 0; i < n; i++) { bx[i] = balls[i].x; by[i] = balls[i].y; br[i] = 1 / (2 * balls[i].r * balls[i].r + 1e-3); }
-
-    // pass 1: field -> height. For one ball h = sqrt(1 - d²/r²), i.e. an exact hemisphere; blends smoothly when balls merge
-    if (!hf || hf.length < gw * gh) { hf = new Float32Array(gw * gh); ff = new Float32Array(gw * gh); }
-    for (let j = 0, q = 0; j < gh; j++) {
-      const y = y0 + j * S + S / 2;
-      for (let i = 0; i < gw; i++, q++) {
-        const x = x0 + i * S + S / 2;
-        let f = 0;
-        for (let k = 0; k < n; k++) { const dx = x - bx[k], dy = y - by[k], u = 1 - (dx * dx + dy * dy) * br[k]; if (u > 0) f += u * u; }
-        ff[q] = f; const hh = 2 * Math.sqrt(f) - 1; hf[q] = hh > 0 ? Math.sqrt(hh > 1 ? 1 + (hh - 1) * .15 : hh) : 0;
-      }
-    }
-    // soften the height map (separable 1-2-1 blur) to iron out bumps between merged balls
-    if (!tf || tf.length < gw * gh) tf = new Float32Array(gw * gh);
-    for (let j = 0, q = 0; j < gh; j++) for (let i = 0; i < gw; i++, q++)
-      tf[q] = ((i > 0 ? hf[q - 1] : 0) + 2 * hf[q] + (i < gw - 1 ? hf[q + 1] : 0)) * .25;
-    for (let j = 0, q = 0; j < gh; j++) for (let i = 0; i < gw; i++, q++)
-      hf[q] = ((j > 0 ? tf[q - gw] : 0) + 2 * tf[q] + (j < gh - 1 ? tf[q + gw] : 0)) * .25;
-    // pass 2: normals from height differences, then chrome shading
-    const R = 12 / S;
-    for (let j = 0, q = 0, p = 0; j < gh; j++) {
-      for (let i = 0; i < gw; i++, q++, p += 4) {
-        const f = ff[q];
-        if (f < .12) { data[p + 3] = 0; continue; }
-        const hl = i > 0 ? hf[q - 1] : 0, hr = i < gw - 1 ? hf[q + 1] : 0;
-        const hu = j > 0 ? hf[q - gw] : 0, hd = j < gh - 1 ? hf[q + gw] : 0;
-        let nx = (hl - hr) * R * .5, ny = (hu - hd) * R * .5, nz = 1;
-        const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
-        const c = shade(nx, ny, nz);
-        data[p] = c; data[p + 1] = c; data[p + 2] = c * 1.03 > 255 ? 255 : c * 1.03;
-        const ea = (f - .12) / .16; data[p + 3] = ea >= 1 ? 255 : ea * ea * (3 - 2 * ea) * 255;
-      }
-    }
-    octx.putImageData(img, 0, 0);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(off, x0, y0, gw * S, gh * S);
-  }
-
   function frame(t) {
     raf = 0;
-    const dt = Math.min(2.5, (t - (last || t)) / 16.67); last = t;
+    const dt = Math.min(3, (t - (last || t)) / 16.67); last = t;
+    const ease = (k) => 1 - Math.pow(1 - k, dt);
+    S.x += (P.x - S.x) * ease(.22); S.y += (P.y - S.y) * ease(.22);
+    G.x += (P.x - G.x) * ease(.06); G.y += (P.y - G.y) * ease(.06);
+    C.x += (P.x - C.x) * ease(.28); C.y += (P.y - C.y) * ease(.28);
+    C.s += (C.ts - C.s) * ease(.2);
+    S.a += ((P.in ? 1 : 0) - S.a) * ease(.08);
+    ring.style.transform = `translate3d(${C.x}px,${C.y}px,0) translate(-50%,-50%) scale(${C.s})`;
+
     ctx.clearRect(0, 0, W, H);
 
-    // spine physics: head springs to pointer, each link springs to the one before it
-    P.hot += (P.th - P.hot) * .15 * dt;
-    const headR = 14 + P.hot * 9;
-    for (let i = 0; i < N; i++) {
-      const s = spine[i], tx = i ? spine[i - 1].x : P.x, ty = i ? spine[i - 1].y : P.y;
-      const k = i ? .34 : .24, damp = i ? .55 : .62;
-      s.vx = (s.vx + (tx - s.x) * k * dt) * Math.pow(damp, dt);
-      s.vy = (s.vy + (ty - s.y) * k * dt) * Math.pow(damp, dt);
-      s.x += s.vx * dt; s.y += s.vy * dt;
-      const target = P.in ? (i ? (headR - i * 1.05 * (1 + P.hot * .4)) : headR) : 0;
-      s.r += (Math.max(0, target) - s.r) * (i ? .2 : .12) * dt;
-    }
-    // droplets: fly, slow down, get pulled back to the drop and shrink
-    for (let i = drops.length - 1; i >= 0; i--) {
-      const d = drops[i];
-      const h = spine[0], dx = h.x - d.x, dy = h.y - d.y, dist = Math.hypot(dx, dy) + 1;
-      if (P.in) { d.vx += dx / dist * .18 * dt; d.vy += dy / dist * .18 * dt; }
-      d.vx *= Math.pow(.92, dt); d.vy *= Math.pow(.92, dt);
-      d.x += d.vx * dt; d.y += d.vy * dt;
-      d.life -= (P.in && dist < h.r * 1.2 ? .08 : .012) * dt;
-      if (d.life <= 0) drops.splice(i, 1);
+    // soft trailing light
+    if (S.a > .01) {
+      const g = ctx.createRadialGradient(G.x, G.y, 0, G.x, G.y, 420);
+      g.addColorStop(0, `rgba(255,255,255,${.12 * S.a})`);
+      g.addColorStop(.45, `rgba(255,255,255,${.04 * S.a})`);
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = g; ctx.fillRect(G.x - 420, G.y - 420, 840, 840);
     }
 
-    // click ripples: thin silver rings under the drop
+    // waves advance
     for (let i = waves.length - 1; i >= 0; i--) {
-      const w = waves[i];
-      w.life -= .022 * dt;
-      if (w.life <= 0) { waves.splice(i, 1); continue; }
-      const e = 1 - Math.pow(w.life, 3);
-      for (let k = 0; k < 2; k++) {
-        const r = 10 + e * (70 - k * 26);
-        ctx.strokeStyle = `rgba(230,233,240,${w.life * (k ? .25 : .55)})`;
-        ctx.lineWidth = 1.2 * w.life + .4;
-        ctx.beginPath(); ctx.arc(w.x, w.y, r, 0, 7); ctx.stroke();
+      waves[i].r += 11 * dt;
+      if (waves[i].r > Math.hypot(W, H)) waves.splice(i, 1);
+    }
+
+    // dot grid (scrolls with the page)
+    const oy = -(scrollY % GAP), ox = (W % GAP) / 2;
+    const full = waves.length > 0;
+    const x0 = full ? 0 : Math.max(0, Math.floor((S.x - R - ox) / GAP)), x1 = full ? Math.ceil(W / GAP) : Math.ceil((S.x + R - ox) / GAP);
+    const y0 = full ? 0 : Math.max(0, Math.floor((S.y - R - oy) / GAP)), y1 = full ? Math.ceil(H / GAP) + 1 : Math.ceil((S.y + R - oy) / GAP);
+    ctx.fillStyle = "#fff";
+    for (let gy = y0; gy <= y1; gy++) {
+      const by = oy + gy * GAP;
+      for (let gx = x0; gx <= x1; gx++) {
+        const bx = ox + gx * GAP;
+        let x = bx, y = by, a = 0, s = 0;
+        // spotlight lens
+        const dx = bx - S.x, dy = by - S.y, d = Math.hypot(dx, dy);
+        if (d < R && S.a > .01) {
+          const k = 1 - d / R, k2 = k * k * (3 - 2 * k);
+          a += (.12 + k2 * .95) * S.a * Math.min(1, k * 4); s += k2 * 2 * S.a;
+          const push = k2 * 12 * S.a / (d + 1);
+          x += dx * push; y += dy * push;
+        }
+        // click waves
+        for (const w of waves) {
+          const wd = Math.hypot(bx - w.x, by - w.y), band = 1 - Math.abs(wd - w.r) / 60;
+          if (band > 0) {
+            const fade = Math.max(0, 1 - w.r / 1100), b = band * band * fade;
+            a += b; s += b * 2.2;
+            const push = b * 6 / (wd + 1);
+            x += (bx - w.x) * push; y += (by - w.y) * push;
+          }
+        }
+        if (a < .02) continue;
+        ctx.globalAlpha = a > 1 ? 1 : a;
+        const r = .8 + s;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
       }
     }
+    ctx.globalAlpha = 1;
 
-    render();
+    // fine crosshair lines through the spotlight, fading out
+    if (S.a > .01) {
+      const lg = ctx.createRadialGradient(S.x, S.y, 0, S.x, S.y, R * 1.15);
+      lg.addColorStop(0, `rgba(255,255,255,${.22 * S.a})`); lg.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.strokeStyle = lg; ctx.lineWidth = 1;
+      ctx.beginPath();
+      const gyN = Math.round((S.y - oy) / GAP) * GAP + oy, gxN = Math.round((S.x - ox) / GAP) * GAP + ox;
+      ctx.moveTo(S.x - R, gyN + .5); ctx.lineTo(S.x + R, gyN + .5);
+      ctx.moveTo(gxN + .5, S.y - R); ctx.lineTo(gxN + .5, S.y + R);
+      ctx.stroke();
+    }
 
-    let motion = Math.abs(P.x - spine[N - 1].x) + Math.abs(P.y - spine[N - 1].y);
-    for (const s of spine) motion += Math.abs(s.vx) + Math.abs(s.vy);
-    energy = Math.min(1, motion / 4);
-    const settling = spine.some((s, i) => Math.abs(s.r - (P.in ? Math.max(0, (i ? headR - i * 1.05 * (1 + P.hot * .4) : headR)) : 0)) > .05);
-    if (drops.length || waves.length || energy > .01 || settling) wake();
+    const busy = waves.length || Math.abs(P.x - G.x) + Math.abs(P.y - G.y) > .3 || Math.abs(C.ts - C.s) > .01 ||
+      Math.abs((P.in ? 1 : 0) - S.a) > .01;
+    if (busy) wake();
   }
   function wake() { if (!raf && !document.hidden) raf = requestAnimationFrame(frame); }
   document.addEventListener("visibilitychange", () => { last = 0; wake(); });
