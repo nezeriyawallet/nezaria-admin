@@ -287,8 +287,8 @@
   go(0);
 })();
 
-// Cursor FX v4 (2026-11-26): a small ring around the cursor and a short silver tail with a few
-// sparks behind it when the mouse moves. Compact, cursor-sized. Desktop only.
+// Cursor FX (2026-11-26): a short silver tail with a few sparks behind the cursor when the mouse
+// moves. Compact, cursor-sized, no ring. Desktop only.
 (() => {
   const fine = matchMedia("(hover: hover) and (pointer: fine)").matches;
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -297,10 +297,7 @@
   const cv = document.createElement("canvas");
   cv.className = "cfx-canvas";
   cv.setAttribute("aria-hidden", "true");
-  const ring = document.createElement("div");
-  ring.className = "cfx-ring";
-  ring.setAttribute("aria-hidden", "true");
-  document.body.append(cv, ring);
+  document.body.append(cv);
   const ctx = cv.getContext("2d");
 
   let W = 0, H = 0, dpr = 1;
@@ -315,15 +312,14 @@
 
   const TAIL = 140;                      // ms of movement kept in the tail
   const P = { x: -99, y: -99, in: false };
-  const C = { x: -99, y: -99, s: 1, ts: 1 };
-  const pts = [], sparks = [], pulses = [];
-  let raf = 0, last = 0, hot = false, px = 0, py = 0;
+  const pts = [], sparks = [];
+  let raf = 0, last = 0, px = 0, py = 0;
   const rand = (a, b) => a + Math.random() * (b - a);
 
   addEventListener("pointermove", (e) => {
     if (e.pointerType !== "mouse") return;
     const now = performance.now();
-    if (!P.in) { P.in = true; C.x = px = e.clientX; C.y = py = e.clientY; ring.classList.add("on"); }
+    if (!P.in) { P.in = true; px = e.clientX; py = e.clientY; }
     P.x = e.clientX; P.y = e.clientY;
     pts.push({ x: P.x, y: P.y, t: now });
     const sp = Math.hypot(P.x - px, P.y - py);
@@ -331,28 +327,17 @@
       sparks.push({ x: P.x, y: P.y, vx: (px - P.x) * .05 + rand(-.6, .6), vy: (py - P.y) * .05 + rand(-.6, .6), life: 1, r: rand(.6, 1.4) });
     }
     px = P.x; py = P.y;
-    const t = e.target.closest && e.target.closest("a, button, [role=button], input, select, textarea, label, summary");
-    if (!!t !== hot) { hot = !!t; ring.classList.toggle("hot", hot); C.ts = hot ? 1.6 : 1; }
     wake();
   }, { passive: true });
-  const leave = () => { P.in = false; ring.classList.remove("on"); };
+  const leave = () => { P.in = false; };
   document.documentElement.addEventListener("pointerleave", leave);
   addEventListener("blur", leave);
 
-  addEventListener("pointerdown", (e) => {
-    if (e.pointerType !== "mouse") return;
-    pulses.push({ x: e.clientX, y: e.clientY, life: 1 });
-    C.s = C.ts * .75;
-    wake();
-  }, { passive: true });
 
   function frame(t) {
     raf = 0;
     const dt = Math.min(3, (t - (last || t)) / 16.67); last = t;
     const ease = (k) => 1 - Math.pow(1 - k, dt);
-    C.x += (P.x - C.x) * ease(.55); C.y += (P.y - C.y) * ease(.55);
-    C.s += (C.ts - C.s) * ease(.22);
-    ring.style.transform = `translate3d(${C.x}px,${C.y}px,0) translate(-50%,-50%) scale(${C.s})`;
 
     ctx.clearRect(0, 0, W, H);
     const now = performance.now();
@@ -384,17 +369,7 @@
     }
     ctx.globalAlpha = 1;
 
-    // click: a small ring that pops out from the cursor
-    for (let i = pulses.length - 1; i >= 0; i--) {
-      const p = pulses[i];
-      p.life -= .06 * dt;
-      if (p.life <= 0) { pulses.splice(i, 1); continue; }
-      const e = 1 - p.life * p.life;
-      ctx.strokeStyle = `rgba(255,255,255,${p.life * .8})`; ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.arc(p.x, p.y, 10 + e * 16, 0, 6.2832); ctx.stroke();
-    }
-
-    if (pts.length > 1 || sparks.length || pulses.length || Math.abs(P.x - C.x) + Math.abs(P.y - C.y) > .2 || Math.abs(C.ts - C.s) > .01) wake();
+    if (pts.length > 1 || sparks.length) wake();
   }
   function wake() { if (!raf && !document.hidden) raf = requestAnimationFrame(frame); }
   document.addEventListener("visibilitychange", () => { last = 0; wake(); });
