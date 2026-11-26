@@ -287,9 +287,8 @@
   go(0);
 })();
 
-// Cursor FX v3 (2026-11-26): spotlight that reveals a dot grid around the pointer (dots swell and
-// part like under a lens), a soft light that trails the pointer, a ring cursor that inverts what it
-// hovers, and a light wave across the grid on click. Desktop only.
+// Cursor FX v4 (2026-11-26): a small ring around the cursor and a short silver tail with a few
+// sparks behind it when the mouse moves. Compact, cursor-sized. Desktop only.
 (() => {
   const fine = matchMedia("(hover: hover) and (pointer: fine)").matches;
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -304,7 +303,6 @@
   document.body.append(cv, ring);
   const ctx = cv.getContext("2d");
 
-  const GAP = 24, R = 260;                // grid step and spotlight radius
   let W = 0, H = 0, dpr = 1;
   const resize = () => {
     dpr = Math.min(devicePixelRatio || 1, 2);
@@ -315,31 +313,36 @@
   resize();
   addEventListener("resize", resize);
 
-  const P = { x: W / 2, y: H / 2, in: false };
-  const S = { x: W / 2, y: H / 2, a: 0 };     // smoothed spotlight
-  const G = { x: W / 2, y: H / 2 };           // slower glow
-  const C = { x: W / 2, y: H / 2, s: 1, ts: 1 }; // ring
-  const waves = [];
-  let raf = 0, last = 0, hot = false;
+  const TAIL = 140;                      // ms of movement kept in the tail
+  const P = { x: -99, y: -99, in: false };
+  const C = { x: -99, y: -99, s: 1, ts: 1 };
+  const pts = [], sparks = [], pulses = [];
+  let raf = 0, last = 0, hot = false, px = 0, py = 0;
+  const rand = (a, b) => a + Math.random() * (b - a);
 
   addEventListener("pointermove", (e) => {
     if (e.pointerType !== "mouse") return;
+    const now = performance.now();
+    if (!P.in) { P.in = true; C.x = px = e.clientX; C.y = py = e.clientY; ring.classList.add("on"); }
     P.x = e.clientX; P.y = e.clientY;
-    if (!P.in) { P.in = true; S.x = G.x = C.x = P.x; S.y = G.y = C.y = P.y; ring.classList.add("on"); }
+    pts.push({ x: P.x, y: P.y, t: now });
+    const sp = Math.hypot(P.x - px, P.y - py);
+    if (sp > 14 && sparks.length < 30 && Math.random() < Math.min(.7, sp / 60)) {
+      sparks.push({ x: P.x, y: P.y, vx: (px - P.x) * .05 + rand(-.6, .6), vy: (py - P.y) * .05 + rand(-.6, .6), life: 1, r: rand(.6, 1.4) });
+    }
+    px = P.x; py = P.y;
     const t = e.target.closest && e.target.closest("a, button, [role=button], input, select, textarea, label, summary");
-    if (!!t !== hot) { hot = !!t; ring.classList.toggle("hot", hot); }
-    C.ts = hot ? 1.9 : 1;
+    if (!!t !== hot) { hot = !!t; ring.classList.toggle("hot", hot); C.ts = hot ? 1.6 : 1; }
     wake();
   }, { passive: true });
-  const leave = () => { P.in = false; ring.classList.remove("on"); wake(); };
+  const leave = () => { P.in = false; ring.classList.remove("on"); };
   document.documentElement.addEventListener("pointerleave", leave);
   addEventListener("blur", leave);
-  addEventListener("scroll", wake, { passive: true });
 
   addEventListener("pointerdown", (e) => {
     if (e.pointerType !== "mouse") return;
-    waves.push({ x: e.clientX, y: e.clientY, r: 0 });
-    C.s *= .7;
+    pulses.push({ x: e.clientX, y: e.clientY, life: 1 });
+    C.s = C.ts * .75;
     wake();
   }, { passive: true });
 
@@ -347,82 +350,51 @@
     raf = 0;
     const dt = Math.min(3, (t - (last || t)) / 16.67); last = t;
     const ease = (k) => 1 - Math.pow(1 - k, dt);
-    S.x += (P.x - S.x) * ease(.22); S.y += (P.y - S.y) * ease(.22);
-    G.x += (P.x - G.x) * ease(.06); G.y += (P.y - G.y) * ease(.06);
-    C.x += (P.x - C.x) * ease(.28); C.y += (P.y - C.y) * ease(.28);
-    C.s += (C.ts - C.s) * ease(.2);
-    S.a += ((P.in ? 1 : 0) - S.a) * ease(.08);
+    C.x += (P.x - C.x) * ease(.55); C.y += (P.y - C.y) * ease(.55);
+    C.s += (C.ts - C.s) * ease(.22);
     ring.style.transform = `translate3d(${C.x}px,${C.y}px,0) translate(-50%,-50%) scale(${C.s})`;
 
     ctx.clearRect(0, 0, W, H);
+    const now = performance.now();
+    while (pts.length && now - pts[0].t > TAIL) pts.shift();
 
-    // soft trailing light
-    if (S.a > .01) {
-      const g = ctx.createRadialGradient(G.x, G.y, 0, G.x, G.y, 420);
-      g.addColorStop(0, `rgba(255,255,255,${.12 * S.a})`);
-      g.addColorStop(.45, `rgba(255,255,255,${.04 * S.a})`);
-      g.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = g; ctx.fillRect(G.x - 420, G.y - 420, 840, 840);
-    }
-
-    // waves advance
-    for (let i = waves.length - 1; i >= 0; i--) {
-      waves[i].r += 11 * dt;
-      if (waves[i].r > Math.hypot(W, H)) waves.splice(i, 1);
-    }
-
-    // dot grid (scrolls with the page)
-    const oy = -(scrollY % GAP), ox = (W % GAP) / 2;
-    const full = waves.length > 0;
-    const x0 = full ? 0 : Math.max(0, Math.floor((S.x - R - ox) / GAP)), x1 = full ? Math.ceil(W / GAP) : Math.ceil((S.x + R - ox) / GAP);
-    const y0 = full ? 0 : Math.max(0, Math.floor((S.y - R - oy) / GAP)), y1 = full ? Math.ceil(H / GAP) + 1 : Math.ceil((S.y + R - oy) / GAP);
-    ctx.fillStyle = "#fff";
-    for (let gy = y0; gy <= y1; gy++) {
-      const by = oy + gy * GAP;
-      for (let gx = x0; gx <= x1; gx++) {
-        const bx = ox + gx * GAP;
-        let x = bx, y = by, a = 0, s = 0;
-        // spotlight lens
-        const dx = bx - S.x, dy = by - S.y, d = Math.hypot(dx, dy);
-        if (d < R && S.a > .01) {
-          const k = 1 - d / R, k2 = k * k * (3 - 2 * k);
-          a += (.12 + k2 * .95) * S.a * Math.min(1, k * 4); s += k2 * 2 * S.a;
-          const push = k2 * 12 * S.a / (d + 1);
-          x += dx * push; y += dy * push;
-        }
-        // click waves
-        for (const w of waves) {
-          const wd = Math.hypot(bx - w.x, by - w.y), band = 1 - Math.abs(wd - w.r) / 60;
-          if (band > 0) {
-            const fade = Math.max(0, 1 - w.r / 1100), b = band * band * fade;
-            a += b; s += b * 2.2;
-            const push = b * 6 / (wd + 1);
-            x += (bx - w.x) * push; y += (by - w.y) * push;
-          }
-        }
-        if (a < .02) continue;
-        ctx.globalAlpha = a > 1 ? 1 : a;
-        const r = .8 + s;
-        ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
+    // tail: tapered silver ribbon, thin at the end, ~5px at the cursor
+    if (pts.length > 1) {
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        const k = 1 - (now - b.t) / TAIL;            // 1 = newest
+        if (k <= 0) continue;
+        ctx.strokeStyle = `rgba(255,255,255,${.08 * k})`; ctx.lineWidth = 9 * k;   // soft glow
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        ctx.strokeStyle = `rgba(240,242,248,${.85 * k})`; ctx.lineWidth = .5 + 3.5 * k;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       }
+    }
+
+    // sparks: tiny glints that fall off the tail
+    ctx.fillStyle = "#fff";
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const s = sparks[i];
+      s.x += s.vx * dt; s.y += s.vy * dt; s.vx *= .94; s.vy *= .94;
+      s.life -= .035 * dt;
+      if (s.life <= 0) { sparks.splice(i, 1); continue; }
+      ctx.globalAlpha = s.life;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 6.2832); ctx.fill();
     }
     ctx.globalAlpha = 1;
 
-    // fine crosshair lines through the spotlight, fading out
-    if (S.a > .01) {
-      const lg = ctx.createRadialGradient(S.x, S.y, 0, S.x, S.y, R * 1.15);
-      lg.addColorStop(0, `rgba(255,255,255,${.22 * S.a})`); lg.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.strokeStyle = lg; ctx.lineWidth = 1;
-      ctx.beginPath();
-      const gyN = Math.round((S.y - oy) / GAP) * GAP + oy, gxN = Math.round((S.x - ox) / GAP) * GAP + ox;
-      ctx.moveTo(S.x - R, gyN + .5); ctx.lineTo(S.x + R, gyN + .5);
-      ctx.moveTo(gxN + .5, S.y - R); ctx.lineTo(gxN + .5, S.y + R);
-      ctx.stroke();
+    // click: a small ring that pops out from the cursor
+    for (let i = pulses.length - 1; i >= 0; i--) {
+      const p = pulses[i];
+      p.life -= .06 * dt;
+      if (p.life <= 0) { pulses.splice(i, 1); continue; }
+      const e = 1 - p.life * p.life;
+      ctx.strokeStyle = `rgba(255,255,255,${p.life * .8})`; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 10 + e * 16, 0, 6.2832); ctx.stroke();
     }
 
-    const busy = waves.length || Math.abs(P.x - G.x) + Math.abs(P.y - G.y) > .3 || Math.abs(C.ts - C.s) > .01 ||
-      Math.abs((P.in ? 1 : 0) - S.a) > .01;
-    if (busy) wake();
+    if (pts.length > 1 || sparks.length || pulses.length || Math.abs(P.x - C.x) + Math.abs(P.y - C.y) > .2 || Math.abs(C.ts - C.s) > .01) wake();
   }
   function wake() { if (!raf && !document.hidden) raf = requestAnimationFrame(frame); }
   document.addEventListener("visibilitychange", () => { last = 0; wake(); });

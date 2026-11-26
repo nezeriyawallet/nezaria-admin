@@ -1336,12 +1336,12 @@ h1, h2 { overflow-wrap: break-word; hyphens: auto; }
 .screen.app.lg .ap-nav .n4 { width: 36px; height: 36px; }
 .screen.app.lg .ap-nav .n5 { width: 30px; height: 30px; mix-blend-mode: normal; opacity: .55; }
 
-/* Cursor FX v3: spotlight grid + ring (2026-11-26) */
+/* Cursor FX v4: small ring + short tail (2026-11-26) */
 .cfx-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9998; mix-blend-mode: screen; }
 .cfx-ring {
-  position: fixed; left: 0; top: 0; width: 34px; height: 34px; border-radius: 50%;
+  position: fixed; left: 0; top: 0; width: 22px; height: 22px; border-radius: 50%;
   border: 1.5px solid #fff; pointer-events: none; z-index: 9999; mix-blend-mode: difference;
-  opacity: 0; transition: opacity .3s, background-color .25s, border-width .25s; will-change: transform;
+  opacity: 0; transition: opacity .3s, background-color .2s, border-width .2s; will-change: transform;
 }
 .cfx-ring.on { opacity: 1; }
 .cfx-ring.hot { background: #fff; border-width: 0; }
