@@ -287,8 +287,9 @@
   go(0);
 })();
 
-// Cursor FX (2026-11-26): silver comet trail + "blockchain" nodes that link up and dissolve,
-// a glass lens that follows the pointer and a hex shockwave on click. Desktop only.
+// Cursor FX v2 (2026-11-26): "liquid chrome". A drop of mercury follows the pointer on a spring,
+// stretches into a tail when you move, throws off droplets that merge back, splashes on click.
+// Rendered as metaballs at 1/3 resolution only around the drop. Desktop only.
 (() => {
   const fine = matchMedia("(hover: hover) and (pointer: fine)").matches;
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -297,12 +298,11 @@
   const cv = document.createElement("canvas");
   cv.className = "cfx-canvas";
   cv.setAttribute("aria-hidden", "true");
-  const lens = document.createElement("div");
-  lens.className = "cfx-lens";
-  lens.setAttribute("aria-hidden", "true");
-  lens.innerHTML = "<i></i>";
-  document.body.append(cv, lens);
+  document.body.append(cv);
   const ctx = cv.getContext("2d");
+  const off = document.createElement("canvas");
+  const octx = off.getContext("2d");
+  const S = 1.5;                       // field resolution in CSS px
 
   let W = 0, H = 0, dpr = 1;
   const resize = () => {
@@ -314,160 +314,171 @@
   resize();
   addEventListener("resize", resize);
 
-  const P = { x: -999, y: -999, lx: -999, ly: -999, in: false };
-  const L = { x: -999, y: -999, s: 1, ts: 1 };
-  const trail = [];           // {x,y,t}
-  const nodes = [];           // blockchain dots
-  const sparks = [];          // little glints and burst shards
-  const rings = [];           // click shockwaves
-  const GLYPHS = ["₮", "◆", "+", "·", "⬡", "$"];
-  let dist = 0, raf = 0, last = 0, hue = 0;
-
+  const P = { x: -999, y: -999, in: false, hot: 0, th: 0 };
+  const N = 9;                                  // spine of the drop
+  const spine = Array.from({ length: N }, (_, i) => ({ x: -999, y: -999, vx: 0, vy: 0, r: 13 - i * 1.05 }));
+  const drops = [];                              // loose droplets {x,y,vx,vy,r,life}
+  const waves = [];                              // click ripples
+  let raf = 0, last = 0, energy = 0;
   const rand = (a, b) => a + Math.random() * (b - a);
 
   addEventListener("pointermove", (e) => {
     if (e.pointerType !== "mouse") return;
+    if (!P.in) { P.in = true; spine.forEach((s) => { s.x = e.clientX; s.y = e.clientY; s.vx = s.vy = 0; }); }
+    const dx = e.clientX - P.x, dy = e.clientY - P.y, sp = Math.hypot(dx, dy);
     P.x = e.clientX; P.y = e.clientY;
-    if (!P.in) { P.in = true; P.lx = P.x; P.ly = P.y; L.x = P.x; L.y = P.y; lens.classList.add("on"); }
-    const dx = P.x - P.lx, dy = P.y - P.ly, d = Math.hypot(dx, dy);
-    dist = Math.min(dist + d, 26 * 4);
-    const now = performance.now();
-    trail.push({ x: P.x, y: P.y, t: now });
-    while (dist > 26) {
-      dist -= 26;
-      nodes.push({ x: P.x + rand(-6, 6), y: P.y + rand(-6, 6), vx: dx * .02 + rand(-.25, .25), vy: dy * .02 + rand(-.25, .25),
-        life: 1, r: rand(1.2, 2.6), sq: Math.random() < .35, rot: rand(0, Math.PI) });
-      if (nodes.length > 70) nodes.shift();
-      if (Math.random() < .28) sparks.push({ x: P.x, y: P.y, vx: rand(-.6, .6) - dx * .01, vy: rand(-1.1, -.3), life: 1,
-        g: GLYPHS[(Math.random() * GLYPHS.length) | 0], s: rand(9, 14), spin: rand(-.04, .04), a: 0 });
+    if (sp > 28 && sp < 400 && drops.length < 40 && Math.random() < .5) {
+      const t = spine[N - 2 - ((Math.random() * 3) | 0)];
+      drops.push({ x: t.x, y: t.y, vx: -dx * .06 + rand(-1.5, 1.5), vy: -dy * .06 + rand(-1.5, 1.5), r: rand(3, 6.5), life: 1 });
     }
-    P.lx = P.x; P.ly = P.y;
-    const t = e.target.closest && e.target.closest("a, button, [role=button], input, select, textarea, label, .tile, .btn");
-    L.ts = t ? 1.9 : 1;
-    lens.classList.toggle("hot", !!t);
+    const t = e.target.closest && e.target.closest("a, button, [role=button], input, select, textarea, label, .btn");
+    P.th = t ? 1 : 0;
+    energy = 1;
     wake();
   }, { passive: true });
 
-  document.documentElement.addEventListener("pointerleave", () => { P.in = false; lens.classList.remove("on"); });
-  addEventListener("blur", () => { P.in = false; lens.classList.remove("on"); });
+  const leave = () => { P.in = false; };
+  document.documentElement.addEventListener("pointerleave", leave);
+  addEventListener("blur", leave);
 
   addEventListener("pointerdown", (e) => {
     if (e.pointerType !== "mouse") return;
-    rings.push({ x: e.clientX, y: e.clientY, life: 1 });
-    for (let i = 0; i < 14; i++) {
-      const a = (i / 14) * Math.PI * 2 + rand(-.2, .2), v = rand(1.6, 3.6);
-      sparks.push({ x: e.clientX, y: e.clientY, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, g: null, s: rand(1, 2.2), spin: 0, a });
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2 + rand(-.25, .25), v = rand(3, 7);
+      drops.push({ x: e.clientX, y: e.clientY, vx: Math.cos(a) * v, vy: Math.sin(a) * v, r: rand(2.5, 6), life: 1 });
     }
-    lens.classList.add("press");
-    setTimeout(() => lens.classList.remove("press"), 160);
+    waves.push({ x: e.clientX, y: e.clientY, life: 1 });
+    spine[0].r = 6;  // the head "squishes" and refills
+    energy = 1;
     wake();
   }, { passive: true });
 
-  const hex = (x, y, r, rot) => {
-    ctx.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const a = rot + i * Math.PI / 3;
-      i ? ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r) : ctx.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
-    }
-    ctx.closePath();
+  // chrome palette: reflection of a dark studio with a bright horizon
+  const shade = (nx, ny, nz) => {
+    // reflect the view ray (0,0,-1) about the normal; ry > 0 looks at the floor, ry < 0 at the sky
+    const up = -2 * nz * ny;                                            // reflected ray height: sky > 0 > floor
+    const k = Math.min(1, Math.max(0, (up + .06) / .3)), sm = k * k * (3 - 2 * k);
+    let c = 14 + 225 * sm * (.75 + .25 * Math.min(1, up + .5));
+    c += 45 * Math.exp(-Math.pow((up - .5) * 3, 2));                    // soft horizon glow
+    const spec = Math.pow(Math.max(0, -nx * .5 - ny * .55 + nz * .67), 60) * 255;  // key light, top-left
+    c = c * (.6 + .4 * nz) + spec + (1 - nz) * 25;                       // a little rim light
+    return c > 255 ? 255 : c;
   };
+
+  let img = null, hf = null, ff = null, tf = null;
+  function render() {
+    const balls = [];
+    for (let i = 0; i < N; i++) {          // spine plus midpoints, so the tail is a smooth tube, not beads
+      const s = spine[i];
+      if (s.r > .5) balls.push(s);
+      const t = spine[i + 1];
+      if (t && t.r > .5) balls.push({ x: (s.x + t.x) / 2, y: (s.y + t.y) / 2, r: (s.r + t.r) / 2 });
+    }
+    for (const d of drops) balls.push({ x: d.x, y: d.y, r: d.r * Math.min(1, d.life * 2) });
+    if (!balls.length || !P.in && !drops.length && energy < .02) return;
+
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (const b of balls) {
+      x0 = Math.min(x0, b.x - b.r * 1.5); y0 = Math.min(y0, b.y - b.r * 1.5);
+      x1 = Math.max(x1, b.x + b.r * 1.5); y1 = Math.max(y1, b.y + b.r * 1.5);
+    }
+    x0 = Math.max(0, Math.floor(x0)); y0 = Math.max(0, Math.floor(y0));
+    x1 = Math.min(W, Math.ceil(x1)); y1 = Math.min(H, Math.ceil(y1));
+    const gw = Math.ceil((x1 - x0) / S), gh = Math.ceil((y1 - y0) / S);
+    if (gw <= 0 || gh <= 0 || gw * gh > 160000) return;
+    if (off.width !== gw || off.height !== gh) { off.width = gw; off.height = gh; img = octx.createImageData(gw, gh); }
+    const data = img.data;
+    const n = balls.length, bx = new Float32Array(n), by = new Float32Array(n), br = new Float32Array(n);
+    for (let i = 0; i < n; i++) { bx[i] = balls[i].x; by[i] = balls[i].y; br[i] = 1 / (2 * balls[i].r * balls[i].r + 1e-3); }
+
+    // pass 1: field -> height. For one ball h = sqrt(1 - d²/r²), i.e. an exact hemisphere; blends smoothly when balls merge
+    if (!hf || hf.length < gw * gh) { hf = new Float32Array(gw * gh); ff = new Float32Array(gw * gh); }
+    for (let j = 0, q = 0; j < gh; j++) {
+      const y = y0 + j * S + S / 2;
+      for (let i = 0; i < gw; i++, q++) {
+        const x = x0 + i * S + S / 2;
+        let f = 0;
+        for (let k = 0; k < n; k++) { const dx = x - bx[k], dy = y - by[k], u = 1 - (dx * dx + dy * dy) * br[k]; if (u > 0) f += u * u; }
+        ff[q] = f; const hh = 2 * Math.sqrt(f) - 1; hf[q] = hh > 0 ? Math.sqrt(hh > 1 ? 1 + (hh - 1) * .15 : hh) : 0;
+      }
+    }
+    // soften the height map (separable 1-2-1 blur) to iron out bumps between merged balls
+    if (!tf || tf.length < gw * gh) tf = new Float32Array(gw * gh);
+    for (let j = 0, q = 0; j < gh; j++) for (let i = 0; i < gw; i++, q++)
+      tf[q] = ((i > 0 ? hf[q - 1] : 0) + 2 * hf[q] + (i < gw - 1 ? hf[q + 1] : 0)) * .25;
+    for (let j = 0, q = 0; j < gh; j++) for (let i = 0; i < gw; i++, q++)
+      hf[q] = ((j > 0 ? tf[q - gw] : 0) + 2 * tf[q] + (j < gh - 1 ? tf[q + gw] : 0)) * .25;
+    // pass 2: normals from height differences, then chrome shading
+    const R = 12 / S;
+    for (let j = 0, q = 0, p = 0; j < gh; j++) {
+      for (let i = 0; i < gw; i++, q++, p += 4) {
+        const f = ff[q];
+        if (f < .12) { data[p + 3] = 0; continue; }
+        const hl = i > 0 ? hf[q - 1] : 0, hr = i < gw - 1 ? hf[q + 1] : 0;
+        const hu = j > 0 ? hf[q - gw] : 0, hd = j < gh - 1 ? hf[q + gw] : 0;
+        let nx = (hl - hr) * R * .5, ny = (hu - hd) * R * .5, nz = 1;
+        const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+        const c = shade(nx, ny, nz);
+        data[p] = c; data[p + 1] = c; data[p + 2] = c * 1.03 > 255 ? 255 : c * 1.03;
+        const ea = (f - .12) / .16; data[p + 3] = ea >= 1 ? 255 : ea * ea * (3 - 2 * ea) * 255;
+      }
+    }
+    octx.putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(off, x0, y0, gw * S, gh * S);
+  }
 
   function frame(t) {
     raf = 0;
-    const dt = Math.min(3, (t - (last || t)) / 16.67); last = t;
-    hue += dt;
+    const dt = Math.min(2.5, (t - (last || t)) / 16.67); last = t;
     ctx.clearRect(0, 0, W, H);
-    ctx.globalCompositeOperation = "lighter";
 
-    // Comet trail: tapered ribbon of the last ~380 ms of movement
-    while (trail.length && t - trail[0].t > 380) trail.shift();
-    if (trail.length > 2) {
-      for (let i = 1; i < trail.length; i++) {
-        const a = trail[i - 1], b = trail[i], k = i / trail.length;
-        const fade = 1 - (t - b.t) / 380;
-        ctx.strokeStyle = `rgba(235,238,245,${.55 * k * fade})`;
-        ctx.lineWidth = 0.6 + k * 3.2;
-        ctx.lineCap = "round";
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-      }
-      const h = trail[trail.length - 1];
-      const g = ctx.createRadialGradient(h.x, h.y, 0, h.x, h.y, 26);
-      g.addColorStop(0, "rgba(255,255,255,.22)"); g.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(h.x, h.y, 26, 0, 7); ctx.fill();
-    }
-
-    // Blockchain nodes + links
-    for (let i = nodes.length - 1; i >= 0; i--) {
-      const n = nodes[i];
-      n.x += n.vx * dt; n.y += n.vy * dt; n.vx *= .97; n.vy *= .97;
-      n.life -= .011 * dt; n.rot += .01 * dt;
-      if (n.life <= 0) nodes.splice(i, 1);
-    }
-    ctx.lineWidth = .7;
-    for (let i = 0; i < nodes.length; i++) {
-      const a = nodes[i];
-      for (let j = i + 1; j < nodes.length; j++) {
-        const b = nodes[j], dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy;
-        if (d2 > 8100) continue;
-        const al = (1 - Math.sqrt(d2) / 90) * Math.min(a.life, b.life) * .45;
-        ctx.strokeStyle = `rgba(200,205,215,${al})`;
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-      }
-    }
-    for (const n of nodes) {
-      const al = Math.min(1, n.life * 1.4);
-      if (n.sq) {
-        ctx.save(); ctx.translate(n.x, n.y); ctx.rotate(n.rot);
-        ctx.strokeStyle = `rgba(255,255,255,${al * .8})`; ctx.lineWidth = .9;
-        ctx.strokeRect(-n.r * 1.6, -n.r * 1.6, n.r * 3.2, n.r * 3.2); ctx.restore();
-      } else {
-        ctx.fillStyle = `rgba(255,255,255,${al * .85})`;
-        ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, 7); ctx.fill();
-      }
-    }
-
-    // Sparks: floating glyphs and click shards
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    for (let i = sparks.length - 1; i >= 0; i--) {
-      const s = sparks[i];
+    // spine physics: head springs to pointer, each link springs to the one before it
+    P.hot += (P.th - P.hot) * .15 * dt;
+    const headR = 14 + P.hot * 9;
+    for (let i = 0; i < N; i++) {
+      const s = spine[i], tx = i ? spine[i - 1].x : P.x, ty = i ? spine[i - 1].y : P.y;
+      const k = i ? .34 : .24, damp = i ? .55 : .62;
+      s.vx = (s.vx + (tx - s.x) * k * dt) * Math.pow(damp, dt);
+      s.vy = (s.vy + (ty - s.y) * k * dt) * Math.pow(damp, dt);
       s.x += s.vx * dt; s.y += s.vy * dt;
-      if (s.g) { s.vy -= .004 * dt; s.a += s.spin * dt; s.life -= .014 * dt; }
-      else { s.vx *= .93; s.vy *= .93; s.life -= .03 * dt; }
-      if (s.life <= 0) { sparks.splice(i, 1); continue; }
-      if (s.g) {
-        ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.a);
-        ctx.font = `600 ${s.s}px "JetBrains Mono", ui-monospace, monospace`;
-        ctx.fillStyle = `rgba(225,228,236,${s.life * .7})`;
-        ctx.fillText(s.g, 0, 0); ctx.restore();
-      } else {
-        ctx.strokeStyle = `rgba(255,255,255,${s.life})`; ctx.lineWidth = s.s;
-        ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x - s.vx * 3, s.y - s.vy * 3); ctx.stroke();
+      const target = P.in ? (i ? (headR - i * 1.05 * (1 + P.hot * .4)) : headR) : 0;
+      s.r += (Math.max(0, target) - s.r) * (i ? .2 : .12) * dt;
+    }
+    // droplets: fly, slow down, get pulled back to the drop and shrink
+    for (let i = drops.length - 1; i >= 0; i--) {
+      const d = drops[i];
+      const h = spine[0], dx = h.x - d.x, dy = h.y - d.y, dist = Math.hypot(dx, dy) + 1;
+      if (P.in) { d.vx += dx / dist * .18 * dt; d.vy += dy / dist * .18 * dt; }
+      d.vx *= Math.pow(.92, dt); d.vy *= Math.pow(.92, dt);
+      d.x += d.vx * dt; d.y += d.vy * dt;
+      d.life -= (P.in && dist < h.r * 1.2 ? .08 : .012) * dt;
+      if (d.life <= 0) drops.splice(i, 1);
+    }
+
+    // click ripples: thin silver rings under the drop
+    for (let i = waves.length - 1; i >= 0; i--) {
+      const w = waves[i];
+      w.life -= .022 * dt;
+      if (w.life <= 0) { waves.splice(i, 1); continue; }
+      const e = 1 - Math.pow(w.life, 3);
+      for (let k = 0; k < 2; k++) {
+        const r = 10 + e * (70 - k * 26);
+        ctx.strokeStyle = `rgba(230,233,240,${w.life * (k ? .25 : .55)})`;
+        ctx.lineWidth = 1.2 * w.life + .4;
+        ctx.beginPath(); ctx.arc(w.x, w.y, r, 0, 7); ctx.stroke();
       }
     }
 
-    // Click shockwaves: double hex ring
-    for (let i = rings.length - 1; i >= 0; i--) {
-      const r = rings[i];
-      r.life -= .025 * dt;
-      if (r.life <= 0) { rings.splice(i, 1); continue; }
-      const p = 1 - r.life, e = 1 - Math.pow(1 - p, 3);
-      ctx.lineWidth = 1.4 * r.life + .3;
-      ctx.strokeStyle = `rgba(255,255,255,${r.life * .8})`;
-      hex(r.x, r.y, 8 + e * 54, p * .8); ctx.stroke();
-      ctx.strokeStyle = `rgba(200,205,215,${r.life * .4})`;
-      hex(r.x, r.y, 4 + e * 30, -p * .8 + Math.PI / 6); ctx.stroke();
-    }
-    ctx.globalCompositeOperation = "source-over";
+    render();
 
-    // Glass lens follows with a soft spring
-    L.x += (P.x - L.x) * Math.min(1, .2 * dt);
-    L.y += (P.y - L.y) * Math.min(1, .2 * dt);
-    L.s += (L.ts - L.s) * Math.min(1, .18 * dt);
-    lens.style.transform = `translate3d(${L.x}px,${L.y}px,0) translate(-50%,-50%) scale(${L.s})`;
-
-    const moving = Math.abs(P.x - L.x) + Math.abs(P.y - L.y) + Math.abs(L.ts - L.s) > .3;
-    if (trail.length || nodes.length || sparks.length || rings.length || moving) wake();
+    let motion = Math.abs(P.x - spine[N - 1].x) + Math.abs(P.y - spine[N - 1].y);
+    for (const s of spine) motion += Math.abs(s.vx) + Math.abs(s.vy);
+    energy = Math.min(1, motion / 4);
+    const settling = spine.some((s, i) => Math.abs(s.r - (P.in ? Math.max(0, (i ? headR - i * 1.05 * (1 + P.hot * .4) : headR)) : 0)) > .05);
+    if (drops.length || waves.length || energy > .01 || settling) wake();
   }
-  function wake() { if (!raf && !document.hidden) { raf = requestAnimationFrame(frame); } }
+  function wake() { if (!raf && !document.hidden) raf = requestAnimationFrame(frame); }
   document.addEventListener("visibilitychange", () => { last = 0; wake(); });
 })();
