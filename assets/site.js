@@ -286,3 +286,188 @@
   setPlaying(playing);
   go(0);
 })();
+
+// Cursor FX (2026-11-26): silver comet trail + "blockchain" nodes that link up and dissolve,
+// a glass lens that follows the pointer and a hex shockwave on click. Desktop only.
+(() => {
+  const fine = matchMedia("(hover: hover) and (pointer: fine)").matches;
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!fine || reduce) return;
+
+  const cv = document.createElement("canvas");
+  cv.className = "cfx-canvas";
+  cv.setAttribute("aria-hidden", "true");
+  const lens = document.createElement("div");
+  lens.className = "cfx-lens";
+  lens.setAttribute("aria-hidden", "true");
+  lens.innerHTML = "<i></i>";
+  document.body.append(cv, lens);
+  const ctx = cv.getContext("2d");
+
+  let W = 0, H = 0, dpr = 1;
+  const resize = () => {
+    dpr = Math.min(devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  };
+  resize();
+  addEventListener("resize", resize);
+
+  const P = { x: -999, y: -999, lx: -999, ly: -999, in: false };
+  const L = { x: -999, y: -999, s: 1, ts: 1 };
+  const trail = [];           // {x,y,t}
+  const nodes = [];           // blockchain dots
+  const sparks = [];          // little glints and burst shards
+  const rings = [];           // click shockwaves
+  const GLYPHS = ["₮", "◆", "+", "·", "⬡", "$"];
+  let dist = 0, raf = 0, last = 0, hue = 0;
+
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse") return;
+    P.x = e.clientX; P.y = e.clientY;
+    if (!P.in) { P.in = true; P.lx = P.x; P.ly = P.y; L.x = P.x; L.y = P.y; lens.classList.add("on"); }
+    const dx = P.x - P.lx, dy = P.y - P.ly, d = Math.hypot(dx, dy);
+    dist = Math.min(dist + d, 26 * 4);
+    const now = performance.now();
+    trail.push({ x: P.x, y: P.y, t: now });
+    while (dist > 26) {
+      dist -= 26;
+      nodes.push({ x: P.x + rand(-6, 6), y: P.y + rand(-6, 6), vx: dx * .02 + rand(-.25, .25), vy: dy * .02 + rand(-.25, .25),
+        life: 1, r: rand(1.2, 2.6), sq: Math.random() < .35, rot: rand(0, Math.PI) });
+      if (nodes.length > 70) nodes.shift();
+      if (Math.random() < .28) sparks.push({ x: P.x, y: P.y, vx: rand(-.6, .6) - dx * .01, vy: rand(-1.1, -.3), life: 1,
+        g: GLYPHS[(Math.random() * GLYPHS.length) | 0], s: rand(9, 14), spin: rand(-.04, .04), a: 0 });
+    }
+    P.lx = P.x; P.ly = P.y;
+    const t = e.target.closest && e.target.closest("a, button, [role=button], input, select, textarea, label, .tile, .btn");
+    L.ts = t ? 1.9 : 1;
+    lens.classList.toggle("hot", !!t);
+    wake();
+  }, { passive: true });
+
+  document.documentElement.addEventListener("pointerleave", () => { P.in = false; lens.classList.remove("on"); });
+  addEventListener("blur", () => { P.in = false; lens.classList.remove("on"); });
+
+  addEventListener("pointerdown", (e) => {
+    if (e.pointerType !== "mouse") return;
+    rings.push({ x: e.clientX, y: e.clientY, life: 1 });
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2 + rand(-.2, .2), v = rand(1.6, 3.6);
+      sparks.push({ x: e.clientX, y: e.clientY, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, g: null, s: rand(1, 2.2), spin: 0, a });
+    }
+    lens.classList.add("press");
+    setTimeout(() => lens.classList.remove("press"), 160);
+    wake();
+  }, { passive: true });
+
+  const hex = (x, y, r, rot) => {
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = rot + i * Math.PI / 3;
+      i ? ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r) : ctx.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+    }
+    ctx.closePath();
+  };
+
+  function frame(t) {
+    raf = 0;
+    const dt = Math.min(3, (t - (last || t)) / 16.67); last = t;
+    hue += dt;
+    ctx.clearRect(0, 0, W, H);
+    ctx.globalCompositeOperation = "lighter";
+
+    // Comet trail: tapered ribbon of the last ~380 ms of movement
+    while (trail.length && t - trail[0].t > 380) trail.shift();
+    if (trail.length > 2) {
+      for (let i = 1; i < trail.length; i++) {
+        const a = trail[i - 1], b = trail[i], k = i / trail.length;
+        const fade = 1 - (t - b.t) / 380;
+        ctx.strokeStyle = `rgba(235,238,245,${.55 * k * fade})`;
+        ctx.lineWidth = 0.6 + k * 3.2;
+        ctx.lineCap = "round";
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+      const h = trail[trail.length - 1];
+      const g = ctx.createRadialGradient(h.x, h.y, 0, h.x, h.y, 26);
+      g.addColorStop(0, "rgba(255,255,255,.22)"); g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(h.x, h.y, 26, 0, 7); ctx.fill();
+    }
+
+    // Blockchain nodes + links
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
+      n.x += n.vx * dt; n.y += n.vy * dt; n.vx *= .97; n.vy *= .97;
+      n.life -= .011 * dt; n.rot += .01 * dt;
+      if (n.life <= 0) nodes.splice(i, 1);
+    }
+    ctx.lineWidth = .7;
+    for (let i = 0; i < nodes.length; i++) {
+      const a = nodes[i];
+      for (let j = i + 1; j < nodes.length; j++) {
+        const b = nodes[j], dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy;
+        if (d2 > 8100) continue;
+        const al = (1 - Math.sqrt(d2) / 90) * Math.min(a.life, b.life) * .45;
+        ctx.strokeStyle = `rgba(200,205,215,${al})`;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+    }
+    for (const n of nodes) {
+      const al = Math.min(1, n.life * 1.4);
+      if (n.sq) {
+        ctx.save(); ctx.translate(n.x, n.y); ctx.rotate(n.rot);
+        ctx.strokeStyle = `rgba(255,255,255,${al * .8})`; ctx.lineWidth = .9;
+        ctx.strokeRect(-n.r * 1.6, -n.r * 1.6, n.r * 3.2, n.r * 3.2); ctx.restore();
+      } else {
+        ctx.fillStyle = `rgba(255,255,255,${al * .85})`;
+        ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, 7); ctx.fill();
+      }
+    }
+
+    // Sparks: floating glyphs and click shards
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const s = sparks[i];
+      s.x += s.vx * dt; s.y += s.vy * dt;
+      if (s.g) { s.vy -= .004 * dt; s.a += s.spin * dt; s.life -= .014 * dt; }
+      else { s.vx *= .93; s.vy *= .93; s.life -= .03 * dt; }
+      if (s.life <= 0) { sparks.splice(i, 1); continue; }
+      if (s.g) {
+        ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.a);
+        ctx.font = `600 ${s.s}px "JetBrains Mono", ui-monospace, monospace`;
+        ctx.fillStyle = `rgba(225,228,236,${s.life * .7})`;
+        ctx.fillText(s.g, 0, 0); ctx.restore();
+      } else {
+        ctx.strokeStyle = `rgba(255,255,255,${s.life})`; ctx.lineWidth = s.s;
+        ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x - s.vx * 3, s.y - s.vy * 3); ctx.stroke();
+      }
+    }
+
+    // Click shockwaves: double hex ring
+    for (let i = rings.length - 1; i >= 0; i--) {
+      const r = rings[i];
+      r.life -= .025 * dt;
+      if (r.life <= 0) { rings.splice(i, 1); continue; }
+      const p = 1 - r.life, e = 1 - Math.pow(1 - p, 3);
+      ctx.lineWidth = 1.4 * r.life + .3;
+      ctx.strokeStyle = `rgba(255,255,255,${r.life * .8})`;
+      hex(r.x, r.y, 8 + e * 54, p * .8); ctx.stroke();
+      ctx.strokeStyle = `rgba(200,205,215,${r.life * .4})`;
+      hex(r.x, r.y, 4 + e * 30, -p * .8 + Math.PI / 6); ctx.stroke();
+    }
+    ctx.globalCompositeOperation = "source-over";
+
+    // Glass lens follows with a soft spring
+    L.x += (P.x - L.x) * Math.min(1, .2 * dt);
+    L.y += (P.y - L.y) * Math.min(1, .2 * dt);
+    L.s += (L.ts - L.s) * Math.min(1, .18 * dt);
+    lens.style.transform = `translate3d(${L.x}px,${L.y}px,0) translate(-50%,-50%) scale(${L.s})`;
+
+    const moving = Math.abs(P.x - L.x) + Math.abs(P.y - L.y) + Math.abs(L.ts - L.s) > .3;
+    if (trail.length || nodes.length || sparks.length || rings.length || moving) wake();
+  }
+  function wake() { if (!raf && !document.hidden) { raf = requestAnimationFrame(frame); } }
+  document.addEventListener("visibilitychange", () => { last = 0; wake(); });
+})();
