@@ -287,8 +287,8 @@
   go(0);
 })();
 
-// Cursor FX (2026-11-26): a dot grid revealed around the cursor that bulges outward like a lens, plus a
-// short silver tail with sparks when the mouse moves. No ring. Desktop only.
+// Cursor FX (2026-11-26): floating particles light up around the cursor and get blown away and swirled by
+// it, plus a short silver tail with sparks when the mouse moves. No ring. Desktop only.
 (() => {
   const fine = matchMedia("(hover: hover) and (pointer: fine)").matches;
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -313,7 +313,17 @@
   const TAIL = 140;                      // ms of movement kept in the tail
   const P = { x: -99, y: -99, in: false };
   const S = { x: -99, y: -99, a: 0 };          // smoothed lens position and visibility
-  const GAP = 24, R = 170;
+  const R = 170;
+  const motes = [], field = { w: 0, h: 0, sy: scrollY, lx: -99, ly: -99 };
+  const seed = () => {
+    field.w = W; field.h = H; motes.length = 0;
+    const n = Math.min(1400, Math.round(W * H / 620));
+    for (let i = 0; i < n; i++) {
+      const hx = Math.random() * W, hy = Math.random() * H;
+      motes.push({ hx, hy, x: hx, y: hy, vx: 0, vy: 0, ph: Math.random() * 6.28, sp: .01 + Math.random() * .025,
+        am: 4 + Math.random() * 10, r: .7 + Math.random() * 1.5, b: Math.random() });
+    }
+  };
   const pts = [], sparks = [];
   let raf = 0, last = 0, px = 0, py = 0;
   const rand = (a, b) => a + Math.random() * (b - a);
@@ -321,7 +331,7 @@
   addEventListener("pointermove", (e) => {
     if (e.pointerType !== "mouse") return;
     const now = performance.now();
-    if (!P.in) { P.in = true; px = S.x = e.clientX; py = S.y = e.clientY; }
+    if (!P.in) { P.in = true; px = S.x = field.lx = e.clientX; py = S.y = field.ly = e.clientY; }
     P.x = e.clientX; P.y = e.clientY;
     pts.push({ x: P.x, y: P.y, t: now });
     const sp = Math.hypot(P.x - px, P.y - py);
@@ -345,33 +355,37 @@
     ctx.clearRect(0, 0, W, H);
     const now = performance.now();
 
-    // lens grid: dots appear around the cursor, swell and get pushed outward
+    // particles: a loose field of motes that drift on their own, light up near the cursor,
+    // get blown away from it and swirled along its motion, then float back
     S.x += (P.x - S.x) * ease(.25); S.y += (P.y - S.y) * ease(.25);
     S.a += ((P.in ? 1 : 0) - S.a) * ease(.1);
-    if (S.a > .01) {
-      const oy = -(scrollY % GAP), ox = (W % GAP) / 2;
-      const gx0 = Math.floor((S.x - R - ox) / GAP), gx1 = Math.ceil((S.x + R - ox) / GAP);
-      const gy0 = Math.floor((S.y - R - oy) / GAP), gy1 = Math.ceil((S.y + R - oy) / GAP);
-      ctx.fillStyle = "#fff";
-      for (let gy = gy0; gy <= gy1; gy++) {
-        for (let gx = gx0; gx <= gx1; gx++) {
-          const bx = ox + gx * GAP, by = oy + gy * GAP, dx = bx - S.x, dy = by - S.y, d = Math.hypot(dx, dy);
-          if (d >= R) continue;
-          const k = 1 - d / R, k2 = k * k * (3 - 2 * k);
-          const push = k2 * 14 / (d + 1);
-          ctx.globalAlpha = Math.min(1, (.1 + k2 * .95) * Math.min(1, k * 4)) * S.a;
-          ctx.beginPath(); ctx.arc(bx + dx * push, by + dy * push, .8 + k2 * 2, 0, 6.2832); ctx.fill();
-        }
+    if (field.w !== W || field.h !== H) seed();
+    const sx = scrollY - field.sy; field.sy = scrollY;
+    const mvx = (S.x - field.lx) / dt, mvy = (S.y - field.ly) / dt; field.lx = S.x; field.ly = S.y;
+    ctx.fillStyle = "#fff";
+    for (const q of motes) {
+      q.hy -= sx; if (q.hy < -30) q.hy += H + 60; else if (q.hy > H + 30) q.hy -= H + 60;
+      q.ph += q.sp * dt;
+      const tx = q.hx + Math.cos(q.ph) * q.am, ty = q.hy + Math.sin(q.ph * 1.3) * q.am;
+      const dx = q.x - S.x, dy = q.y - S.y, d2 = dx * dx + dy * dy;
+      if (d2 < R * R && S.a > .01) {
+        const d = Math.sqrt(d2) + 1, k = 1 - d / R;
+        const f = k * k * 2.2 * S.a;
+        q.vx += (dx / d * f + mvx * k * .05 + -dy / d * k * .35) * dt;   // push out + drag along + slight swirl
+        q.vy += (dy / d * f + mvy * k * .05 + dx / d * k * .35) * dt;
       }
-      ctx.globalAlpha = 1;
-      // thin crosshair through the lens
-      const lg = ctx.createRadialGradient(S.x, S.y, 0, S.x, S.y, R);
-      lg.addColorStop(0, `rgba(255,255,255,${.22 * S.a})`); lg.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.strokeStyle = lg; ctx.lineWidth = 1; ctx.beginPath();
-      ctx.moveTo(S.x - R, Math.round(S.y) + .5); ctx.lineTo(S.x + R, Math.round(S.y) + .5);
-      ctx.moveTo(Math.round(S.x) + .5, S.y - R); ctx.lineTo(Math.round(S.x) + .5, S.y + R);
-      ctx.stroke();
+      q.vx = (q.vx + (tx - q.x) * .012 * dt) * Math.pow(.9, dt);
+      q.vy = (q.vy + (ty - q.y) * .012 * dt) * Math.pow(.9, dt);
+      q.x += q.vx * dt; q.y += q.vy * dt;
+      const ex = q.x - S.x, ey = q.y - S.y, e = Math.sqrt(ex * ex + ey * ey);
+      if (e > R * 1.1) continue;
+      const k = Math.max(0, 1 - e / (R * 1.1)), kk = k * k * (3 - 2 * k);
+      const spd = Math.min(1, Math.hypot(q.vx, q.vy) / 4);
+      ctx.globalAlpha = Math.min(1, kk * (.55 + q.b * .45) + spd * .4 * kk) * S.a;
+      ctx.beginPath(); ctx.arc(q.x, q.y, q.r * (.6 + kk * .9), 0, 6.2832); ctx.fill();
     }
+    ctx.globalAlpha = 1;
+
     while (pts.length && now - pts[0].t > TAIL) pts.shift();
 
     // tail: tapered silver ribbon, thin at the end, ~5px at the cursor
@@ -400,7 +414,7 @@
     }
     ctx.globalAlpha = 1;
 
-    if (pts.length > 1 || sparks.length || Math.abs(P.x - S.x) + Math.abs(P.y - S.y) > .2 || Math.abs((P.in ? 1 : 0) - S.a) > .01) wake();
+    if (P.in || pts.length > 1 || sparks.length || S.a > .01) wake();   // motes keep drifting while the pointer is on the page
   }
   function wake() { if (!raf && !document.hidden) raf = requestAnimationFrame(frame); }
   document.addEventListener("visibilitychange", () => { last = 0; wake(); });
