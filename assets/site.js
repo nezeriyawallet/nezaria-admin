@@ -287,8 +287,8 @@
   go(0);
 })();
 
-// Cursor FX (2026-11-26): a short silver tail with a few sparks behind the cursor when the mouse
-// moves. Compact, cursor-sized, no ring. Desktop only.
+// Cursor FX (2026-11-26): a dot grid revealed around the cursor that bulges outward like a lens, plus a
+// short silver tail with sparks when the mouse moves. No ring. Desktop only.
 (() => {
   const fine = matchMedia("(hover: hover) and (pointer: fine)").matches;
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -312,6 +312,8 @@
 
   const TAIL = 140;                      // ms of movement kept in the tail
   const P = { x: -99, y: -99, in: false };
+  const S = { x: -99, y: -99, a: 0 };          // smoothed lens position and visibility
+  const GAP = 24, R = 170;
   const pts = [], sparks = [];
   let raf = 0, last = 0, px = 0, py = 0;
   const rand = (a, b) => a + Math.random() * (b - a);
@@ -319,7 +321,7 @@
   addEventListener("pointermove", (e) => {
     if (e.pointerType !== "mouse") return;
     const now = performance.now();
-    if (!P.in) { P.in = true; px = e.clientX; py = e.clientY; }
+    if (!P.in) { P.in = true; px = S.x = e.clientX; py = S.y = e.clientY; }
     P.x = e.clientX; P.y = e.clientY;
     pts.push({ x: P.x, y: P.y, t: now });
     const sp = Math.hypot(P.x - px, P.y - py);
@@ -332,6 +334,7 @@
   const leave = () => { P.in = false; };
   document.documentElement.addEventListener("pointerleave", leave);
   addEventListener("blur", leave);
+  addEventListener("scroll", () => wake(), { passive: true });
 
 
   function frame(t) {
@@ -341,6 +344,34 @@
 
     ctx.clearRect(0, 0, W, H);
     const now = performance.now();
+
+    // lens grid: dots appear around the cursor, swell and get pushed outward
+    S.x += (P.x - S.x) * ease(.25); S.y += (P.y - S.y) * ease(.25);
+    S.a += ((P.in ? 1 : 0) - S.a) * ease(.1);
+    if (S.a > .01) {
+      const oy = -(scrollY % GAP), ox = (W % GAP) / 2;
+      const gx0 = Math.floor((S.x - R - ox) / GAP), gx1 = Math.ceil((S.x + R - ox) / GAP);
+      const gy0 = Math.floor((S.y - R - oy) / GAP), gy1 = Math.ceil((S.y + R - oy) / GAP);
+      ctx.fillStyle = "#fff";
+      for (let gy = gy0; gy <= gy1; gy++) {
+        for (let gx = gx0; gx <= gx1; gx++) {
+          const bx = ox + gx * GAP, by = oy + gy * GAP, dx = bx - S.x, dy = by - S.y, d = Math.hypot(dx, dy);
+          if (d >= R) continue;
+          const k = 1 - d / R, k2 = k * k * (3 - 2 * k);
+          const push = k2 * 14 / (d + 1);
+          ctx.globalAlpha = Math.min(1, (.1 + k2 * .95) * Math.min(1, k * 4)) * S.a;
+          ctx.beginPath(); ctx.arc(bx + dx * push, by + dy * push, .8 + k2 * 2, 0, 6.2832); ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+      // thin crosshair through the lens
+      const lg = ctx.createRadialGradient(S.x, S.y, 0, S.x, S.y, R);
+      lg.addColorStop(0, `rgba(255,255,255,${.22 * S.a})`); lg.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.strokeStyle = lg; ctx.lineWidth = 1; ctx.beginPath();
+      ctx.moveTo(S.x - R, Math.round(S.y) + .5); ctx.lineTo(S.x + R, Math.round(S.y) + .5);
+      ctx.moveTo(Math.round(S.x) + .5, S.y - R); ctx.lineTo(Math.round(S.x) + .5, S.y + R);
+      ctx.stroke();
+    }
     while (pts.length && now - pts[0].t > TAIL) pts.shift();
 
     // tail: tapered silver ribbon, thin at the end, ~5px at the cursor
@@ -369,7 +400,7 @@
     }
     ctx.globalAlpha = 1;
 
-    if (pts.length > 1 || sparks.length) wake();
+    if (pts.length > 1 || sparks.length || Math.abs(P.x - S.x) + Math.abs(P.y - S.y) > .2 || Math.abs((P.in ? 1 : 0) - S.a) > .01) wake();
   }
   function wake() { if (!raf && !document.hidden) raf = requestAnimationFrame(frame); }
   document.addEventListener("visibilitychange", () => { last = 0; wake(); });
