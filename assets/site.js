@@ -481,7 +481,7 @@
     const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1) return;
     const d = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], n = [-d[1], d[0]];
     const k = Math.min(1, Math.max(0, (speed - 0.35) / 2.4));
-    const N = 90 + 160 * k, T = 80 + 170 * k, Rv = 0.2 + 0.45 * k, now = performance.now();
+    const N = 34 + 46 * k, T = 14 + 30 * k, Rv = 0.03 + 0.08 * k, now = performance.now();
     const next = [];
     for (const p of pieces) {
       // line into the piece's local (unmoved) frame
@@ -512,7 +512,7 @@
     const cnt = Math.min(90, Math.round(span.length * (0.9 + k)));
     for (let i = 0; i < cnt && span.length && motes.length < 360; i++) {
       const h = span[(Math.random() * span.length) | 0], s = Math.random() < 0.5 ? 1 : -1;
-      const sp = (60 + Math.random() * 260) * (0.6 + k), sp2 = (Math.random() - 0.5) * 2;
+      const sp = (25 + Math.random() * 110) * (0.6 + 0.6 * k), sp2 = (Math.random() - 0.5) * 2;
       motes.push({ hx: h[0], hy: h[1], x: h[0], y: h[1], vx: s * n[0] * sp + d[0] * sp2 * sp * 0.8, vy: s * n[1] * sp + d[1] * sp2 * sp * 0.8,
         a: Math.random() * 6.28, va: (Math.random() - 0.5) * 9, z: 1 + Math.random() * 2.6, t0: now + Math.random() * 250, life: 1 });
     }
@@ -536,8 +536,8 @@
     for (let st = 0; st < n; st++) {
       const tn = now - (n - 1 - st) * dt * 1000;
       for (const p of pieces) {
-        const dist = Math.hypot(p.ox, p.oy), pull = ramp(((tn - p.t0) / 1000 - 0.45) / 1.6);
-        let k = 7 * pull, c = 0.25 + 2 * Math.sqrt(k) * 0.85;
+        const dist = Math.hypot(p.ox, p.oy), pull = ramp(((tn - p.t0) / 1000 - 0.25) / 1.2);
+        let k = 6 * pull, c = 0.6 + 2 * Math.sqrt(k) * 1.0;
         if (pull > 0.5 && dist < 12) { k += 140 * (1 - dist / 12); c = 2 * Math.sqrt(k) * 0.8; } // final magnetic click
         p.vx += (-k * p.ox - c * p.vx) * dt; p.vy += (-k * p.oy - c * p.vy) * dt;
         p.vr += (-k * 1.3 * p.r - c * p.vr) * dt;
@@ -546,8 +546,8 @@
       for (const m of motes) {
         const age = (tn - m.t0) / 1000;
         if (age <= 0 || m.life <= 0) continue;
-        const pull = ramp((age - 0.7) / 2.2), dx = m.hx - m.x, dy = m.hy - m.y, dist = Math.hypot(dx, dy);
-        const k = 5 * pull + (pull > 0.6 && dist < 30 ? 40 : 0), c = 0.15 + 2 * Math.sqrt(k) * 0.75;
+        const pull = ramp((age - 0.35) / 1.6), dx = m.hx - m.x, dy = m.hy - m.y, dist = Math.hypot(dx, dy);
+        const k = 5 * pull + (pull > 0.6 && dist < 30 ? 40 : 0), c = 0.5 + 2 * Math.sqrt(k) * 0.9;
         m.vx += (k * dx - c * m.vx) * dt; m.vy += (k * dy - c * m.vy) * dt;
         m.x += m.vx * dt; m.y += m.vy * dt; m.a += m.va * dt;
         if ((pull > 0.6 && dist < 2.5) || age > 6) m.life -= dt * 5; // absorbed back into the letters
