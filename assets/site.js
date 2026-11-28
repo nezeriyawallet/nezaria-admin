@@ -429,7 +429,7 @@
   const hero = word && word.closest(".hero");
   if (!hero || matchMedia("(prefers-reduced-motion: reduce)").matches || !matchMedia("(pointer: fine)").matches) return;
   const PAD = 240, MAXP = 28, born = performance.now();
-  let layer = null, pieces = [], seams = [], raf = 0, last = 0, rect = null, prev = null, stroke = null;
+  let layer = null, cv = null, cx = null, motes = [], pieces = [], seams = [], raf = 0, last = 0, rect = null, prev = null, stroke = null;
 
   const box = () => { const h = hero.getBoundingClientRect(), r = word.getBoundingClientRect();
     return { x: r.left - h.left, y: r.top - h.top, w: r.width, h: r.height, hx: h.left, hy: h.top }; };
@@ -457,11 +457,17 @@
     layer = document.createElement("div"); layer.className = "hero-slice"; layer.setAttribute("aria-hidden", "true");
     Object.assign(layer.style, { left: rect.x + "px", top: rect.y + "px", width: rect.w + "px", height: rect.h + "px" });
     hero.appendChild(layer);
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    cv = document.createElement("canvas"); cv.className = "hero-slice-motes";
+    cv.width = (rect.w + 2 * PAD) * dpr; cv.height = (rect.h + 2 * PAD) * dpr;
+    Object.assign(cv.style, { left: -PAD + "px", top: -PAD + "px", width: rect.w + 2 * PAD + "px", height: rect.h + 2 * PAD + "px" });
+    cx = cv.getContext("2d"); cx.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
+    layer.appendChild(cv); motes = [];
     const pts = [[-PAD, -PAD], [rect.w + PAD, -PAD], [rect.w + PAD, rect.h + PAD], [-PAD, rect.h + PAD]];
-    pieces = [{ el: makeEl(), pts, c: centroid(pts), ox: 0, oy: 0, vx: 0, vy: 0, r: 0, vr: 0 }];
+    pieces = [{ el: makeEl(), pts, c: centroid(pts), ox: 0, oy: 0, vx: 0, vy: 0, r: 0, vr: 0, t0: 0 }];
     word.classList.add("is-sliced");
   };
-  const stop = () => { layer && layer.remove(); layer = null; pieces = []; seams = []; word.classList.remove("is-sliced"); };
+  const stop = () => { layer && layer.remove(); layer = null; pieces = []; seams = []; motes = []; word.classList.remove("is-sliced"); };
   const draw = (p) => {
     p.el.style.clipPath = poly(p.pts);
     p.el.style.transformOrigin = `${p.c[0].toFixed(1)}px ${p.c[1].toFixed(1)}px`;
@@ -475,7 +481,7 @@
     const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1) return;
     const d = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], n = [-d[1], d[0]];
     const k = Math.min(1, Math.max(0, (speed - 0.35) / 2.4));
-    const N = 110 + 230 * k, T = 170 + 430 * k, Rv = 0.3 + 0.8 * k;
+    const N = 90 + 160 * k, T = 80 + 170 * k, Rv = 0.2 + 0.45 * k, now = performance.now();
     const next = [];
     for (const p of pieces) {
       // line into the piece's local (unmoved) frame
@@ -487,15 +493,29 @@
       if (A.length < 3 || B.length < 3 || area(A) < 600 || area(B) < 600) { next.push(p); continue; }
       p.el.remove();
       for (const [pts, s] of [[A, 1], [B, -1]]) {
-        const q = { el: makeEl(), pts, c: centroid(pts), ox: p.ox, oy: p.oy, vx: p.vx, vy: p.vy, r: p.r, vr: p.vr };
+        const q = { el: makeEl(), pts, c: centroid(pts), ox: p.ox, oy: p.oy, vx: p.vx, vy: p.vy, r: p.r, vr: p.vr, t0: now };
         // keep the visual position: the pivot moved from p.c to q.c, compensate the rotation offset
         const dx = q.c[0] - p.c[0], dy = q.c[1] - p.c[1], c0 = Math.cos(p.r), s0 = Math.sin(p.r);
         q.ox += dx * c0 - dy * s0 - dx; q.oy += dx * s0 + dy * c0 - dy;
-        q.vx += s * (n[0] * N + d[0] * T); q.vy += s * (n[1] * N + d[1] * T); q.vr += s * Rv * (Math.random() * 0.6 + 0.7);
+        q.vx += s * (n[0] * N + d[0] * T); q.vy += s * (n[1] * N + d[1] * T); const xs = pts.map((v) => v[0]), wid = Math.max(60, Math.min(rect.w, Math.max(...xs)) - Math.max(0, Math.min(...xs)));
+        q.vr += s * Rv * (Math.random() * 0.6 + 0.7) * Math.min(1, 260 / wid); // long pieces turn less, so their ends don't swing far
         draw(q); next.push(q);
       }
     }
     pieces = next;
+    // debris: small silver shards burst out of the cut and drift in space before they are pulled home
+    const span = [], steps = 90;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps, x = a[0] + (b[0] - a[0]) * (t * 3 - 1), y = a[1] + (b[1] - a[1]) * (t * 3 - 1);
+      if (x > rect.w * 0.01 && x < rect.w * 0.99 && y > rect.h * 0.12 && y < rect.h * 0.9) span.push([x, y]);
+    }
+    const cnt = Math.min(90, Math.round(span.length * (0.9 + k)));
+    for (let i = 0; i < cnt && span.length && motes.length < 360; i++) {
+      const h = span[(Math.random() * span.length) | 0], s = Math.random() < 0.5 ? 1 : -1;
+      const sp = (60 + Math.random() * 260) * (0.6 + k), sp2 = (Math.random() - 0.5) * 2;
+      motes.push({ hx: h[0], hy: h[1], x: h[0], y: h[1], vx: s * n[0] * sp + d[0] * sp2 * sp * 0.8, vy: s * n[1] * sp + d[1] * sp2 * sp * 0.8,
+        a: Math.random() * 6.28, va: (Math.random() - 0.5) * 9, z: 1 + Math.random() * 2.6, t0: now + Math.random() * 250, life: 1 });
+    }
     // the blade: a bright streak along the cut
     const sx = rect.w * 1.15 + PAD, mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
     const bl = document.createElement("i"); bl.className = "hero-slice-blade";
@@ -507,17 +527,49 @@
     if (!raf) { last = performance.now(); raf = requestAnimationFrame(tick); }
   };
 
+  // space physics: after the hit things drift with almost no drag, then a magnetic pull slowly fades in
+  const ramp = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
   const tick = (now) => {
-    const dt = Math.min(0.033, (now - last) / 1000); last = now;
+    const DT = Math.min(0.1, (now - last) / 1000); last = now;
     let busy = false;
+    const n = Math.max(1, Math.ceil(DT / 0.008)), dt = DT / n; // fixed small steps so slow frames don't slow time
+    for (let st = 0; st < n; st++) {
+      const tn = now - (n - 1 - st) * dt * 1000;
+      for (const p of pieces) {
+        const dist = Math.hypot(p.ox, p.oy), pull = ramp(((tn - p.t0) / 1000 - 0.45) / 1.6);
+        let k = 7 * pull, c = 0.25 + 2 * Math.sqrt(k) * 0.85;
+        if (pull > 0.5 && dist < 12) { k += 140 * (1 - dist / 12); c = 2 * Math.sqrt(k) * 0.8; } // final magnetic click
+        p.vx += (-k * p.ox - c * p.vx) * dt; p.vy += (-k * p.oy - c * p.vy) * dt;
+        p.vr += (-k * 1.3 * p.r - c * p.vr) * dt;
+        p.ox += p.vx * dt; p.oy += p.vy * dt; p.r += p.vr * dt;
+      }
+      for (const m of motes) {
+        const age = (tn - m.t0) / 1000;
+        if (age <= 0 || m.life <= 0) continue;
+        const pull = ramp((age - 0.7) / 2.2), dx = m.hx - m.x, dy = m.hy - m.y, dist = Math.hypot(dx, dy);
+        const k = 5 * pull + (pull > 0.6 && dist < 30 ? 40 : 0), c = 0.15 + 2 * Math.sqrt(k) * 0.75;
+        m.vx += (k * dx - c * m.vx) * dt; m.vy += (k * dy - c * m.vy) * dt;
+        m.x += m.vx * dt; m.y += m.vy * dt; m.a += m.va * dt;
+        if ((pull > 0.6 && dist < 2.5) || age > 6) m.life -= dt * 5; // absorbed back into the letters
+      }
+    }
     for (const p of pieces) {
-      const dist = Math.hypot(p.ox, p.oy);
-      const k = 55 * (1 + 3.5 * Math.exp(-dist / 7)), c = 2 * Math.sqrt(k) * 0.62; // stronger pull when close = magnetic snap
-      p.vx += (-k * p.ox - c * p.vx) * dt; p.vy += (-k * p.oy - c * p.vy) * dt;
-      p.vr += (-k * p.r - c * p.vr) * dt;
-      p.ox += p.vx * dt; p.oy += p.vy * dt; p.r += p.vr * dt;
-      if (dist > 0.35 || Math.abs(p.r) > 0.0015 || Math.hypot(p.vx, p.vy) > 6) busy = true;
+      if (Math.hypot(p.ox, p.oy) > 0.35 || Math.abs(p.r) > 0.0015 || Math.hypot(p.vx, p.vy) > 6) busy = true;
       draw(p);
+    }
+    if (cx) {
+      cx.clearRect(-PAD, -PAD, rect.w + 2 * PAD, rect.h + 2 * PAD);
+      cx.globalCompositeOperation = "lighter";
+      for (const m of motes) {
+        if (m.life <= 0 || now < m.t0) { if (m.life > 0) busy = true; continue; }
+        busy = true;
+        const al = Math.max(0, Math.min(1, m.life)), z = m.z;
+        cx.save(); cx.translate(m.x, m.y); cx.rotate(m.a);
+        cx.fillStyle = `rgba(235,238,245,${0.9 * al})`; cx.shadowColor = "rgba(255,255,255,.8)"; cx.shadowBlur = 6;
+        cx.beginPath(); cx.moveTo(-z, -z * 0.6); cx.lineTo(z * 1.3, 0); cx.lineTo(-z * 0.4, z); cx.closePath(); cx.fill();
+        cx.restore();
+      }
+      motes = motes.filter((m) => m.life > 0);
     }
     if (busy) { raf = requestAnimationFrame(tick); return; }
     raf = 0;
@@ -529,8 +581,9 @@
       L.appendChild(g); g.animate([{ opacity: 0.7 }, { opacity: 0 }], { duration: 380, easing: "ease-out" });
     }
     for (const p of pieces) p.el.remove();
+    cv && cv.remove(); cv = cx = null; motes = [];
     word.classList.remove("is-sliced"); pieces = []; seams = [];
-    setTimeout(() => { if (L === layer) { L.remove(); layer = null; } else L.remove(); }, 400);
+    setTimeout(() => L.remove(), 400);
     layer = null;
   };
 
