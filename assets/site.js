@@ -421,182 +421,146 @@
   document.addEventListener("visibilitychange", () => { last = 0; wake(); });
 })();
 
-// Hero slice (2026-11-28): the cursor cuts "NEZERIYA" exactly along the path the user draws through it (curves,
-// zigzags). The pieces drift apart a little, silver shards float out of the cut, then everything is slowly pulled
-// back together magnetically, so the name always stays readable. A piece is a clone of the heading inside a chain
-// of nested clip-path polygons (one per cut it went through), so it renders pixel-identical to the real heading.
+// Hero sand cut (2026-11-28): the cursor cuts "NEZERIYA" exactly along the path the user draws through it. Where the
+// cursor went, the letters crumble into fine sand grains that drift off as in space, then slowly drift back and snap
+// into place, so the name always stays readable. One canvas, plain particles: light enough for any laptop.
 (() => {
   const word = document.querySelector(".hero-word");
   const hero = word && word.closest(".hero");
   if (!hero || matchMedia("(prefers-reduced-motion: reduce)").matches || !matchMedia("(pointer: fine)").matches) return;
-  const PAD = 240, MAXP = 24, born = performance.now();
-  let layer = null, cv = null, cx = null, motes = [], trails = [], pieces = [], grid = [], raf = 0, last = 0, rect = null, prev = null, stroke = null;
+  const PAD = 170, MAXG = 7000, born = performance.now();
+  let cv = null, cx = null, base = null, glw = null, txt = null, txd = null, eraser = null, ex = null, grains = [], trails = [];
+  let raf = 0, last = 0, rect = null, dpr = 1, prev = null, stroke = null;
 
   const box = () => { const h = hero.getBoundingClientRect(), r = word.getBoundingClientRect();
-    return { x: r.left - h.left, y: r.top - h.top, w: r.width, h: r.height, hx: h.left, hy: h.top }; };
-  const poly = (pts) => "polygon(" + pts.map((p) => `${p[0].toFixed(1)}px ${p[1].toFixed(1)}px`).join(",") + ")";
-  const inPoly = (x, y, P) => { let c = false;
-    for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
-      const a = P[i], b = P[j];
-      if ((a[1] > y) !== (b[1] > y) && x < ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1]) + a[0]) c = !c;
-    }
-    return c; };
+    return { x: r.left - h.left, y: r.top - h.top, w: r.width, h: r.height, hx: h.left, hy: h.top, sx: r.left, sy: r.top }; };
   const ramp = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+  const mkc = (w, h) => { const c = document.createElement("canvas"); c.width = Math.ceil(w * dpr); c.height = Math.ceil(h * dpr); return c; };
 
+  // draw the heading into canvases exactly where the DOM letters are (font, per-letter gradient, glow)
   const start = () => {
-    rect = box();
-    layer = document.createElement("div"); layer.className = "hero-slice"; layer.setAttribute("aria-hidden", "true");
-    Object.assign(layer.style, { left: rect.x + "px", top: rect.y + "px", width: rect.w + "px", height: rect.h + "px" });
-    hero.appendChild(layer);
-    const dpr = Math.min(2, devicePixelRatio || 1);
-    cv = document.createElement("canvas"); cv.className = "hero-slice-motes";
-    cv.width = (rect.w + 2 * PAD) * dpr; cv.height = (rect.h + 2 * PAD) * dpr;
-    Object.assign(cv.style, { left: -PAD + "px", top: -PAD + "px", width: rect.w + 2 * PAD + "px", height: rect.h + 2 * PAD + "px" });
-    cx = cv.getContext("2d"); cx.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
-    layer.appendChild(cv); motes = []; trails = [];
-    // sample points over the word: a piece "owns" the points inside its clip chain (to skip empty pieces, find pivots)
-    grid = []; const st = Math.max(8, rect.h / 11);
-    for (let y = st / 2; y < rect.h; y += st) for (let x = st / 2; x < rect.w; x += st) grid.push([x, y]);
-    pieces = [mk([], grid.map((_, i) => i), null)];
-    word.classList.add("is-sliced");
-  };
-  // piece = outer (moves) > clip > clip > ... > heading clone
-  function mk(clips, idx, from) {
-    const outer = document.createElement("div"); outer.className = "hero-slice-piece";
-    let host = outer;
-    for (const c of clips) { const d = document.createElement("div"); d.className = "hero-slice-clip"; d.style.clipPath = poly(c); host.appendChild(d); host = d; }
-    const el = word.cloneNode(true);
-    el.removeAttribute("aria-label"); el.setAttribute("aria-hidden", "true"); el.className = "hero-word hero-slice-word";
-    host.appendChild(el); layer.insertBefore(outer, cv);
-    let sx = 0, sy = 0; for (const i of idx) { sx += grid[i][0]; sy += grid[i][1]; }
-    const p = { outer, clips, idx, c: [sx / idx.length, sy / idx.length], ox: 0, oy: 0, vx: 0, vy: 0, r: 0, vr: 0, t0: 0 };
-    if (from) {
-      Object.assign(p, { ox: from.ox, oy: from.oy, vx: from.vx, vy: from.vy, r: from.r, vr: from.vr });
-      // keep the visual position when the pivot moves from from.c to p.c
-      const dx = p.c[0] - from.c[0], dy = p.c[1] - from.c[1], c0 = Math.cos(from.r), s0 = Math.sin(from.r);
-      p.ox += dx * c0 - dy * s0 - dx; p.oy += dx * s0 + dy * c0 - dy;
+    rect = box(); dpr = Math.min(2, devicePixelRatio || 1);
+    const W = rect.w + 2 * PAD, H = rect.h + 2 * PAD;
+    txt = mkc(W, H); base = mkc(W, H); glw = mkc(W, H); eraser = mkc(W, H);
+    const t = txt.getContext("2d"); t.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
+    const glow = glw.getContext("2d"); glow.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
+    for (const s of word.children) {
+      const r = s.getBoundingClientRect(), cs = getComputedStyle(s);
+      t.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`; t.textBaseline = "alphabetic";
+      const m = t.measureText(s.textContent), asc = m.fontBoundingBoxAscent, des = m.fontBoundingBoxDescent;
+      const x = r.left - rect.sx, top = r.top - rect.sy, y = top + (r.height - (asc + des)) / 2 + asc;
+      const g = t.createLinearGradient(0, top, 0, top + r.height); g.addColorStop(0.25, "#ffffff"); g.addColorStop(1, "#9c9c9c");
+      t.fillStyle = g; t.fillText(s.textContent, x, y);
+      glow.font = t.font; glow.shadowColor = "rgba(255,255,255,.12)"; glow.shadowBlur = 80 * dpr; glow.fillStyle = "#9c9c9c"; glow.fillText(s.textContent, x, y);
     }
-    return p;
-  }
-  const draw = (p) => {
-    p.outer.style.transformOrigin = `${p.c[0].toFixed(1)}px ${p.c[1].toFixed(1)}px`;
-    p.outer.style.transform = `translate(${p.ox.toFixed(2)}px,${p.oy.toFixed(2)}px) rotate(${p.r.toFixed(4)}rad)`;
+    txd = t.getImageData(0, 0, txt.width, txt.height).data;
+    ex = eraser.getContext("2d"); ex.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
+    cv = mkc(W, H); cv.className = "hero-sand"; cv.setAttribute("aria-hidden", "true");
+    Object.assign(cv.style, { left: rect.x - PAD + "px", top: rect.y - PAD + "px", width: W + "px", height: H + "px" });
+    cx = cv.getContext("2d"); hero.appendChild(cv);
+    grains = []; trails = [];
+    rebuild(); word.classList.add("is-sliced");
   };
+  // base = glow + text with the cut channels erased
+  const rebuild = () => {
+    const b = base.getContext("2d"); b.setTransform(1, 0, 0, 1, 0, 0);
+    b.globalCompositeOperation = "source-over"; b.clearRect(0, 0, base.width, base.height);
+    b.drawImage(glw, 0, 0); b.drawImage(txt, 0, 0);
+    b.globalCompositeOperation = "destination-out"; b.drawImage(eraser, 0, 0);
+    b.globalCompositeOperation = "source-over";
+  };
+  const stop = () => { cv && cv.remove(); cv = cx = base = glw = txt = txd = eraser = ex = null; grains = []; trails = []; word.classList.remove("is-sliced"); };
 
-  // cut along the drawn path (word-local points, from outside the word to outside the word); speed in px/ms
+  // cut along the drawn path (word-local points); speed in px/ms
   const cut = (path, speed) => {
-    if (!layer) start();
-    const a = path[0], b = path[path.length - 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    if (L < 1) return;
-    const d = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], n = [-d[1], d[0]];
-    const k = Math.min(1, Math.max(0, (speed - 0.35) / 2.4));
-    const N = 34 + 46 * k, T = 14 + 30 * k, Rv = 0.03 + 0.08 * k, now = performance.now();
-    const C = [rect.w / 2, rect.h / 2], R = Math.hypot(rect.w, rect.h) / 2 + PAD + 60;
-    const next = [];
-    for (const p of pieces) {
-      if (next.length >= MAXP) { next.push(p); continue; }
-      // path into the piece's local (unmoved) frame
-      const cs = Math.cos(-p.r), sn = Math.sin(-p.r);
-      const loc = (q) => { const x = q[0] - p.c[0] - p.ox, y = q[1] - p.c[1] - p.oy; return [x * cs - y * sn + p.c[0], x * sn + y * cs + p.c[1]]; };
-      const lp = path.map(loc);
-      // push both ends out to the big circle, then close each side with an arc of that circle
-      const ext = (q, dir) => { const ang = Math.atan2(q[1] - C[1], q[0] - C[0]); return [C[0] + Math.cos(ang) * R, C[1] + Math.sin(ang) * R, ang]; };
-      const e0 = ext(lp[0]), e1 = ext(lp[lp.length - 1]);
-      const side = (sgn) => {
-        const pts = [[e0[0], e0[1]], ...lp, [e1[0], e1[1]]];
-        let span = e0[2] - e1[2]; // go from end angle back to start angle
-        if (sgn > 0) { while (span <= 0) span += Math.PI * 2; } else { while (span >= 0) span -= Math.PI * 2; }
-        const steps = 24;
-        for (let i = 1; i < steps; i++) { const t = e1[2] + (span * i) / steps; pts.push([C[0] + Math.cos(t) * R, C[1] + Math.sin(t) * R]); }
-        return pts;
-      };
-      const A = side(1), B = side(-1);
-      const ia = [], ib = [];
-      for (const i of p.idx) (inPoly(grid[i][0], grid[i][1], A) ? ia : ib).push(i);
-      if (ia.length < 2 || ib.length < 2 || next.length + 2 > MAXP + 1) { next.push(p); continue; }
-      p.outer.remove();
-      for (const [P, idx] of [[A, ia], [B, ib]]) {
-        const q = mk([...p.clips, P], idx, p); q.t0 = now;
-        // which side of the chord is this piece on (in screen space)
-        const s = Math.sign((q.c[0] + q.ox - a[0]) * n[0] + (q.c[1] + q.oy - a[1]) * n[1]) || 1;
-        let x0 = Infinity, x1 = -Infinity; for (const i of idx) { x0 = Math.min(x0, grid[i][0]); x1 = Math.max(x1, grid[i][0]); }
-        q.vx += s * (n[0] * N + d[0] * T); q.vy += s * (n[1] * N + d[1] * T);
-        q.vr += s * Rv * (Math.random() * 0.6 + 0.7) * Math.min(1, 260 / Math.max(60, x1 - x0));
-        draw(q); next.push(q);
+    if (!cv) start();
+    const now = performance.now(), k = Math.min(1, Math.max(0, (speed - 0.35) / 2.4)), HW = 5 + 3 * k; // half width of the cut
+    // grains already back in place inside the new cut get knocked loose again
+    for (const g of grains) if (g.home) {
+      for (let i = 1; i < path.length; i++) if (segD(g.hx, g.hy, path[i - 1], path[i]) < HW) { launch(g, path, i, k, now); break; }
+    }
+    // fresh grains from the letters' pixels along the path (skip pixels already turned to sand)
+    let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+    for (const q of path) { bx0 = Math.min(bx0, q[0]); by0 = Math.min(by0, q[1]); bx1 = Math.max(bx1, q[0]); by1 = Math.max(by1, q[1]); }
+    const ox = Math.max(0, Math.floor((bx0 - HW - 2 + PAD) * dpr)), oy = Math.max(0, Math.floor((by0 - HW - 2 + PAD) * dpr));
+    const ow = Math.max(1, Math.min(eraser.width - ox, Math.ceil((bx1 - bx0 + 2 * HW + 4) * dpr))), oh = Math.max(1, Math.min(eraser.height - oy, Math.ceil((by1 - by0 + 2 * HW + 4) * dpr)));
+    const ed = ex.getImageData(ox, oy, ow, oh).data, Wd = txt.width, st = 2;
+    const seen = new Set();
+    for (let i = 1; i < path.length && grains.length < MAXG; i++) {
+      const a = path[i - 1], b = path[i];
+      const x0 = Math.floor(Math.min(a[0], b[0]) - HW), x1 = Math.ceil(Math.max(a[0], b[0]) + HW);
+      const y0 = Math.floor(Math.min(a[1], b[1]) - HW), y1 = Math.ceil(Math.max(a[1], b[1]) + HW);
+      for (let y = Math.max(0, y0 - (y0 % st)); y <= Math.min(rect.h, y1); y += st) for (let x = Math.max(0, x0 - (x0 % st)); x <= Math.min(rect.w, x1); x += st) {
+        const key = x * 10000 + y; if (seen.has(key)) continue;
+        if (segD(x, y, a, b) > HW) continue;
+        seen.add(key);
+        const X = Math.round((x + PAD) * dpr), Y = Math.round((y + PAD) * dpr), px = (Y * Wd + X) * 4;
+        const ei = ((Y - oy) * ow + (X - ox)) * 4, er = X >= ox && Y >= oy && X < ox + ow && Y < oy + oh ? ed[ei + 3] : 0;
+        if (txd[px + 3] < 90 || er > 0) continue;
+        const g = { hx: x, hy: y, x, y, vx: 0, vy: 0, c: txd[px], al: txd[px + 3] / 255, home: false, t0: 0, s: 0.9 + Math.random() * 1.4 };
+        launch(g, path, i, k, now); grains.push(g);
+        if (grains.length >= MAXG) break;
       }
     }
-    pieces = next;
-    // the blade glints along the exact path; shards burst out of it
+    ex.lineJoin = ex.lineCap = "round"; ex.strokeStyle = "#000"; ex.lineWidth = HW * 2 + 1;
+    ex.beginPath(); path.forEach((q, i) => (i ? ex.lineTo(q[0], q[1]) : ex.moveTo(q[0], q[1]))); ex.stroke();
+    rebuild();
     trails.push({ path, t0: now });
-    const inside = path.filter((q) => q[0] > 0 && q[0] < rect.w && q[1] > rect.h * 0.1 && q[1] < rect.h * 0.92);
-    let len = 0; for (let i = 1; i < inside.length; i++) len += Math.hypot(inside[i][0] - inside[i - 1][0], inside[i][1] - inside[i - 1][1]);
-    const cnt = Math.min(90, Math.round(len / 9 * (0.8 + k)));
-    for (let i = 0; i < cnt && inside.length > 1 && motes.length < 360; i++) {
-      const j = (Math.random() * (inside.length - 1)) | 0, t = Math.random(), u = inside[j], v = inside[j + 1];
-      const h = [u[0] + (v[0] - u[0]) * t, u[1] + (v[1] - u[1]) * t];
-      const tl = Math.hypot(v[0] - u[0], v[1] - u[1]) || 1, tn = [-(v[1] - u[1]) / tl, (v[0] - u[0]) / tl];
-      const s = Math.random() < 0.5 ? 1 : -1, sp = (25 + Math.random() * 110) * (0.6 + 0.6 * k), sp2 = (Math.random() - 0.5) * 1.6;
-      motes.push({ hx: h[0], hy: h[1], x: h[0], y: h[1], vx: s * tn[0] * sp - tn[1] * sp2 * sp * 0.6, vy: s * tn[1] * sp + tn[0] * sp2 * sp * 0.6,
-        a: Math.random() * 6.28, va: (Math.random() - 0.5) * 9, z: 1 + Math.random() * 2.6, t0: now + Math.random() * 200, life: 1 });
-    }
     if (!raf) { last = performance.now(); raf = requestAnimationFrame(tick); }
   };
+  function segD(x, y, a, b) {
+    const dx = b[0] - a[0], dy = b[1] - a[1], l = dx * dx + dy * dy;
+    const t = l ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / l)) : 0;
+    return Math.hypot(x - a[0] - dx * t, y - a[1] - dy * t);
+  }
+  // blow a grain off sideways from the cut, a little along the swipe, with random scatter
+  function launch(g, path, i, k, now) {
+    const a = path[i - 1], b = path[i], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, tx = (b[0] - a[0]) / l, ty = (b[1] - a[1]) / l;
+    const side = Math.sign((g.hx - a[0]) * -ty + (g.hy - a[1]) * tx) || (Math.random() < 0.5 ? 1 : -1);
+    const sp = (18 + Math.random() * 70) * (0.7 + 0.8 * k), ang = (Math.random() - 0.5) * 1.6;
+    const nx = -ty * side, ny = tx * side, c = Math.cos(ang), s = Math.sin(ang);
+    g.vx += (nx * c - ny * s) * sp + tx * sp * 0.5 * Math.random(); g.vy += (nx * s + ny * c) * sp + ty * sp * 0.5 * Math.random();
+    g.home = false; g.t0 = now; g.d = 0.25 + Math.random() * 0.6; // each grain starts heading home at its own moment
+  }
 
-  // space physics: the hit makes things drift with little drag, then a magnetic pull slowly fades in and snaps them home
   const tick = (now) => {
     const DT = Math.min(0.1, (now - last) / 1000); last = now;
-    let busy = false;
-    const ns = Math.max(1, Math.ceil(DT / 0.008)), dt = DT / ns; // fixed small steps so slow frames don't slow time
-    for (let st = 0; st < ns; st++) {
-      const tn = now - (ns - 1 - st) * dt * 1000;
-      for (const p of pieces) {
-        const dist = Math.hypot(p.ox, p.oy), pull = ramp(((tn - p.t0) / 1000 - 0.25) / 1.2);
-        let k = 6 * pull, c = 0.6 + 2 * Math.sqrt(k);
-        if (pull > 0.5 && dist < 12) { k += 140 * (1 - dist / 12); c = 2 * Math.sqrt(k) * 0.8; } // final magnetic click
-        p.vx += (-k * p.ox - c * p.vx) * dt; p.vy += (-k * p.oy - c * p.vy) * dt;
-        p.vr += (-k * 1.3 * p.r - c * p.vr) * dt;
-        p.ox += p.vx * dt; p.oy += p.vy * dt; p.r += p.vr * dt;
+    const ns = Math.max(1, Math.ceil(DT / 0.012)), dt = DT / ns;
+    let flying = 0;
+    for (const g of grains) {
+      if (g.home) continue;
+      for (let st = 0; st < ns; st++) {
+        const age = (now - g.t0) / 1000 - (ns - 1 - st) * dt, pull = ramp((age - g.d) / 1.5);
+        const dx = g.hx - g.x, dy = g.hy - g.y, dist = Math.hypot(dx, dy);
+        let k = 5 * pull, c = 0.5 + 2 * Math.sqrt(k) * 0.95;
+        if (pull > 0.6 && dist < 10) { k += 60 * (1 - dist / 10); c = 2 * Math.sqrt(k) * 0.9; } // magnetic snap
+        g.vx += (k * dx - c * g.vx) * dt; g.vy += (k * dy - c * g.vy) * dt;
+        g.x += g.vx * dt; g.y += g.vy * dt;
+        if (pull > 0.9 && dist < 0.6 && Math.hypot(g.vx, g.vy) < 8) { g.home = true; g.x = g.hx; g.y = g.hy; break; }
       }
-      for (const m of motes) {
-        const age = (tn - m.t0) / 1000;
-        if (age <= 0 || m.life <= 0) continue;
-        const pull = ramp((age - 0.35) / 1.6), dx = m.hx - m.x, dy = m.hy - m.y, dist = Math.hypot(dx, dy);
-        const k = 5 * pull + (pull > 0.6 && dist < 30 ? 40 : 0), c = 0.5 + 2 * Math.sqrt(k) * 0.9;
-        m.vx += (k * dx - c * m.vx) * dt; m.vy += (k * dy - c * m.vy) * dt;
-        m.x += m.vx * dt; m.y += m.vy * dt; m.a += m.va * dt;
-        if ((pull > 0.6 && dist < 2.5) || age > 6) m.life -= dt * 5; // absorbed back into the letters
-      }
+      if (!g.home) flying++;
     }
-    for (const p of pieces) {
-      if (Math.hypot(p.ox, p.oy) > 0.35 || Math.abs(p.r) > 0.0015 || Math.hypot(p.vx, p.vy) > 6) busy = true;
-      draw(p);
+    trails = trails.filter((t) => now - t.t0 < 480);
+    if (!flying && !trails.length) { raf = 0; stop(); return; }
+
+    cx.setTransform(1, 0, 0, 1, 0, 0); cx.clearRect(0, 0, cv.width, cv.height);
+    cx.drawImage(base, 0, 0);
+    cx.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
+    // landed grains fill the channel back (2px cells), flying grains are bright specks
+    for (const g of grains) {
+      const v = g.c;
+      if (g.home) { cx.fillStyle = `rgba(${v},${v},${v},${g.al})`; cx.fillRect(g.hx - 1, g.hy - 1, 2.2, 2.2); }
+      else { cx.fillStyle = `rgba(${v},${v},${Math.min(255, v + 6)},${0.85 * g.al})`; cx.fillRect(g.x - g.s / 2, g.y - g.s / 2, g.s, g.s); }
     }
-    cx.clearRect(-PAD, -PAD, rect.w + 2 * PAD, rect.h + 2 * PAD);
-    cx.globalCompositeOperation = "lighter";
-    trails = trails.filter((t) => now - t.t0 < 520);
     for (const t of trails) {
-      const f = (now - t.t0) / 520, al = f < 0.15 ? f / 0.15 : 1 - (f - 0.15) / 0.85;
-      cx.save(); cx.lineJoin = cx.lineCap = "round";
+      const f = (now - t.t0) / 480, al = f < 0.15 ? f / 0.15 : 1 - (f - 0.15) / 0.85;
+      cx.save(); cx.globalCompositeOperation = "lighter"; cx.lineJoin = cx.lineCap = "round";
       cx.beginPath(); t.path.forEach((q, i) => (i ? cx.lineTo(q[0], q[1]) : cx.moveTo(q[0], q[1])));
-      cx.strokeStyle = `rgba(210,215,225,${0.35 * al})`; cx.lineWidth = 7; cx.shadowColor = "rgba(255,255,255,.7)"; cx.shadowBlur = 18; cx.stroke();
-      cx.strokeStyle = `rgba(255,255,255,${0.95 * al})`; cx.lineWidth = 1.6; cx.shadowBlur = 6; cx.stroke();
-      cx.restore(); busy = true;
-    }
-    for (const m of motes) {
-      if (m.life <= 0) continue;
-      busy = true;
-      if (now < m.t0) continue;
-      const al = Math.max(0, Math.min(1, m.life)), z = m.z;
-      cx.save(); cx.translate(m.x, m.y); cx.rotate(m.a);
-      cx.fillStyle = `rgba(235,238,245,${0.9 * al})`; cx.shadowColor = "rgba(255,255,255,.8)"; cx.shadowBlur = 6;
-      cx.beginPath(); cx.moveTo(-z, -z * 0.6); cx.lineTo(z * 1.3, 0); cx.lineTo(-z * 0.4, z); cx.closePath(); cx.fill();
+      cx.strokeStyle = `rgba(255,255,255,${0.8 * al})`; cx.lineWidth = 1.4; cx.shadowColor = "rgba(255,255,255,.7)"; cx.shadowBlur = 10; cx.stroke();
       cx.restore();
     }
-    motes = motes.filter((m) => m.life > 0);
-    if (busy) { raf = requestAnimationFrame(tick); return; }
-    raf = 0; stop();
+    raf = requestAnimationFrame(tick);
   };
-  const stop = () => { layer && layer.remove(); layer = cv = cx = null; pieces = []; motes = []; trails = []; word.classList.remove("is-sliced"); };
 
   const inside = (p, r) => p[0] >= r.x && p[0] <= r.x + r.w && p[1] >= r.y && p[1] <= r.y + r.h;
   const hits = (p, q, r) => { // does segment p→q cross rectangle r (Liang–Barsky)
@@ -607,29 +571,34 @@
     }
     return true;
   };
-  // the stroke records every pointer position from just before it enters the word until it leaves it
-  const add = (q) => { const l = stroke.pts[stroke.pts.length - 1]; if (Math.hypot(q[0] - l[0], q[1] - l[1]) >= 3 && stroke.pts.length < 400) stroke.pts.push(q); };
-  const finish = (r, t) => {
-    const s = stroke; stroke = null;
-    const P = s.pts, ms = Math.max(8, t - s.t);
-    let len = 0; for (let i = 1; i < P.length; i++) len += Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]);
-    if (P.length < 2 || len < r.h * 0.5 || ms > 2500) return;
-    cut(P.map((q) => [q[0] - r.x, q[1] - r.y]), len / ms);
+  // cut live while the cursor moves through the word: every ~40ms the newest part of the path is cut
+  const flush = (r, t, force) => {
+    const P = stroke.pts; if (P.length - stroke.done < 2) return;
+    if (!force && t - stroke.tf < 40) return;
+    const seg = P.slice(stroke.done), ms = Math.max(8, t - stroke.tf);
+    let len = 0; for (let i = 1; i < seg.length; i++) len += Math.hypot(seg[i][0] - seg[i - 1][0], seg[i][1] - seg[i - 1][1]);
+    stroke.done = P.length - 1; stroke.tf = t;
+    if (len < 2) return;
+    cut(seg.map((q) => [q[0] - r.x, q[1] - r.y]), len / ms);
   };
   hero.addEventListener("pointermove", (e) => {
     if (e.timeStamp - born < 2200) return; // let the intro animation finish
-    const r0 = box(), r = layer ? rect : r0; if (!layer) rect = r0;
+    const r0 = box(), r = cv ? rect : r0;
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
     for (const ev of evs.length ? evs : [e]) {
       const p = [ev.clientX - r0.hx, ev.clientY - r0.hy], t = ev.timeStamp;
       if (prev) {
         const isIn = inside(p, r);
-        if (!stroke && (isIn || hits(prev.p, p, r))) stroke = { pts: [prev.p], t: prev.t };
-        if (stroke) { add(p); if (!isIn) finish(r, t); }
+        if (!stroke && (isIn || hits(prev.p, p, r))) stroke = { pts: [prev.p], done: 0, tf: prev.t };
+        if (stroke) {
+          const l = stroke.pts[stroke.pts.length - 1];
+          if (Math.hypot(p[0] - l[0], p[1] - l[1]) >= 2) stroke.pts.push(p);
+          if (!isIn) { flush(r, t, true); stroke = null; } else flush(r, t, false);
+        }
       }
       prev = { p, t };
     }
   });
   hero.addEventListener("pointerleave", () => { prev = null; stroke = null; });
-  addEventListener("resize", () => { if (!raf) stop(); });
+  addEventListener("resize", () => { if (raf) { cancelAnimationFrame(raf); raf = 0; } stop(); });
 })();

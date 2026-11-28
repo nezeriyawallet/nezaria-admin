@@ -1340,11 +1340,6 @@ h1, h2 { overflow-wrap: break-word; hyphens: auto; }
 .cfx-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9998; mix-blend-mode: screen; }
 @media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) { .cfx-canvas { display: none; } }
 
-/* Hero slice (2026-11-28): the name is cut along the cursor path and drifts back together */
+/* Hero sand cut (2026-11-28): letters crumble to sand along the cursor path and drift back */
 .hero-word.is-sliced { opacity: 0; }
-.hero-slice { position: absolute; z-index: 1; pointer-events: none; }
-.hero-slice-piece, .hero-slice-clip { position: absolute; inset: 0; }
-.hero-slice-piece { will-change: transform; }
-.hero-slice .hero-slice-word { position: absolute; inset: 0; margin: 0; }
-.hero-slice .hero-slice-word span { animation: none; opacity: 1; transform: none; }
-.hero-slice-motes { position: absolute; z-index: 2; pointer-events: none; }
+.hero-sand { position: absolute; z-index: 1; pointer-events: none; }
