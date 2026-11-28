@@ -421,37 +421,28 @@
   document.addEventListener("visibilitychange", () => { last = 0; wake(); });
 })();
 
-// Hero slice (2026-11-28): swipe the cursor through "NEZERIYA" and the name is cut along the swipe; the pieces
-// slide apart along the cut and then snap back together magnetically, so the name always stays readable.
-// Each piece is an exact clone of the heading clipped to a convex polygon, so it renders pixel-identical.
+// Hero slice (2026-11-28): the cursor cuts "NEZERIYA" exactly along the path the user draws through it (curves,
+// zigzags). The pieces drift apart a little, silver shards float out of the cut, then everything is slowly pulled
+// back together magnetically, so the name always stays readable. A piece is a clone of the heading inside a chain
+// of nested clip-path polygons (one per cut it went through), so it renders pixel-identical to the real heading.
 (() => {
   const word = document.querySelector(".hero-word");
   const hero = word && word.closest(".hero");
   if (!hero || matchMedia("(prefers-reduced-motion: reduce)").matches || !matchMedia("(pointer: fine)").matches) return;
-  const PAD = 240, MAXP = 28, born = performance.now();
-  let layer = null, cv = null, cx = null, motes = [], pieces = [], seams = [], raf = 0, last = 0, rect = null, prev = null, stroke = null;
+  const PAD = 240, MAXP = 24, born = performance.now();
+  let layer = null, cv = null, cx = null, motes = [], trails = [], pieces = [], grid = [], raf = 0, last = 0, rect = null, prev = null, stroke = null;
 
   const box = () => { const h = hero.getBoundingClientRect(), r = word.getBoundingClientRect();
     return { x: r.left - h.left, y: r.top - h.top, w: r.width, h: r.height, hx: h.left, hy: h.top }; };
   const poly = (pts) => "polygon(" + pts.map((p) => `${p[0].toFixed(1)}px ${p[1].toFixed(1)}px`).join(",") + ")";
-  const centroid = (pts) => { let x = 0, y = 0; for (const p of pts) { x += p[0]; y += p[1]; } return [x / pts.length, y / pts.length]; };
-  // keep the part of a convex polygon where (p - a)·n >= 0
-  const clip = (pts, a, n, sgn) => {
-    const out = [], f = (p) => sgn * ((p[0] - a[0]) * n[0] + (p[1] - a[1]) * n[1]);
-    for (let i = 0; i < pts.length; i++) {
-      const p = pts[i], q = pts[(i + 1) % pts.length], fp = f(p), fq = f(q);
-      if (fp >= 0) out.push(p);
-      if ((fp >= 0) !== (fq >= 0)) { const t = fp / (fp - fq); out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]); }
+  const inPoly = (x, y, P) => { let c = false;
+    for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+      const a = P[i], b = P[j];
+      if ((a[1] > y) !== (b[1] > y) && x < ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1]) + a[0]) c = !c;
     }
-    return out;
-  };
-  const area = (pts) => { let s = 0; for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; s += p[0] * q[1] - q[0] * p[1]; } return Math.abs(s / 2); };
+    return c; };
+  const ramp = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
-  const makeEl = () => {
-    const el = word.cloneNode(true);
-    el.removeAttribute("aria-label"); el.setAttribute("aria-hidden", "true"); el.className = "hero-word hero-slice-piece";
-    layer.appendChild(el); return el;
-  };
   const start = () => {
     rect = box();
     layer = document.createElement("div"); layer.className = "hero-slice"; layer.setAttribute("aria-hidden", "true");
@@ -462,82 +453,105 @@
     cv.width = (rect.w + 2 * PAD) * dpr; cv.height = (rect.h + 2 * PAD) * dpr;
     Object.assign(cv.style, { left: -PAD + "px", top: -PAD + "px", width: rect.w + 2 * PAD + "px", height: rect.h + 2 * PAD + "px" });
     cx = cv.getContext("2d"); cx.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
-    layer.appendChild(cv); motes = [];
-    const pts = [[-PAD, -PAD], [rect.w + PAD, -PAD], [rect.w + PAD, rect.h + PAD], [-PAD, rect.h + PAD]];
-    pieces = [{ el: makeEl(), pts, c: centroid(pts), ox: 0, oy: 0, vx: 0, vy: 0, r: 0, vr: 0, t0: 0 }];
+    layer.appendChild(cv); motes = []; trails = [];
+    // sample points over the word: a piece "owns" the points inside its clip chain (to skip empty pieces, find pivots)
+    grid = []; const st = Math.max(8, rect.h / 11);
+    for (let y = st / 2; y < rect.h; y += st) for (let x = st / 2; x < rect.w; x += st) grid.push([x, y]);
+    pieces = [mk([], grid.map((_, i) => i), null)];
     word.classList.add("is-sliced");
   };
-  const stop = () => { layer && layer.remove(); layer = null; pieces = []; seams = []; motes = []; word.classList.remove("is-sliced"); };
+  // piece = outer (moves) > clip > clip > ... > heading clone
+  function mk(clips, idx, from) {
+    const outer = document.createElement("div"); outer.className = "hero-slice-piece";
+    let host = outer;
+    for (const c of clips) { const d = document.createElement("div"); d.className = "hero-slice-clip"; d.style.clipPath = poly(c); host.appendChild(d); host = d; }
+    const el = word.cloneNode(true);
+    el.removeAttribute("aria-label"); el.setAttribute("aria-hidden", "true"); el.className = "hero-word hero-slice-word";
+    host.appendChild(el); layer.insertBefore(outer, cv);
+    let sx = 0, sy = 0; for (const i of idx) { sx += grid[i][0]; sy += grid[i][1]; }
+    const p = { outer, clips, idx, c: [sx / idx.length, sy / idx.length], ox: 0, oy: 0, vx: 0, vy: 0, r: 0, vr: 0, t0: 0 };
+    if (from) {
+      Object.assign(p, { ox: from.ox, oy: from.oy, vx: from.vx, vy: from.vy, r: from.r, vr: from.vr });
+      // keep the visual position when the pivot moves from from.c to p.c
+      const dx = p.c[0] - from.c[0], dy = p.c[1] - from.c[1], c0 = Math.cos(from.r), s0 = Math.sin(from.r);
+      p.ox += dx * c0 - dy * s0 - dx; p.oy += dx * s0 + dy * c0 - dy;
+    }
+    return p;
+  }
   const draw = (p) => {
-    p.el.style.clipPath = poly(p.pts);
-    p.el.style.transformOrigin = `${p.c[0].toFixed(1)}px ${p.c[1].toFixed(1)}px`;
-    p.el.style.transform = `translate(${p.ox.toFixed(2)}px,${p.oy.toFixed(2)}px) rotate(${p.r.toFixed(4)}rad)`;
+    p.outer.style.transformOrigin = `${p.c[0].toFixed(1)}px ${p.c[1].toFixed(1)}px`;
+    p.outer.style.transform = `translate(${p.ox.toFixed(2)}px,${p.oy.toFixed(2)}px) rotate(${p.r.toFixed(4)}rad)`;
   };
 
-  // cut along the line through a and b (word-local, screen space), speed in px/ms
-  const cut = (a, b, speed) => {
+  // cut along the drawn path (word-local points, from outside the word to outside the word); speed in px/ms
+  const cut = (path, speed) => {
     if (!layer) start();
-    if (pieces.length >= MAXP) return;
-    const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1) return;
+    const a = path[0], b = path[path.length - 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (L < 1) return;
     const d = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], n = [-d[1], d[0]];
     const k = Math.min(1, Math.max(0, (speed - 0.35) / 2.4));
     const N = 34 + 46 * k, T = 14 + 30 * k, Rv = 0.03 + 0.08 * k, now = performance.now();
+    const C = [rect.w / 2, rect.h / 2], R = Math.hypot(rect.w, rect.h) / 2 + PAD + 60;
     const next = [];
     for (const p of pieces) {
-      // line into the piece's local (unmoved) frame
+      if (next.length >= MAXP) { next.push(p); continue; }
+      // path into the piece's local (unmoved) frame
       const cs = Math.cos(-p.r), sn = Math.sin(-p.r);
       const loc = (q) => { const x = q[0] - p.c[0] - p.ox, y = q[1] - p.c[1] - p.oy; return [x * cs - y * sn + p.c[0], x * sn + y * cs + p.c[1]]; };
-      const la = loc(a), lb = loc(b), lL = Math.hypot(lb[0] - la[0], lb[1] - la[1]);
-      const ln = [-(lb[1] - la[1]) / lL, (lb[0] - la[0]) / lL];
-      const A = clip(p.pts, la, ln, 1), B = clip(p.pts, la, ln, -1);
-      if (A.length < 3 || B.length < 3 || area(A) < 600 || area(B) < 600) { next.push(p); continue; }
-      p.el.remove();
-      for (const [pts, s] of [[A, 1], [B, -1]]) {
-        const q = { el: makeEl(), pts, c: centroid(pts), ox: p.ox, oy: p.oy, vx: p.vx, vy: p.vy, r: p.r, vr: p.vr, t0: now };
-        // keep the visual position: the pivot moved from p.c to q.c, compensate the rotation offset
-        const dx = q.c[0] - p.c[0], dy = q.c[1] - p.c[1], c0 = Math.cos(p.r), s0 = Math.sin(p.r);
-        q.ox += dx * c0 - dy * s0 - dx; q.oy += dx * s0 + dy * c0 - dy;
-        q.vx += s * (n[0] * N + d[0] * T); q.vy += s * (n[1] * N + d[1] * T); const xs = pts.map((v) => v[0]), wid = Math.max(60, Math.min(rect.w, Math.max(...xs)) - Math.max(0, Math.min(...xs)));
-        q.vr += s * Rv * (Math.random() * 0.6 + 0.7) * Math.min(1, 260 / wid); // long pieces turn less, so their ends don't swing far
+      const lp = path.map(loc);
+      // push both ends out to the big circle, then close each side with an arc of that circle
+      const ext = (q, dir) => { const ang = Math.atan2(q[1] - C[1], q[0] - C[0]); return [C[0] + Math.cos(ang) * R, C[1] + Math.sin(ang) * R, ang]; };
+      const e0 = ext(lp[0]), e1 = ext(lp[lp.length - 1]);
+      const side = (sgn) => {
+        const pts = [[e0[0], e0[1]], ...lp, [e1[0], e1[1]]];
+        let span = e0[2] - e1[2]; // go from end angle back to start angle
+        if (sgn > 0) { while (span <= 0) span += Math.PI * 2; } else { while (span >= 0) span -= Math.PI * 2; }
+        const steps = 24;
+        for (let i = 1; i < steps; i++) { const t = e1[2] + (span * i) / steps; pts.push([C[0] + Math.cos(t) * R, C[1] + Math.sin(t) * R]); }
+        return pts;
+      };
+      const A = side(1), B = side(-1);
+      const ia = [], ib = [];
+      for (const i of p.idx) (inPoly(grid[i][0], grid[i][1], A) ? ia : ib).push(i);
+      if (ia.length < 2 || ib.length < 2 || next.length + 2 > MAXP + 1) { next.push(p); continue; }
+      p.outer.remove();
+      for (const [P, idx] of [[A, ia], [B, ib]]) {
+        const q = mk([...p.clips, P], idx, p); q.t0 = now;
+        // which side of the chord is this piece on (in screen space)
+        const s = Math.sign((q.c[0] + q.ox - a[0]) * n[0] + (q.c[1] + q.oy - a[1]) * n[1]) || 1;
+        let x0 = Infinity, x1 = -Infinity; for (const i of idx) { x0 = Math.min(x0, grid[i][0]); x1 = Math.max(x1, grid[i][0]); }
+        q.vx += s * (n[0] * N + d[0] * T); q.vy += s * (n[1] * N + d[1] * T);
+        q.vr += s * Rv * (Math.random() * 0.6 + 0.7) * Math.min(1, 260 / Math.max(60, x1 - x0));
         draw(q); next.push(q);
       }
     }
     pieces = next;
-    // debris: small silver shards burst out of the cut and drift in space before they are pulled home
-    const span = [], steps = 90;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps, x = a[0] + (b[0] - a[0]) * (t * 3 - 1), y = a[1] + (b[1] - a[1]) * (t * 3 - 1);
-      if (x > rect.w * 0.01 && x < rect.w * 0.99 && y > rect.h * 0.12 && y < rect.h * 0.9) span.push([x, y]);
+    // the blade glints along the exact path; shards burst out of it
+    trails.push({ path, t0: now });
+    const inside = path.filter((q) => q[0] > 0 && q[0] < rect.w && q[1] > rect.h * 0.1 && q[1] < rect.h * 0.92);
+    let len = 0; for (let i = 1; i < inside.length; i++) len += Math.hypot(inside[i][0] - inside[i - 1][0], inside[i][1] - inside[i - 1][1]);
+    const cnt = Math.min(90, Math.round(len / 9 * (0.8 + k)));
+    for (let i = 0; i < cnt && inside.length > 1 && motes.length < 360; i++) {
+      const j = (Math.random() * (inside.length - 1)) | 0, t = Math.random(), u = inside[j], v = inside[j + 1];
+      const h = [u[0] + (v[0] - u[0]) * t, u[1] + (v[1] - u[1]) * t];
+      const tl = Math.hypot(v[0] - u[0], v[1] - u[1]) || 1, tn = [-(v[1] - u[1]) / tl, (v[0] - u[0]) / tl];
+      const s = Math.random() < 0.5 ? 1 : -1, sp = (25 + Math.random() * 110) * (0.6 + 0.6 * k), sp2 = (Math.random() - 0.5) * 1.6;
+      motes.push({ hx: h[0], hy: h[1], x: h[0], y: h[1], vx: s * tn[0] * sp - tn[1] * sp2 * sp * 0.6, vy: s * tn[1] * sp + tn[0] * sp2 * sp * 0.6,
+        a: Math.random() * 6.28, va: (Math.random() - 0.5) * 9, z: 1 + Math.random() * 2.6, t0: now + Math.random() * 200, life: 1 });
     }
-    const cnt = Math.min(90, Math.round(span.length * (0.9 + k)));
-    for (let i = 0; i < cnt && span.length && motes.length < 360; i++) {
-      const h = span[(Math.random() * span.length) | 0], s = Math.random() < 0.5 ? 1 : -1;
-      const sp = (25 + Math.random() * 110) * (0.6 + 0.6 * k), sp2 = (Math.random() - 0.5) * 2;
-      motes.push({ hx: h[0], hy: h[1], x: h[0], y: h[1], vx: s * n[0] * sp + d[0] * sp2 * sp * 0.8, vy: s * n[1] * sp + d[1] * sp2 * sp * 0.8,
-        a: Math.random() * 6.28, va: (Math.random() - 0.5) * 9, z: 1 + Math.random() * 2.6, t0: now + Math.random() * 250, life: 1 });
-    }
-    // the blade: a bright streak along the cut
-    const sx = rect.w * 1.15 + PAD, mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-    const bl = document.createElement("i"); bl.className = "hero-slice-blade";
-    Object.assign(bl.style, { left: mid[0] + "px", top: mid[1] + "px", width: sx + "px", rotate: Math.atan2(d[1], d[0]) + "rad" });
-    layer.appendChild(bl);
-    bl.animate([{ opacity: 0, scale: "0.2 1" }, { opacity: 1, scale: "1 1", offset: 0.25 }, { opacity: 0, scale: "1.05 0.4" }],
-      { duration: 520, easing: "cubic-bezier(.2,.8,.2,1)" }).onfinish = () => bl.remove();
-    seams.push({ mid, ang: Math.atan2(d[1], d[0]) });
     if (!raf) { last = performance.now(); raf = requestAnimationFrame(tick); }
   };
 
-  // space physics: after the hit things drift with almost no drag, then a magnetic pull slowly fades in
-  const ramp = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+  // space physics: the hit makes things drift with little drag, then a magnetic pull slowly fades in and snaps them home
   const tick = (now) => {
     const DT = Math.min(0.1, (now - last) / 1000); last = now;
     let busy = false;
-    const n = Math.max(1, Math.ceil(DT / 0.008)), dt = DT / n; // fixed small steps so slow frames don't slow time
-    for (let st = 0; st < n; st++) {
-      const tn = now - (n - 1 - st) * dt * 1000;
+    const ns = Math.max(1, Math.ceil(DT / 0.008)), dt = DT / ns; // fixed small steps so slow frames don't slow time
+    for (let st = 0; st < ns; st++) {
+      const tn = now - (ns - 1 - st) * dt * 1000;
       for (const p of pieces) {
         const dist = Math.hypot(p.ox, p.oy), pull = ramp(((tn - p.t0) / 1000 - 0.25) / 1.2);
-        let k = 6 * pull, c = 0.6 + 2 * Math.sqrt(k) * 1.0;
+        let k = 6 * pull, c = 0.6 + 2 * Math.sqrt(k);
         if (pull > 0.5 && dist < 12) { k += 140 * (1 - dist / 12); c = 2 * Math.sqrt(k) * 0.8; } // final magnetic click
         p.vx += (-k * p.ox - c * p.vx) * dt; p.vy += (-k * p.oy - c * p.vy) * dt;
         p.vr += (-k * 1.3 * p.r - c * p.vr) * dt;
@@ -557,39 +571,35 @@
       if (Math.hypot(p.ox, p.oy) > 0.35 || Math.abs(p.r) > 0.0015 || Math.hypot(p.vx, p.vy) > 6) busy = true;
       draw(p);
     }
-    if (cx) {
-      cx.clearRect(-PAD, -PAD, rect.w + 2 * PAD, rect.h + 2 * PAD);
-      cx.globalCompositeOperation = "lighter";
-      for (const m of motes) {
-        if (m.life <= 0 || now < m.t0) { if (m.life > 0) busy = true; continue; }
-        busy = true;
-        const al = Math.max(0, Math.min(1, m.life)), z = m.z;
-        cx.save(); cx.translate(m.x, m.y); cx.rotate(m.a);
-        cx.fillStyle = `rgba(235,238,245,${0.9 * al})`; cx.shadowColor = "rgba(255,255,255,.8)"; cx.shadowBlur = 6;
-        cx.beginPath(); cx.moveTo(-z, -z * 0.6); cx.lineTo(z * 1.3, 0); cx.lineTo(-z * 0.4, z); cx.closePath(); cx.fill();
-        cx.restore();
-      }
-      motes = motes.filter((m) => m.life > 0);
+    cx.clearRect(-PAD, -PAD, rect.w + 2 * PAD, rect.h + 2 * PAD);
+    cx.globalCompositeOperation = "lighter";
+    trails = trails.filter((t) => now - t.t0 < 520);
+    for (const t of trails) {
+      const f = (now - t.t0) / 520, al = f < 0.15 ? f / 0.15 : 1 - (f - 0.15) / 0.85;
+      cx.save(); cx.lineJoin = cx.lineCap = "round";
+      cx.beginPath(); t.path.forEach((q, i) => (i ? cx.lineTo(q[0], q[1]) : cx.moveTo(q[0], q[1])));
+      cx.strokeStyle = `rgba(210,215,225,${0.35 * al})`; cx.lineWidth = 7; cx.shadowColor = "rgba(255,255,255,.7)"; cx.shadowBlur = 18; cx.stroke();
+      cx.strokeStyle = `rgba(255,255,255,${0.95 * al})`; cx.lineWidth = 1.6; cx.shadowBlur = 6; cx.stroke();
+      cx.restore(); busy = true;
     }
+    for (const m of motes) {
+      if (m.life <= 0) continue;
+      busy = true;
+      if (now < m.t0) continue;
+      const al = Math.max(0, Math.min(1, m.life)), z = m.z;
+      cx.save(); cx.translate(m.x, m.y); cx.rotate(m.a);
+      cx.fillStyle = `rgba(235,238,245,${0.9 * al})`; cx.shadowColor = "rgba(255,255,255,.8)"; cx.shadowBlur = 6;
+      cx.beginPath(); cx.moveTo(-z, -z * 0.6); cx.lineTo(z * 1.3, 0); cx.lineTo(-z * 0.4, z); cx.closePath(); cx.fill();
+      cx.restore();
+    }
+    motes = motes.filter((m) => m.life > 0);
     if (busy) { raf = requestAnimationFrame(tick); return; }
-    raf = 0;
-    // snapped together: a soft click-glint along each seam, then hand back to the real heading
-    const L = layer;
-    for (const s of seams) {
-      const g = document.createElement("i"); g.className = "hero-slice-blade is-weld";
-      Object.assign(g.style, { left: s.mid[0] + "px", top: s.mid[1] + "px", width: rect.w * 1.2 + "px", rotate: s.ang + "rad" });
-      L.appendChild(g); g.animate([{ opacity: 0.7 }, { opacity: 0 }], { duration: 380, easing: "ease-out" });
-    }
-    for (const p of pieces) p.el.remove();
-    cv && cv.remove(); cv = cx = null; motes = [];
-    word.classList.remove("is-sliced"); pieces = []; seams = [];
-    setTimeout(() => L.remove(), 400);
-    layer = null;
+    raf = 0; stop();
   };
+  const stop = () => { layer && layer.remove(); layer = cv = cx = null; pieces = []; motes = []; trails = []; word.classList.remove("is-sliced"); };
 
-  const inside = (p, r) => p[0] >= r.x - 6 && p[0] <= r.x + r.w + 6 && p[1] >= r.y - 6 && p[1] <= r.y + r.h + 6;
-  // does segment p→q cross rectangle r (Liang–Barsky)
-  const hits = (p, q, r) => {
+  const inside = (p, r) => p[0] >= r.x && p[0] <= r.x + r.w && p[1] >= r.y && p[1] <= r.y + r.h;
+  const hits = (p, q, r) => { // does segment p→q cross rectangle r (Liang–Barsky)
     let t0 = 0, t1 = 1; const dx = q[0] - p[0], dy = q[1] - p[1];
     for (const [pp, qq] of [[-dx, p[0] - r.x], [dx, r.x + r.w - p[0]], [-dy, p[1] - r.y], [dy, r.y + r.h - p[1]]]) {
       if (pp === 0) { if (qq < 0) return false; continue; }
@@ -597,27 +607,28 @@
     }
     return true;
   };
-  const finish = (end, t) => {
-    if (!stroke) return;
+  // the stroke records every pointer position from just before it enters the word until it leaves it
+  const add = (q) => { const l = stroke.pts[stroke.pts.length - 1]; if (Math.hypot(q[0] - l[0], q[1] - l[1]) >= 3 && stroke.pts.length < 400) stroke.pts.push(q); };
+  const finish = (r, t) => {
     const s = stroke; stroke = null;
-    const L = Math.hypot(end[0] - s.p[0], end[1] - s.p[1]), ms = Math.max(8, t - s.t);
-    if (L > rect.h * 0.55 && ms < 700) cut([s.p[0] - rect.x, s.p[1] - rect.y], [end[0] - rect.x, end[1] - rect.y], L / ms);
+    const P = s.pts, ms = Math.max(8, t - s.t);
+    let len = 0; for (let i = 1; i < P.length; i++) len += Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]);
+    if (P.length < 2 || len < r.h * 0.5 || ms > 2500) return;
+    cut(P.map((q) => [q[0] - r.x, q[1] - r.y]), len / ms);
   };
   hero.addEventListener("pointermove", (e) => {
-    const t = e.timeStamp, q = [e.clientX, e.clientY];
-    if (t - born < 2200) return; // let the intro animation finish
-    const r0 = box(), r = rect && layer ? rect : r0; rect = r;
-    const p = [q[0] - r0.hx, q[1] - r0.hy];
-    if (prev) {
-      const pv = prev.p, isIn = inside(p, r);
-      if (!stroke && (isIn || hits(pv, p, r))) stroke = { p: pv, t: prev.t };
-      if (stroke) {
-        if (!isIn) finish(p, t);
-        else if (t - stroke.t > 700) stroke = { p: pv, t: prev.t };
-        else if (Math.hypot(p[0] - stroke.p[0], p[1] - stroke.p[1]) > r.h * 1.6) { finish(p, t); stroke = { p, t }; }
+    if (e.timeStamp - born < 2200) return; // let the intro animation finish
+    const r0 = box(), r = layer ? rect : r0; if (!layer) rect = r0;
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+    for (const ev of evs.length ? evs : [e]) {
+      const p = [ev.clientX - r0.hx, ev.clientY - r0.hy], t = ev.timeStamp;
+      if (prev) {
+        const isIn = inside(p, r);
+        if (!stroke && (isIn || hits(prev.p, p, r))) stroke = { pts: [prev.p], t: prev.t };
+        if (stroke) { add(p); if (!isIn) finish(r, t); }
       }
+      prev = { p, t };
     }
-    prev = { p, t };
   });
   hero.addEventListener("pointerleave", () => { prev = null; stroke = null; });
   addEventListener("resize", () => { if (!raf) stop(); });
