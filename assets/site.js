@@ -421,15 +421,15 @@
   document.addEventListener("visibilitychange", () => { last = 0; wake(); });
 })();
 
-// Hero grains (2026-11-28): when the cursor comes to "NEZERIYA", the name turns into thousands of small shaded
-// grains. Wherever the cursor passes, the grains are blown apart along its path and drift like in space, then
-// slowly come back and snap into place. Once everything is back and the cursor is still, the crisp name returns.
+// Hero grains (2026-11-28): after the intro, "NEZERIYA" is made of thousands of small shaded grains that are always
+// alive (each one floats a little around its place, a slow light wave runs through them). Wherever the cursor
+// passes, the grains are blown apart along its path, drift like in space, then slowly snap back into place.
 (() => {
   const word = document.querySelector(".hero-word");
   const hero = word && word.closest(".hero");
   if (!hero || matchMedia("(prefers-reduced-motion: reduce)").matches || !matchMedia("(pointer: fine)").matches) return;
   const PAD = 200, STEP = 4, born = performance.now();
-  let cv = null, cx = null, grains = [], sprites = [], raf = 0, last = 0, rect = null, dpr = 1, prev = null, lastMove = 0, fading = 0;
+  let cv = null, cx = null, grains = [], sprites = [], raf = 0, last = 0, rect = null, dpr = 1, prev = null, seen = true;
 
   const box = () => { const h = hero.getBoundingClientRect(), r = word.getBoundingClientRect();
     return { x: r.left - h.left, y: r.top - h.top, w: r.width, h: r.height, hx: h.left, hy: h.top, sx: r.left, sy: r.top }; };
@@ -472,18 +472,19 @@
         const i = (Math.round(jy) * w + Math.round(jx)) * 4;
         if (d[i + 3] < 120) continue;
         const br = d[i] / 255, lv = Math.max(0, Math.min(7, Math.round(((br - 0.55) / 0.45) * 7 + (Math.random() - 0.5) * 2.5)));
-        grains.push({ hx: jx, hy: jy, x: jx, y: jy, vx: 0, vy: 0, r: (STEP * 0.62) * (0.8 + Math.random() * 0.45), lv, loose: false, t0: 0, dl: 0 });
+        grains.push({ hx: jx, hy: jy, x: jx, y: jy, vx: 0, vy: 0, r: (STEP * 0.62) * (0.8 + Math.random() * 0.45), lv, loose: false, t0: 0, dl: 0,
+          p1: Math.random() * 6.28, p2: Math.random() * 6.28, w1: 0.6 + Math.random() * 0.9, w2: 0.5 + Math.random() * 0.9 });
       }
     }
     cv = document.createElement("canvas"); cv.className = "hero-grains"; cv.setAttribute("aria-hidden", "true");
     cv.width = Math.ceil(W * dpr); cv.height = Math.ceil(H * dpr);
     Object.assign(cv.style, { left: rect.x - PAD + "px", top: rect.y - PAD + "px", width: W + "px", height: H + "px" });
     cx = cv.getContext("2d"); hero.appendChild(cv);
-    word.classList.add("is-sliced"); fading = 0;
     requestAnimationFrame(() => cv && cv.classList.add("on"));
-    if (!raf) { last = performance.now(); raf = requestAnimationFrame(tick); }
+    setTimeout(() => cv && word.classList.add("is-sliced"), 360); // grains fade in over the crisp name, then it hides
   };
-  const stop = () => { cv && cv.remove(); cv = cx = null; grains = []; word.classList.remove("is-sliced"); fading = 0; };
+  const stop = () => { cv && cv.remove(); cv = cx = null; grains = []; word.classList.remove("is-sliced"); };
+  const run = () => { if (!raf && cv) { last = performance.now(); raf = requestAnimationFrame(tick); } };
 
   // blow grains apart along the cursor segment a→b (word-local), speed in px/ms
   const blow = (a, b, speed) => {
@@ -521,14 +522,18 @@
       }
       if (g.loose) loose++;
     }
-    // everything home and the cursor still: fade back to the crisp heading
-    if (!loose && now - lastMove > 900 && !fading) {
-      fading = now; cv.classList.remove("on"); word.classList.remove("is-sliced");
-    }
-    if (fading && now - fading > 420) { raf = 0; stop(); return; }
+    if (!seen && !loose) { raf = 0; return; } // hero scrolled away: rest
     cx.setTransform(1, 0, 0, 1, 0, 0); cx.clearRect(0, 0, cv.width, cv.height);
     cx.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
-    for (const g of grains) { const r = g.r; cx.drawImage(sprites[g.lv], g.x - r, g.y - r, r * 2, r * 2); }
+    const T = now / 1000, A = 1.1;
+    for (const g of grains) {
+      // alive at rest: a small float around home + a slow diagonal light wave across the word
+      const fx = Math.sin(T * g.w1 + g.p1) * A, fy = Math.cos(T * g.w2 + g.p2) * A;
+      const wave = Math.sin((g.hx + g.hy * 0.6) * 0.012 - T * 1.6);
+      const x = g.loose ? g.x + fx * 0.5 : g.hx + fx, y = g.loose ? g.y + fy * 0.5 : g.hy + fy;
+      const lv = Math.max(0, Math.min(7, g.lv + Math.round(wave * 1.6 + 0.3))), r = g.r * (1 + wave * 0.07);
+      cx.drawImage(sprites[lv], x - r, y - r, r * 2, r * 2);
+    }
     raf = requestAnimationFrame(tick);
   };
 
@@ -539,9 +544,8 @@
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
     for (const ev of evs.length ? evs : [e]) {
       const p = [ev.clientX - r0.hx, ev.clientY - r0.hy], t = ev.timeStamp;
-      if (near(p, r, 40)) {
-        lastMove = performance.now();
-        if (!cv || fading) { if (fading) stop(); start(); }
+      if (cv && near(p, r, 40)) {
+        run();
         if (prev) {
           const ms = Math.max(4, t - prev.t), len = Math.hypot(p[0] - prev.p[0], p[1] - prev.p[1]);
           if (len > 0.5) blow([prev.p[0] - rect.x, prev.p[1] - rect.y], [p[0] - rect.x, p[1] - rect.y], len / ms);
@@ -551,5 +555,11 @@
     }
   });
   hero.addEventListener("pointerleave", () => { prev = null; });
-  addEventListener("resize", () => { if (raf) { cancelAnimationFrame(raf); raf = 0; } stop(); });
+  let rz = 0;
+  addEventListener("resize", () => { if (raf) { cancelAnimationFrame(raf); raf = 0; } stop(); clearTimeout(rz); rz = setTimeout(() => { start(); run(); }, 250); });
+  new IntersectionObserver((es) => { seen = es[0].isIntersecting; if (seen) run(); }).observe(hero);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) run(); });
+  // hand the heading over to the grains once the letters have flown in
+  const go = () => { start(); run(); };
+  document.fonts && document.fonts.ready ? document.fonts.ready.then(() => setTimeout(go, Math.max(0, 2300 - (performance.now() - born)))) : setTimeout(go, 2300);
 })();
