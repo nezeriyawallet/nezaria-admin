@@ -177,6 +177,7 @@
   if (word && !reduce) {
     const letters = [...word.children];
     document.querySelector(".hero").addEventListener("pointermove", (e) => {
+      if (word.classList.contains("is-sliced")) return;
       const x = e.clientX / innerWidth - 0.5, y = e.clientY / innerHeight - 0.5;
       letters.forEach((l, i) => {
         const k = (i - letters.length / 2) / letters.length;
@@ -418,4 +419,153 @@
   }
   function wake() { if (!raf && !document.hidden) raf = requestAnimationFrame(frame); }
   document.addEventListener("visibilitychange", () => { last = 0; wake(); });
+})();
+
+// Hero slice (2026-11-28): swipe the cursor through "NEZERIYA" and the name is cut along the swipe; the pieces
+// slide apart along the cut and then snap back together magnetically, so the name always stays readable.
+// Each piece is an exact clone of the heading clipped to a convex polygon, so it renders pixel-identical.
+(() => {
+  const word = document.querySelector(".hero-word");
+  const hero = word && word.closest(".hero");
+  if (!hero || matchMedia("(prefers-reduced-motion: reduce)").matches || !matchMedia("(pointer: fine)").matches) return;
+  const PAD = 240, MAXP = 28, born = performance.now();
+  let layer = null, pieces = [], seams = [], raf = 0, last = 0, rect = null, prev = null, stroke = null;
+
+  const box = () => { const h = hero.getBoundingClientRect(), r = word.getBoundingClientRect();
+    return { x: r.left - h.left, y: r.top - h.top, w: r.width, h: r.height, hx: h.left, hy: h.top }; };
+  const poly = (pts) => "polygon(" + pts.map((p) => `${p[0].toFixed(1)}px ${p[1].toFixed(1)}px`).join(",") + ")";
+  const centroid = (pts) => { let x = 0, y = 0; for (const p of pts) { x += p[0]; y += p[1]; } return [x / pts.length, y / pts.length]; };
+  // keep the part of a convex polygon where (p - a)·n >= 0
+  const clip = (pts, a, n, sgn) => {
+    const out = [], f = (p) => sgn * ((p[0] - a[0]) * n[0] + (p[1] - a[1]) * n[1]);
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i], q = pts[(i + 1) % pts.length], fp = f(p), fq = f(q);
+      if (fp >= 0) out.push(p);
+      if ((fp >= 0) !== (fq >= 0)) { const t = fp / (fp - fq); out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]); }
+    }
+    return out;
+  };
+  const area = (pts) => { let s = 0; for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; s += p[0] * q[1] - q[0] * p[1]; } return Math.abs(s / 2); };
+
+  const makeEl = () => {
+    const el = word.cloneNode(true);
+    el.removeAttribute("aria-label"); el.setAttribute("aria-hidden", "true"); el.className = "hero-word hero-slice-piece";
+    layer.appendChild(el); return el;
+  };
+  const start = () => {
+    rect = box();
+    layer = document.createElement("div"); layer.className = "hero-slice"; layer.setAttribute("aria-hidden", "true");
+    Object.assign(layer.style, { left: rect.x + "px", top: rect.y + "px", width: rect.w + "px", height: rect.h + "px" });
+    hero.appendChild(layer);
+    const pts = [[-PAD, -PAD], [rect.w + PAD, -PAD], [rect.w + PAD, rect.h + PAD], [-PAD, rect.h + PAD]];
+    pieces = [{ el: makeEl(), pts, c: centroid(pts), ox: 0, oy: 0, vx: 0, vy: 0, r: 0, vr: 0 }];
+    word.classList.add("is-sliced");
+  };
+  const stop = () => { layer && layer.remove(); layer = null; pieces = []; seams = []; word.classList.remove("is-sliced"); };
+  const draw = (p) => {
+    p.el.style.clipPath = poly(p.pts);
+    p.el.style.transformOrigin = `${p.c[0].toFixed(1)}px ${p.c[1].toFixed(1)}px`;
+    p.el.style.transform = `translate(${p.ox.toFixed(2)}px,${p.oy.toFixed(2)}px) rotate(${p.r.toFixed(4)}rad)`;
+  };
+
+  // cut along the line through a and b (word-local, screen space), speed in px/ms
+  const cut = (a, b, speed) => {
+    if (!layer) start();
+    if (pieces.length >= MAXP) return;
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1) return;
+    const d = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], n = [-d[1], d[0]];
+    const k = Math.min(1, Math.max(0, (speed - 0.35) / 2.4));
+    const N = 110 + 230 * k, T = 170 + 430 * k, Rv = 0.3 + 0.8 * k;
+    const next = [];
+    for (const p of pieces) {
+      // line into the piece's local (unmoved) frame
+      const cs = Math.cos(-p.r), sn = Math.sin(-p.r);
+      const loc = (q) => { const x = q[0] - p.c[0] - p.ox, y = q[1] - p.c[1] - p.oy; return [x * cs - y * sn + p.c[0], x * sn + y * cs + p.c[1]]; };
+      const la = loc(a), lb = loc(b), lL = Math.hypot(lb[0] - la[0], lb[1] - la[1]);
+      const ln = [-(lb[1] - la[1]) / lL, (lb[0] - la[0]) / lL];
+      const A = clip(p.pts, la, ln, 1), B = clip(p.pts, la, ln, -1);
+      if (A.length < 3 || B.length < 3 || area(A) < 600 || area(B) < 600) { next.push(p); continue; }
+      p.el.remove();
+      for (const [pts, s] of [[A, 1], [B, -1]]) {
+        const q = { el: makeEl(), pts, c: centroid(pts), ox: p.ox, oy: p.oy, vx: p.vx, vy: p.vy, r: p.r, vr: p.vr };
+        // keep the visual position: the pivot moved from p.c to q.c, compensate the rotation offset
+        const dx = q.c[0] - p.c[0], dy = q.c[1] - p.c[1], c0 = Math.cos(p.r), s0 = Math.sin(p.r);
+        q.ox += dx * c0 - dy * s0 - dx; q.oy += dx * s0 + dy * c0 - dy;
+        q.vx += s * (n[0] * N + d[0] * T); q.vy += s * (n[1] * N + d[1] * T); q.vr += s * Rv * (Math.random() * 0.6 + 0.7);
+        draw(q); next.push(q);
+      }
+    }
+    pieces = next;
+    // the blade: a bright streak along the cut
+    const sx = rect.w * 1.15 + PAD, mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const bl = document.createElement("i"); bl.className = "hero-slice-blade";
+    Object.assign(bl.style, { left: mid[0] + "px", top: mid[1] + "px", width: sx + "px", rotate: Math.atan2(d[1], d[0]) + "rad" });
+    layer.appendChild(bl);
+    bl.animate([{ opacity: 0, scale: "0.2 1" }, { opacity: 1, scale: "1 1", offset: 0.25 }, { opacity: 0, scale: "1.05 0.4" }],
+      { duration: 520, easing: "cubic-bezier(.2,.8,.2,1)" }).onfinish = () => bl.remove();
+    seams.push({ mid, ang: Math.atan2(d[1], d[0]) });
+    if (!raf) { last = performance.now(); raf = requestAnimationFrame(tick); }
+  };
+
+  const tick = (now) => {
+    const dt = Math.min(0.033, (now - last) / 1000); last = now;
+    let busy = false;
+    for (const p of pieces) {
+      const dist = Math.hypot(p.ox, p.oy);
+      const k = 55 * (1 + 3.5 * Math.exp(-dist / 7)), c = 2 * Math.sqrt(k) * 0.62; // stronger pull when close = magnetic snap
+      p.vx += (-k * p.ox - c * p.vx) * dt; p.vy += (-k * p.oy - c * p.vy) * dt;
+      p.vr += (-k * p.r - c * p.vr) * dt;
+      p.ox += p.vx * dt; p.oy += p.vy * dt; p.r += p.vr * dt;
+      if (dist > 0.35 || Math.abs(p.r) > 0.0015 || Math.hypot(p.vx, p.vy) > 6) busy = true;
+      draw(p);
+    }
+    if (busy) { raf = requestAnimationFrame(tick); return; }
+    raf = 0;
+    // snapped together: a soft click-glint along each seam, then hand back to the real heading
+    const L = layer;
+    for (const s of seams) {
+      const g = document.createElement("i"); g.className = "hero-slice-blade is-weld";
+      Object.assign(g.style, { left: s.mid[0] + "px", top: s.mid[1] + "px", width: rect.w * 1.2 + "px", rotate: s.ang + "rad" });
+      L.appendChild(g); g.animate([{ opacity: 0.7 }, { opacity: 0 }], { duration: 380, easing: "ease-out" });
+    }
+    for (const p of pieces) p.el.remove();
+    word.classList.remove("is-sliced"); pieces = []; seams = [];
+    setTimeout(() => { if (L === layer) { L.remove(); layer = null; } else L.remove(); }, 400);
+    layer = null;
+  };
+
+  const inside = (p, r) => p[0] >= r.x - 6 && p[0] <= r.x + r.w + 6 && p[1] >= r.y - 6 && p[1] <= r.y + r.h + 6;
+  // does segment p→q cross rectangle r (Liang–Barsky)
+  const hits = (p, q, r) => {
+    let t0 = 0, t1 = 1; const dx = q[0] - p[0], dy = q[1] - p[1];
+    for (const [pp, qq] of [[-dx, p[0] - r.x], [dx, r.x + r.w - p[0]], [-dy, p[1] - r.y], [dy, r.y + r.h - p[1]]]) {
+      if (pp === 0) { if (qq < 0) return false; continue; }
+      const t = qq / pp; if (pp < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; }
+    }
+    return true;
+  };
+  const finish = (end, t) => {
+    if (!stroke) return;
+    const s = stroke; stroke = null;
+    const L = Math.hypot(end[0] - s.p[0], end[1] - s.p[1]), ms = Math.max(8, t - s.t);
+    if (L > rect.h * 0.55 && ms < 700) cut([s.p[0] - rect.x, s.p[1] - rect.y], [end[0] - rect.x, end[1] - rect.y], L / ms);
+  };
+  hero.addEventListener("pointermove", (e) => {
+    const t = e.timeStamp, q = [e.clientX, e.clientY];
+    if (t - born < 2200) return; // let the intro animation finish
+    const r0 = box(), r = rect && layer ? rect : r0; rect = r;
+    const p = [q[0] - r0.hx, q[1] - r0.hy];
+    if (prev) {
+      const pv = prev.p, isIn = inside(p, r);
+      if (!stroke && (isIn || hits(pv, p, r))) stroke = { p: pv, t: prev.t };
+      if (stroke) {
+        if (!isIn) finish(p, t);
+        else if (t - stroke.t > 700) stroke = { p: pv, t: prev.t };
+        else if (Math.hypot(p[0] - stroke.p[0], p[1] - stroke.p[1]) > r.h * 1.6) { finish(p, t); stroke = { p, t }; }
+      }
+    }
+    prev = { p, t };
+  });
+  hero.addEventListener("pointerleave", () => { prev = null; stroke = null; });
+  addEventListener("resize", () => { if (!raf) stop(); });
 })();
