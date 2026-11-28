@@ -421,184 +421,135 @@
   document.addEventListener("visibilitychange", () => { last = 0; wake(); });
 })();
 
-// Hero sand cut (2026-11-28): the cursor cuts "NEZERIYA" exactly along the path the user draws through it. Where the
-// cursor went, the letters crumble into fine sand grains that drift off as in space, then slowly drift back and snap
-// into place, so the name always stays readable. One canvas, plain particles: light enough for any laptop.
+// Hero grains (2026-11-28): when the cursor comes to "NEZERIYA", the name turns into thousands of small shaded
+// grains. Wherever the cursor passes, the grains are blown apart along its path and drift like in space, then
+// slowly come back and snap into place. Once everything is back and the cursor is still, the crisp name returns.
 (() => {
   const word = document.querySelector(".hero-word");
   const hero = word && word.closest(".hero");
   if (!hero || matchMedia("(prefers-reduced-motion: reduce)").matches || !matchMedia("(pointer: fine)").matches) return;
-  const PAD = 170, MAXG = 7000, born = performance.now();
-  let cv = null, cx = null, base = null, glw = null, txt = null, txd = null, eraser = null, ex = null, grains = [], trails = [];
-  let raf = 0, last = 0, rect = null, dpr = 1, prev = null, stroke = null;
+  const PAD = 200, STEP = 4, born = performance.now();
+  let cv = null, cx = null, grains = [], sprites = [], raf = 0, last = 0, rect = null, dpr = 1, prev = null, lastMove = 0, fading = 0;
 
   const box = () => { const h = hero.getBoundingClientRect(), r = word.getBoundingClientRect();
     return { x: r.left - h.left, y: r.top - h.top, w: r.width, h: r.height, hx: h.left, hy: h.top, sx: r.left, sy: r.top }; };
   const ramp = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
-  const mkc = (w, h) => { const c = document.createElement("canvas"); c.width = Math.ceil(w * dpr); c.height = Math.ceil(h * dpr); return c; };
 
-  // draw the heading into canvases exactly where the DOM letters are (font, per-letter gradient, glow)
+  // shaded ball sprites in a few brightness levels
+  const makeSprites = () => {
+    sprites = []; const S = Math.ceil(8 * dpr);
+    for (let i = 0; i < 8; i++) {
+      const b = 0.5 + (i / 7) * 0.5, c = document.createElement("canvas"); c.width = c.height = S;
+      const g = c.getContext("2d"), gr = g.createRadialGradient(S * 0.36, S * 0.32, S * 0.04, S * 0.5, S * 0.5, S * 0.5);
+      const v = (f) => Math.round(255 * b * f);
+      gr.addColorStop(0, `rgb(${v(1.05)},${v(1.05)},${Math.min(255, v(1.1))})`); gr.addColorStop(0.45, `rgb(${v(0.82)},${v(0.83)},${v(0.88)})`);
+      gr.addColorStop(0.85, `rgb(${v(0.45)},${v(0.46)},${v(0.52)})`); gr.addColorStop(1, `rgba(${v(0.3)},${v(0.3)},${v(0.36)},0)`);
+      g.fillStyle = gr; g.beginPath(); g.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2); g.fill();
+      sprites.push(c);
+    }
+  };
+
+  // sample the heading (drawn exactly where the DOM letters are) into grains
   const start = () => {
-    rect = box(); dpr = Math.min(2, devicePixelRatio || 1);
+    rect = box(); dpr = Math.min(2, devicePixelRatio || 1); makeSprites();
     const W = rect.w + 2 * PAD, H = rect.h + 2 * PAD;
-    txt = mkc(W, H); base = mkc(W, H); glw = mkc(W, H); eraser = mkc(W, H);
-    const t = txt.getContext("2d"); t.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
-    const glow = glw.getContext("2d"); glow.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
+    const t = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+    t.canvas.width = Math.ceil(rect.w); t.canvas.height = Math.ceil(rect.h);
     for (const s of word.children) {
       const r = s.getBoundingClientRect(), cs = getComputedStyle(s);
       t.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`; t.textBaseline = "alphabetic";
       const m = t.measureText(s.textContent), asc = m.fontBoundingBoxAscent, des = m.fontBoundingBoxDescent;
       const x = r.left - rect.sx, top = r.top - rect.sy, y = top + (r.height - (asc + des)) / 2 + asc;
-      const g = t.createLinearGradient(0, top, 0, top + r.height); g.addColorStop(0.25, "#ffffff"); g.addColorStop(1, "#9c9c9c");
+      const g = t.createLinearGradient(0, top, 0, top + r.height); g.addColorStop(0.25, "#fff"); g.addColorStop(1, "#9c9c9c");
       t.fillStyle = g; t.fillText(s.textContent, x, y);
-      glow.font = t.font; glow.shadowColor = "rgba(255,255,255,.12)"; glow.shadowBlur = 80 * dpr; glow.fillStyle = "#9c9c9c"; glow.fillText(s.textContent, x, y);
     }
-    txd = t.getImageData(0, 0, txt.width, txt.height).data;
-    ex = eraser.getContext("2d"); ex.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
-    cv = mkc(W, H); cv.className = "hero-sand"; cv.setAttribute("aria-hidden", "true");
-    Object.assign(cv.style, { left: rect.x - PAD + "px", top: rect.y - PAD + "px", width: W + "px", height: H + "px" });
-    cx = cv.getContext("2d"); hero.appendChild(cv);
-    grains = []; trails = [];
-    rebuild(); word.classList.add("is-sliced");
-  };
-  // base = glow + text with the cut channels erased
-  const rebuild = () => {
-    const b = base.getContext("2d"); b.setTransform(1, 0, 0, 1, 0, 0);
-    b.globalCompositeOperation = "source-over"; b.clearRect(0, 0, base.width, base.height);
-    b.drawImage(glw, 0, 0); b.drawImage(txt, 0, 0);
-    b.globalCompositeOperation = "destination-out"; b.drawImage(eraser, 0, 0);
-    b.globalCompositeOperation = "source-over";
-  };
-  const stop = () => { cv && cv.remove(); cv = cx = base = glw = txt = txd = eraser = ex = null; grains = []; trails = []; word.classList.remove("is-sliced"); };
-
-  // cut along the drawn path (word-local points); speed in px/ms
-  const cut = (path, speed) => {
-    if (!cv) start();
-    const now = performance.now(), k = Math.min(1, Math.max(0, (speed - 0.35) / 2.4)), HW = 5 + 3 * k; // half width of the cut
-    // grains already back in place inside the new cut get knocked loose again
-    for (const g of grains) if (g.home) {
-      for (let i = 1; i < path.length; i++) if (segD(g.hx, g.hy, path[i - 1], path[i]) < HW) { launch(g, path, i, k, now); break; }
-    }
-    // fresh grains from the letters' pixels along the path (skip pixels already turned to sand)
-    let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
-    for (const q of path) { bx0 = Math.min(bx0, q[0]); by0 = Math.min(by0, q[1]); bx1 = Math.max(bx1, q[0]); by1 = Math.max(by1, q[1]); }
-    const ox = Math.max(0, Math.floor((bx0 - HW - 2 + PAD) * dpr)), oy = Math.max(0, Math.floor((by0 - HW - 2 + PAD) * dpr));
-    const ow = Math.max(1, Math.min(eraser.width - ox, Math.ceil((bx1 - bx0 + 2 * HW + 4) * dpr))), oh = Math.max(1, Math.min(eraser.height - oy, Math.ceil((by1 - by0 + 2 * HW + 4) * dpr)));
-    const ed = ex.getImageData(ox, oy, ow, oh).data, Wd = txt.width, st = 2;
-    const seen = new Set();
-    for (let i = 1; i < path.length && grains.length < MAXG; i++) {
-      const a = path[i - 1], b = path[i];
-      const x0 = Math.floor(Math.min(a[0], b[0]) - HW), x1 = Math.ceil(Math.max(a[0], b[0]) + HW);
-      const y0 = Math.floor(Math.min(a[1], b[1]) - HW), y1 = Math.ceil(Math.max(a[1], b[1]) + HW);
-      for (let y = Math.max(0, y0 - (y0 % st)); y <= Math.min(rect.h, y1); y += st) for (let x = Math.max(0, x0 - (x0 % st)); x <= Math.min(rect.w, x1); x += st) {
-        const key = x * 10000 + y; if (seen.has(key)) continue;
-        if (segD(x, y, a, b) > HW) continue;
-        seen.add(key);
-        const X = Math.round((x + PAD) * dpr), Y = Math.round((y + PAD) * dpr), px = (Y * Wd + X) * 4;
-        const ei = ((Y - oy) * ow + (X - ox)) * 4, er = X >= ox && Y >= oy && X < ox + ow && Y < oy + oh ? ed[ei + 3] : 0;
-        if (txd[px + 3] < 90 || er > 0) continue;
-        const g = { hx: x, hy: y, x, y, vx: 0, vy: 0, c: txd[px], al: txd[px + 3] / 255, home: false, t0: 0, s: 0.9 + Math.random() * 1.4 };
-        launch(g, path, i, k, now); grains.push(g);
-        if (grains.length >= MAXG) break;
+    const d = t.getImageData(0, 0, t.canvas.width, t.canvas.height).data, w = t.canvas.width;
+    grains = [];
+    for (let y = STEP / 2; y < rect.h; y += STEP * 0.87) {
+      const off = (Math.round(y / (STEP * 0.87)) % 2) * STEP / 2; // hex packing
+      for (let x = STEP / 2 + off; x < rect.w; x += STEP) {
+        const jx = x + (Math.random() - 0.5) * 1.6, jy = y + (Math.random() - 0.5) * 1.6;
+        const i = (Math.round(jy) * w + Math.round(jx)) * 4;
+        if (d[i + 3] < 120) continue;
+        const br = d[i] / 255, lv = Math.max(0, Math.min(7, Math.round(((br - 0.55) / 0.45) * 7 + (Math.random() - 0.5) * 2.5)));
+        grains.push({ hx: jx, hy: jy, x: jx, y: jy, vx: 0, vy: 0, r: (STEP * 0.62) * (0.8 + Math.random() * 0.45), lv, loose: false, t0: 0, dl: 0 });
       }
     }
-    ex.lineJoin = ex.lineCap = "round"; ex.strokeStyle = "#000"; ex.lineWidth = HW * 2 + 1;
-    ex.beginPath(); path.forEach((q, i) => (i ? ex.lineTo(q[0], q[1]) : ex.moveTo(q[0], q[1]))); ex.stroke();
-    rebuild();
-    trails.push({ path, t0: now });
+    cv = document.createElement("canvas"); cv.className = "hero-grains"; cv.setAttribute("aria-hidden", "true");
+    cv.width = Math.ceil(W * dpr); cv.height = Math.ceil(H * dpr);
+    Object.assign(cv.style, { left: rect.x - PAD + "px", top: rect.y - PAD + "px", width: W + "px", height: H + "px" });
+    cx = cv.getContext("2d"); hero.appendChild(cv);
+    word.classList.add("is-sliced"); fading = 0;
+    requestAnimationFrame(() => cv && cv.classList.add("on"));
     if (!raf) { last = performance.now(); raf = requestAnimationFrame(tick); }
   };
-  function segD(x, y, a, b) {
-    const dx = b[0] - a[0], dy = b[1] - a[1], l = dx * dx + dy * dy;
-    const t = l ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / l)) : 0;
-    return Math.hypot(x - a[0] - dx * t, y - a[1] - dy * t);
-  }
-  // blow a grain off sideways from the cut, a little along the swipe, with random scatter
-  function launch(g, path, i, k, now) {
-    const a = path[i - 1], b = path[i], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, tx = (b[0] - a[0]) / l, ty = (b[1] - a[1]) / l;
-    const side = Math.sign((g.hx - a[0]) * -ty + (g.hy - a[1]) * tx) || (Math.random() < 0.5 ? 1 : -1);
-    const sp = (18 + Math.random() * 70) * (0.7 + 0.8 * k), ang = (Math.random() - 0.5) * 1.6;
-    const nx = -ty * side, ny = tx * side, c = Math.cos(ang), s = Math.sin(ang);
-    g.vx += (nx * c - ny * s) * sp + tx * sp * 0.5 * Math.random(); g.vy += (nx * s + ny * c) * sp + ty * sp * 0.5 * Math.random();
-    g.home = false; g.t0 = now; g.d = 0.25 + Math.random() * 0.6; // each grain starts heading home at its own moment
-  }
+  const stop = () => { cv && cv.remove(); cv = cx = null; grains = []; word.classList.remove("is-sliced"); fading = 0; };
+
+  // blow grains apart along the cursor segment a→b (word-local), speed in px/ms
+  const blow = (a, b, speed) => {
+    const now = performance.now(), k = Math.min(1, Math.max(0, (speed - 0.2) / 2.2)), R = 16 + 22 * k;
+    const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy, l = Math.sqrt(l2) || 1, tx = dx / l, ty = dy / l;
+    const x0 = Math.min(a[0], b[0]) - R, x1 = Math.max(a[0], b[0]) + R, y0 = Math.min(a[1], b[1]) - R, y1 = Math.max(a[1], b[1]) + R;
+    for (const g of grains) {
+      if (g.x < x0 || g.x > x1 || g.y < y0 || g.y > y1) continue;
+      const t = l2 ? Math.max(0, Math.min(1, ((g.x - a[0]) * dx + (g.y - a[1]) * dy) / l2)) : 0;
+      const px = g.x - a[0] - dx * t, py = g.y - a[1] - dy * t, dist = Math.hypot(px, py);
+      if (dist > R) continue;
+      const f = 1 - dist / R, side = Math.sign(px * -ty + py * tx) || (Math.random() < 0.5 ? 1 : -1);
+      const sp = (22 + 80 * k) * (0.4 + f) * (0.6 + Math.random() * 0.8);
+      const nx = dist > 0.01 ? px / dist : -ty * side, ny = dist > 0.01 ? py / dist : tx * side;
+      g.vx += nx * sp + tx * sp * 0.6 * Math.random() + (Math.random() - 0.5) * 20;
+      g.vy += ny * sp + ty * sp * 0.6 * Math.random() + (Math.random() - 0.5) * 20;
+      g.loose = true; g.t0 = now; g.dl = 0.2 + Math.random() * 0.5; // each grain starts heading home at its own moment
+    }
+  };
 
   const tick = (now) => {
     const DT = Math.min(0.1, (now - last) / 1000); last = now;
     const ns = Math.max(1, Math.ceil(DT / 0.012)), dt = DT / ns;
-    let flying = 0;
+    let loose = 0;
     for (const g of grains) {
-      if (g.home) continue;
-      for (let st = 0; st < ns; st++) {
-        const age = (now - g.t0) / 1000 - (ns - 1 - st) * dt, pull = ramp((age - g.d) / 1.5);
+      if (!g.loose) continue;
+      for (let s = 0; s < ns; s++) {
+        const age = (now - g.t0) / 1000 - (ns - 1 - s) * dt, pull = ramp((age - g.dl) / 1.1);
         const dx = g.hx - g.x, dy = g.hy - g.y, dist = Math.hypot(dx, dy);
-        let k = 5 * pull, c = 0.5 + 2 * Math.sqrt(k) * 0.95;
-        if (pull > 0.6 && dist < 10) { k += 60 * (1 - dist / 10); c = 2 * Math.sqrt(k) * 0.9; } // magnetic snap
+        let k = 6.5 * pull, c = 0.45 + 2 * Math.sqrt(k) * 0.95;
+        if (pull > 0.6 && dist < 8) { k += 50 * (1 - dist / 8); c = 2 * Math.sqrt(k) * 0.9; } // magnetic snap
         g.vx += (k * dx - c * g.vx) * dt; g.vy += (k * dy - c * g.vy) * dt;
         g.x += g.vx * dt; g.y += g.vy * dt;
-        if (pull > 0.9 && dist < 0.6 && Math.hypot(g.vx, g.vy) < 8) { g.home = true; g.x = g.hx; g.y = g.hy; break; }
+        if (pull > 0.9 && dist < 0.5 && Math.hypot(g.vx, g.vy) < 6) { g.loose = false; g.x = g.hx; g.y = g.hy; g.vx = g.vy = 0; break; }
       }
-      if (!g.home) flying++;
+      if (g.loose) loose++;
     }
-    trails = trails.filter((t) => now - t.t0 < 480);
-    if (!flying && !trails.length) { raf = 0; stop(); return; }
-
+    // everything home and the cursor still: fade back to the crisp heading
+    if (!loose && now - lastMove > 900 && !fading) {
+      fading = now; cv.classList.remove("on"); word.classList.remove("is-sliced");
+    }
+    if (fading && now - fading > 420) { raf = 0; stop(); return; }
     cx.setTransform(1, 0, 0, 1, 0, 0); cx.clearRect(0, 0, cv.width, cv.height);
-    cx.drawImage(base, 0, 0);
     cx.setTransform(dpr, 0, 0, dpr, PAD * dpr, PAD * dpr);
-    // landed grains fill the channel back (2px cells), flying grains are bright specks
-    for (const g of grains) {
-      const v = g.c;
-      if (g.home) { cx.fillStyle = `rgba(${v},${v},${v},${g.al})`; cx.fillRect(g.hx - 1, g.hy - 1, 2.2, 2.2); }
-      else { cx.fillStyle = `rgba(${v},${v},${Math.min(255, v + 6)},${0.85 * g.al})`; cx.fillRect(g.x - g.s / 2, g.y - g.s / 2, g.s, g.s); }
-    }
-    for (const t of trails) {
-      const f = (now - t.t0) / 480, al = f < 0.15 ? f / 0.15 : 1 - (f - 0.15) / 0.85;
-      cx.save(); cx.globalCompositeOperation = "lighter"; cx.lineJoin = cx.lineCap = "round";
-      cx.beginPath(); t.path.forEach((q, i) => (i ? cx.lineTo(q[0], q[1]) : cx.moveTo(q[0], q[1])));
-      cx.strokeStyle = `rgba(255,255,255,${0.8 * al})`; cx.lineWidth = 1.4; cx.shadowColor = "rgba(255,255,255,.7)"; cx.shadowBlur = 10; cx.stroke();
-      cx.restore();
-    }
+    for (const g of grains) { const r = g.r; cx.drawImage(sprites[g.lv], g.x - r, g.y - r, r * 2, r * 2); }
     raf = requestAnimationFrame(tick);
   };
 
-  const inside = (p, r) => p[0] >= r.x && p[0] <= r.x + r.w && p[1] >= r.y && p[1] <= r.y + r.h;
-  const hits = (p, q, r) => { // does segment p→q cross rectangle r (Liang–Barsky)
-    let t0 = 0, t1 = 1; const dx = q[0] - p[0], dy = q[1] - p[1];
-    for (const [pp, qq] of [[-dx, p[0] - r.x], [dx, r.x + r.w - p[0]], [-dy, p[1] - r.y], [dy, r.y + r.h - p[1]]]) {
-      if (pp === 0) { if (qq < 0) return false; continue; }
-      const t = qq / pp; if (pp < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; }
-    }
-    return true;
-  };
-  // cut live while the cursor moves through the word: every ~40ms the newest part of the path is cut
-  const flush = (r, t, force) => {
-    const P = stroke.pts; if (P.length - stroke.done < 2) return;
-    if (!force && t - stroke.tf < 40) return;
-    const seg = P.slice(stroke.done), ms = Math.max(8, t - stroke.tf);
-    let len = 0; for (let i = 1; i < seg.length; i++) len += Math.hypot(seg[i][0] - seg[i - 1][0], seg[i][1] - seg[i - 1][1]);
-    stroke.done = P.length - 1; stroke.tf = t;
-    if (len < 2) return;
-    cut(seg.map((q) => [q[0] - r.x, q[1] - r.y]), len / ms);
-  };
+  const near = (p, r, m) => p[0] >= r.x - m && p[0] <= r.x + r.w + m && p[1] >= r.y - m && p[1] <= r.y + r.h + m;
   hero.addEventListener("pointermove", (e) => {
     if (e.timeStamp - born < 2200) return; // let the intro animation finish
     const r0 = box(), r = cv ? rect : r0;
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
     for (const ev of evs.length ? evs : [e]) {
       const p = [ev.clientX - r0.hx, ev.clientY - r0.hy], t = ev.timeStamp;
-      if (prev) {
-        const isIn = inside(p, r);
-        if (!stroke && (isIn || hits(prev.p, p, r))) stroke = { pts: [prev.p], done: 0, tf: prev.t };
-        if (stroke) {
-          const l = stroke.pts[stroke.pts.length - 1];
-          if (Math.hypot(p[0] - l[0], p[1] - l[1]) >= 2) stroke.pts.push(p);
-          if (!isIn) { flush(r, t, true); stroke = null; } else flush(r, t, false);
+      if (near(p, r, 40)) {
+        lastMove = performance.now();
+        if (!cv || fading) { if (fading) stop(); start(); }
+        if (prev) {
+          const ms = Math.max(4, t - prev.t), len = Math.hypot(p[0] - prev.p[0], p[1] - prev.p[1]);
+          if (len > 0.5) blow([prev.p[0] - rect.x, prev.p[1] - rect.y], [p[0] - rect.x, p[1] - rect.y], len / ms);
         }
       }
       prev = { p, t };
     }
   });
-  hero.addEventListener("pointerleave", () => { prev = null; stroke = null; });
+  hero.addEventListener("pointerleave", () => { prev = null; });
   addEventListener("resize", () => { if (raf) { cancelAnimationFrame(raf); raf = 0; } stop(); });
 })();

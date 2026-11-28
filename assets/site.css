@@ -1340,6 +1340,8 @@ h1, h2 { overflow-wrap: break-word; hyphens: auto; }
 .cfx-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9998; mix-blend-mode: screen; }
 @media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) { .cfx-canvas { display: none; } }
 
-/* Hero sand cut (2026-11-28): letters crumble to sand along the cursor path and drift back */
+/* Hero grains (2026-11-28): the name turns into shaded grains the cursor blows apart; they drift back */
+.hero-word { transition: opacity .35s ease; }
 .hero-word.is-sliced { opacity: 0; }
-.hero-sand { position: absolute; z-index: 1; pointer-events: none; }
+.hero-grains { position: absolute; z-index: 1; pointer-events: none; opacity: 0; transition: opacity .35s ease; }
+.hero-grains.on { opacity: 1; }
